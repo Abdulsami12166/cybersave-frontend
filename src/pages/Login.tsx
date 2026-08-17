@@ -19,7 +19,7 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/auth/login`, {
+      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com'}/api/auth/login`, {
         email,
         password
       });
