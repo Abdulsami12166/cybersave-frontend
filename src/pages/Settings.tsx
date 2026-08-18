@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { showToast } from '../components/Layout';
+import { useAuth } from '../context/AuthContext';
 
 export default function Settings() {
+  const { logout } = useAuth();
   const [role, setRole] = useState("Super Admin");
   const [name, setName] = useState("Rajesh Kumar");
   const [email, setEmail] = useState("rajesh.kumar@cybersave.gov.in");
@@ -133,6 +135,20 @@ export default function Settings() {
             <div style={{display: 'flex', justifyContent: 'flex-end'}}>
               <button className="action-btn" onClick={handleUpdatePassword}>Update Password</button>
             </div>
+          </div>
+
+          <div className="table-card" style={{padding: 24, border: '1px solid #fee2e2', background: '#fff8f8'}}>
+            <h3 style={{fontSize: 16, fontWeight: 700, color: '#991b1b', marginBottom: 8}}>Logout & Session</h3>
+            <p style={{fontSize: 13, color: '#7f1d1d', marginBottom: 16}}>End your active administrative session on this device securely.</p>
+            <button 
+              onClick={logout}
+              style={{
+                background: '#dc2626', color: 'white', padding: '10px 16px', 
+                borderRadius: 6, fontWeight: 600, border: 'none', cursor: 'pointer'
+              }}
+            >
+              Sign Out from Admin Panel
+            </button>
           </div>
         </div>
 
