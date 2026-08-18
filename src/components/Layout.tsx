@@ -5,6 +5,7 @@ import {
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
   Settings, Search, Sun, PanelLeftClose, CheckCircle2, X
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message, type } }));
@@ -12,6 +13,7 @@ export const showToast = (message: string, type: 'success' | 'error' = 'success'
 
 export default function Layout() {
   const [toast, setToast] = useState<{message: string, type: string} | null>(null);
+  const { admin } = useAuth();
 
   useEffect(() => {
     const handleToast = (e: any) => {
@@ -23,21 +25,24 @@ export default function Layout() {
   }, []);
 
   const navItems = [
-    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/' },
-    { icon: <Users size={20} />, label: 'User Management', path: '/users' },
-    { icon: <FileText size={20} />, label: 'Applications', path: '/applications' },
-    { icon: <Grid size={20} />, label: 'Services', path: '/services' },
-    { icon: <UserSquare2 size={20} />, label: 'Operators', path: '/operators' },
-    { icon: <ArrowLeftRight size={20} />, label: 'Transactions', path: '/transactions' },
-    { icon: <Bell size={20} />, label: 'Notifications', path: '/notifications' },
-    { icon: <HelpCircle size={20} />, label: 'Support Tickets', path: '/support' },
+    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/', requiredPermission: 'DASHBOARD' },
+    { icon: <Users size={20} />, label: 'User Management', path: '/users', requiredPermission: 'USERS' },
+    { icon: <FileText size={20} />, label: 'Applications', path: '/applications', requiredPermission: 'APPLICATIONS' },
+    { icon: <Grid size={20} />, label: 'Services', path: '/services', requiredPermission: 'APPLICATIONS' },
+    { icon: <UserSquare2 size={20} />, label: 'Operators', path: '/operators', requiredPermission: 'OPERATORS' },
+    { icon: <ArrowLeftRight size={20} />, label: 'Transactions', path: '/transactions', requiredPermission: 'DASHBOARD' },
+    { icon: <Bell size={20} />, label: 'Notifications', path: '/notifications', requiredPermission: 'DASHBOARD' },
+    { icon: <HelpCircle size={20} />, label: 'Support Tickets', path: '/support', requiredPermission: 'DASHBOARD' },
     { icon: <BarChart3 size={20} />, label: 'Analytics', path: '/analytics', requiredPermission: 'REPORTS' },
     { icon: <ShieldCheck size={20} />, label: 'Audit Logs', path: '/audit', requiredPermission: 'SETTINGS' },
     { icon: <Settings size={20} />, label: 'Settings', path: '/settings', requiredPermission: 'SETTINGS' },
   ];
 
-  // Ponytail Least Privilege: In a real app this comes from AuthContext
-  const adminPermissions = ['DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS']; 
+  const defaultPermissions = ['DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'];
+  const adminPermissions = (admin?.email === 'admin@cybersave.com' || !admin?.permissions || admin.permissions.length === 0)
+    ? defaultPermissions
+    : admin.permissions;
+
   const filteredNavItems = navItems.filter(item => !item.requiredPermission || adminPermissions.includes(item.requiredPermission));
 
   const toggleDarkMode = () => {
