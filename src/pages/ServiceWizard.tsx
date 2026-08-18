@@ -238,7 +238,58 @@ export default function ServiceWizard() {
         <div className="table-card" style={{padding: 32}}>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24}}>
             <h3 style={{fontSize: 16, fontWeight: 700}}>Document Requirements & Limits</h3>
-            <button className="action-btn">+ Add Required Document</button>
+            <button className="action-btn" onClick={() => {
+              const customName = window.prompt("Enter custom document type name:");
+              if (customName) {
+                setServiceData({
+                  ...serviceData,
+                  documents: [...serviceData.documents, { type: customName, formats: 'PDF, JPG', size: '2 MB', req: 'Required' }]
+                });
+              }
+            }}>+ Add Required Document</button>
+          </div>
+
+          <div style={{
+            background: '#f8fafc', padding: 20, borderRadius: 8, marginBottom: 24,
+            border: '1px solid #e5e7eb'
+          }}>
+            <h4 style={{margin: '0 0 12px 0', fontSize: 14, fontWeight: 700, color: '#111827'}}>Standard Documents Selector (Tick to require)</h4>
+            <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12}}>
+              {[
+                { label: 'Date of Birth Certificate', format: 'PDF, JPG', size: '2 MB' },
+                { label: 'Aadhaar Card Copy', format: 'PDF, JPG', size: '2 MB' },
+                { label: 'PAN Card Copy', format: 'PDF, JPG', size: '1 MB' },
+                { label: 'SSC / Class 10 Certificate', format: 'PDF', size: '3 MB' },
+                { label: 'Proof of Address', format: 'PDF, JPG, PNG', size: '5 MB' },
+                { label: 'Income Certificate', format: 'PDF', size: '2 MB' },
+                { label: 'Caste Certificate', format: 'PDF', size: '2 MB' },
+                { label: 'Passport Size Photo', format: 'JPG, PNG', size: '1 MB' }
+              ].map((docItem) => {
+                const isChecked = serviceData.documents.some((d: any) => d.type === docItem.label);
+                return (
+                  <label key={docItem.label} style={{display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: '#374151'}}>
+                    <input 
+                      type="checkbox" 
+                      checked={isChecked}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setServiceData({
+                            ...serviceData,
+                            documents: [...serviceData.documents, { type: docItem.label, formats: docItem.format, size: docItem.size, req: 'Required' }]
+                          });
+                        } else {
+                          setServiceData({
+                            ...serviceData,
+                            documents: serviceData.documents.filter((d: any) => d.type !== docItem.label)
+                          });
+                        }
+                      }}
+                    />
+                    {docItem.label}
+                  </label>
+                );
+              })}
+            </div>
           </div>
           
           <table style={{width: '100%', fontSize: 13, textAlign: 'left', borderCollapse: 'collapse', marginBottom: 48}}>
