@@ -28,7 +28,15 @@ const Login: React.FC = () => {
       login(token, admin);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid credentials');
+      if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.message === 'Network Error' || !err.response) {
+        setError('Unable to reach server. Please check your backend connection.');
+      } else {
+        setError('Invalid email or password');
+      }
     } finally {
       setLoading(false);
     }
