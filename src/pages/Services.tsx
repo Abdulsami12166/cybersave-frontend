@@ -19,11 +19,15 @@ export default function Services() {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Service updated successfully!' } }));
         socket.emit('request_services_data');
       });
+      socket.on('services_updated', () => {
+        socket.emit('request_services_data');
+      });
     }
     return () => {
       if (socket) {
         socket.off('response_services_data');
         socket.off('edit_service_success');
+        socket.off('services_updated');
       }
     };
   }, [socket, connected]);

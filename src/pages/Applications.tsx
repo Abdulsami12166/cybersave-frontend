@@ -24,17 +24,21 @@ export default function Applications() {
         setLoading(false);
       });
       socket.on('create_application_success', () => {
-        // We use window.dispatchEvent because showToast is in Layout, or just import showToast
-        window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Application Created Successfully!' } }));
+        window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Application Workflow Created Successfully!' } }));
         setShowCreateModal(false);
         setNewAppTitle('');
         setNewAppDesc('');
+        socket.emit('request_applications_data');
+      });
+      socket.on('applications_updated', () => {
+        socket.emit('request_applications_data');
       });
     }
     return () => {
       if (socket) {
         socket.off('response_applications_data');
         socket.off('create_application_success');
+        socket.off('applications_updated');
       }
     };
   }, [socket, connected]);
