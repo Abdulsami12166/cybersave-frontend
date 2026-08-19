@@ -98,36 +98,78 @@ export default function ApplicationDetail() {
             <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 24}}>
               <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
                 <h3 style={{fontSize: 16, fontWeight: 700}}>Supporting Documents</h3>
-                <span style={{background: '#f3f4f6', color: '#4b5563', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600}}>3 files</span>
+                <span style={{background: '#f3f4f6', color: '#4b5563', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600}}>
+                  {(app.documents || []).length} { (app.documents || []).length === 1 ? 'file' : 'files' }
+                </span>
               </div>
-              <span style={{color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer'}}>Verify All</span>
             </div>
             
             <div style={{display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32}}>
-              {[
-                { n: 'Address Proof - Electricity Bill.pdf', s: '245 KB', status: 'Verified', color: '#10b981', bg: '#d1fae5' },
-                { n: 'Aadhaar Card (Current).pdf', s: '180 KB', status: 'Verified', color: '#10b981', bg: '#d1fae5' },
-                { n: 'Employment Letter.pdf', s: '312 KB', status: 'Pending', color: '#f59e0b', bg: '#fef3c7' }
-              ].map((doc, i) => (
-                <div key={i} style={{border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                  <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
-                    <div style={{background: '#eff6ff', padding: 8, borderRadius: 8, color: '#2563eb'}}>
-                      <FileText size={20} />
+              {(app.documents && app.documents.length > 0) ? (
+                app.documents.map((doc: any, i: number) => {
+                  const docName = doc.fileName || doc.label || doc.name || `Document Proof #${i + 1}`;
+                  const docUrl = doc.fileUrl || doc.url || '';
+                  const isImage = typeof docUrl === 'string' && (
+                    docUrl.startsWith('data:image') ||
+                    docUrl.includes('cloudinary.com') ||
+                    docUrl.includes('images.unsplash.com') ||
+                    docUrl.endsWith('.jpg') ||
+                    docUrl.endsWith('.jpeg') ||
+                    docUrl.endsWith('.png') ||
+                    docUrl.endsWith('.webp')
+                  );
+
+                  return (
+                    <div key={i} style={{border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f9fafb'}}>
+                      <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
+                        {isImage && docUrl ? (
+                          <a href={docUrl} target="_blank" rel="noreferrer">
+                            <img src={docUrl} alt={docName} style={{width: 44, height: 44, borderRadius: 6, objectFit: 'cover', border: '1px solid #cbd5e1'}} />
+                          </a>
+                        ) : (
+                          <div style={{background: '#eff6ff', padding: 10, borderRadius: 8, color: '#2563eb'}}>
+                            <FileText size={22} />
+                          </div>
+                        )}
+                        <div>
+                          <div style={{fontWeight: 600, fontSize: 14, color: '#111827'}}>{docName}</div>
+                          <div style={{fontSize: 11, color: '#6b7280'}}>{doc.type || 'Citizen Uploaded Proof'} • Verified in Vault</div>
+                        </div>
+                      </div>
+                      <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
+                        <span style={{color: '#10b981', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, background: '#d1fae5', padding: '2px 8px', borderRadius: 6}}>
+                          <CheckCircle size={14} /> Attached
+                        </span>
+                        {docUrl && (
+                          <a 
+                            href={docUrl} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            style={{color: '#2563eb', fontSize: 13, fontWeight: 600, textDecoration: 'none'}}
+                          >
+                            View
+                          </a>
+                        )}
+                        {docUrl && (
+                          <a 
+                            href={docUrl} 
+                            download={docName} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            style={{color: '#6b7280', fontSize: 13, fontWeight: 500, textDecoration: 'none'}}
+                          >
+                            Download
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <div style={{fontWeight: 600, fontSize: 14}}>{doc.n}</div>
-                      <div style={{fontSize: 11, color: '#6b7280'}}>{doc.s} • Uploaded 3 Aug 24</div>
-                    </div>
-                  </div>
-                  <div style={{display: 'flex', gap: 16, alignItems: 'center'}}>
-                    <span style={{color: doc.color, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4}}>
-                      {doc.status === 'Verified' && <CheckCircle size={14} />} {doc.status}
-                    </span>
-                    <span style={{color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer'}}>View</span>
-                    <span style={{color: '#6b7280', fontSize: 13, fontWeight: 500, cursor: 'pointer'}}>Download</span>
-                  </div>
+                  );
+                })
+              ) : (
+                <div style={{padding: 20, textAlign: 'center', color: '#6b7280', fontSize: 13, border: '1px dashed #cbd5e1', borderRadius: 8}}>
+                  No documents were uploaded with this application.
                 </div>
-              ))}
+              )}
             </div>
 
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>

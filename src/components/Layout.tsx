@@ -114,7 +114,11 @@ export default function Layout() {
             </div>
             <button className="action-btn">Quick Actions</button>
             <div className="profile-widget">
-              <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(admin?.name || admin?.email || 'Admin')}&background=0D8ABC&color=fff`} alt="Profile" />
+              <img 
+                src={admin?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(admin?.name || admin?.email || 'Admin')}&background=0D8ABC&color=fff`} 
+                alt="Profile" 
+                style={{width: 36, height: 36, borderRadius: '50%', objectFit: 'cover'}}
+              />
               <div className="profile-info">
                 <span className="profile-name">{admin?.name || (admin?.email === 'admin@cybersave.com' ? 'Super Administrator' : admin?.email?.split('@')[0])}</span>
                 <span className="profile-role">{admin?.role || (admin?.email === 'admin@cybersave.com' ? 'Super Admin' : 'Sub-Admin / Operator')}</span>

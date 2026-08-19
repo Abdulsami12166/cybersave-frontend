@@ -1,34 +1,65 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { showToast } from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { Upload, CheckCircle2, Shield, Image as ImageIcon } from 'lucide-react';
 import axios from 'axios';
 
 export default function Settings() {
-  const { admin, logout } = useAuth();
+  const { admin, updateAdmin } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const initialName = admin?.name || (admin?.email === 'admin@cybersave.com' ? 'Super Administrator' : (admin?.email?.split('@')[0] || 'Administrator'));
   const initialRole = admin?.role || (admin?.email === 'admin@cybersave.com' ? 'Super Admin' : 'Sub-Admin / Operator');
   const initialEmail = admin?.email || 'admin@cybersave.com';
+  const initialPhone = admin?.phone || "+91 98765 43210";
+  const initialAvatar = admin?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(initialName)}&background=0D8ABC&color=fff`;
 
   const [role, setRole] = useState(initialRole);
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
-  const [phone, setPhone] = useState("+91 98765 43210");
+  const [phone, setPhone] = useState(initialPhone);
   const [currentPass, setCurrentPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [twoFactor, setTwoFactor] = useState(true);
   const [emailNotifs, setEmailNotifs] = useState(true);
-  const [avatar, setAvatar] = useState(`https://ui-avatars.com/api/?name=${encodeURIComponent(initialName)}&background=0D8ABC&color=fff`);
+  const [avatar, setAvatar] = useState(initialAvatar);
+
+  useEffect(() => {
+    const fetchAdminProfile = async () => {
+      try {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+        const token = localStorage.getItem('adminToken');
+        const res = await axios.get(`${backendUrl}/api/admin/profile`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.data) {
+          if (res.data.name) setName(res.data.name);
+          if (res.data.email) setEmail(res.data.email);
+          if (res.data.role) setRole(res.data.role);
+          if (res.data.phone) setPhone(res.data.phone);
+          if (res.data.avatarUrl) setAvatar(res.data.avatarUrl);
+          updateAdmin({
+            name: res.data.name,
+            email: res.data.email,
+            role: res.data.role,
+            phone: res.data.phone,
+            avatarUrl: res.data.avatarUrl,
+          });
+        }
+      } catch (err) {
+        console.warn('Could not fetch remote admin profile, using local state', err);
+      }
+    };
+    fetchAdminProfile();
+  }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size (under 5MB)
     if (file.size > 5 * 1024 * 1024) {
       showToast("File is too large. Please select an image under 5MB.", "error");
       return;
@@ -51,24 +82,27 @@ export default function Settings() {
       if (response.data?.url || response.data?.secure_url) {
         const uploadedUrl = response.data.secure_url || response.data.url;
         setAvatar(uploadedUrl);
+        updateAdmin({ avatarUrl: uploadedUrl });
         showToast("Success! Image uploaded to Cloudinary.");
       } else {
-        // Fallback to local Data URI if backend is offline
         const reader = new FileReader();
         reader.onload = (event) => {
           if (event.target?.result) {
-            setAvatar(event.target.result as string);
+            const dataUrl = event.target.result as string;
+            setAvatar(dataUrl);
+            updateAdmin({ avatarUrl: dataUrl });
             showToast("Success! Avatar updated.");
           }
         };
         reader.readAsDataURL(file);
       }
     } catch (err) {
-      // Offline fallback: load data URL directly so user is never blocked
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
-          setAvatar(event.target.result as string);
+          const dataUrl = event.target.result as string;
+          setAvatar(dataUrl);
+          updateAdmin({ avatarUrl: dataUrl });
           showToast("Photo updated in local vault.");
         }
       };
@@ -78,17 +112,23 @@ export default function Settings() {
     }
   };
 
-  const handleSaveProfile = () => {
-    const storedAdmin = localStorage.getItem('adminUser');
-    if (storedAdmin) {
-      try {
-        const parsed = JSON.parse(storedAdmin);
-        parsed.name = name;
-        parsed.role = role;
-        localStorage.setItem('adminUser', JSON.stringify(parsed));
-      } catch (e) {}
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      updateAdmin({ name, email, role, phone, avatarUrl: avatar });
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const token = localStorage.getItem('adminToken');
+      await axios.put(
+        `${backendUrl}/api/admin/profile`,
+        { name, email, role, phone, avatarUrl: avatar },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      showToast("Success! Profile saved and synced with database.");
+    } catch (e) {
+      showToast("Success! Profile saved locally.");
+    } finally {
+      setSaving(false);
     }
-    showToast("Success! Profile changes saved.");
   };
 
   const handleUpdatePassword = () => {

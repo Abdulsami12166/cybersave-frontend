@@ -644,145 +644,130 @@ export default function Applications() {
                     alignItems: 'center',
                     gap: 6
                   }}>
-                    <FileCheck size={16} color="#059669" /> Uploaded Document Proofs ({((selectedApp.documents && selectedApp.documents.length > 0) ? selectedApp.documents : [
-                      { fileName: 'Aadhaar_Card_Front_Back.pdf', type: 'Aadhaar Identity Proof', fileUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800' },
-                      { fileName: 'Passport_Size_Photograph.jpg', type: 'Applicant Photograph', fileUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500' },
-                      { fileName: 'Income_Certificate_Verified.pdf', type: 'Income Certificate Proof', fileUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800' }
-                    ]).length})
+                    <FileCheck size={16} color="#059669" /> Uploaded Document Proofs ({(selectedApp.documents || []).length})
                   </div>
-                  <span style={{fontSize: 12, color: '#2563eb', fontWeight: 600}}>
-                    💡 Click on document image or button to automatically download
-                  </span>
+                  {(selectedApp.documents || []).length > 0 && (
+                    <span style={{fontSize: 12, color: '#2563eb', fontWeight: 600}}>
+                      💡 Click on document image or button to view / download
+                    </span>
+                  )}
                 </div>
 
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: 14
-                }}>
-                  {((selectedApp.documents && selectedApp.documents.length > 0) ? selectedApp.documents : [
-                    { fileName: 'Aadhaar_Card_Front_Back.pdf', type: 'Aadhaar Identity Proof', fileUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800' },
-                    { fileName: 'Passport_Size_Photograph.jpg', type: 'Applicant Photograph', fileUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500' },
-                    { fileName: 'Income_Certificate_Verified.pdf', type: 'Income Certificate Proof', fileUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800' }
-                  ]).map((doc: any, idx: number) => {
-                    const docName = doc.fileName || doc.label || doc.type || `Document Proof #${idx + 1}`;
-                    const docUrl = doc.fileUrl || doc.url || `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800`;
-                    const isImage = typeof docUrl === 'string' && (
-                      docUrl.startsWith('data:image') || 
-                      docUrl.includes('images.unsplash.com') ||
-                      docUrl.includes('cloudinary.com') ||
-                      docUrl.endsWith('.jpg') || 
-                      docUrl.endsWith('.jpeg') || 
-                      docUrl.endsWith('.png') || 
-                      docUrl.endsWith('.webp')
-                    );
-                    
-                    return (
-                      <div 
-                        key={idx}
-                        style={{
-                          padding: '12px 14px',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: 10,
-                          background: '#f8fafc',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 10
-                        }}
-                      >
-                        <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
-                          {/* Visual Thumbnail (Click to Auto-Download) */}
-                          <div 
-                            onClick={() => handleDownloadDoc(docUrl, docName)}
-                            title="Click to automatically download document proof"
-                            style={{
-                              width: 56,
-                              height: 56,
-                              borderRadius: 8,
-                              background: '#eff6ff',
-                              color: '#2563eb',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                              cursor: 'pointer',
-                              border: '1px solid #bfdbfe',
-                              overflow: 'hidden',
-                              position: 'relative'
-                            }}
-                          >
-                            {isImage ? (
-                              <img 
-                                src={docUrl} 
-                                alt={docName} 
-                                style={{width: '100%', height: '100%', objectFit: 'cover'}} 
-                              />
-                            ) : (
-                              <FileText size={26} color="#2563eb" />
-                            )}
-                          </div>
-
-                          <div style={{minWidth: 0, flex: 1}}>
-                            <div style={{fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
-                              {docName}
+                {(selectedApp.documents && selectedApp.documents.length > 0) ? (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: 14
+                  }}>
+                    {selectedApp.documents.map((doc: any, idx: number) => {
+                      const docName = doc.fileName || doc.label || doc.name || `Document Proof #${idx + 1}`;
+                      const docUrl = doc.fileUrl || doc.url || '';
+                      const isImage = typeof docUrl === 'string' && (
+                        docUrl.startsWith('data:image') || 
+                        docUrl.includes('cloudinary.com') ||
+                        docUrl.includes('images.unsplash.com') ||
+                        docUrl.endsWith('.jpg') || 
+                        docUrl.endsWith('.jpeg') || 
+                        docUrl.endsWith('.png') || 
+                        docUrl.endsWith('.webp')
+                      );
+                      
+                      return (
+                        <div 
+                          key={idx}
+                          style={{
+                            padding: '12px 14px',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: 10,
+                            background: '#f8fafc',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 10
+                          }}
+                        >
+                          <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+                            <div 
+                              onClick={() => handleDownloadDoc(docUrl, docName)}
+                              title="Click to download document proof"
+                              style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 8,
+                                background: '#eff6ff',
+                                color: '#2563eb',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                cursor: 'pointer',
+                                border: '1px solid #bfdbfe',
+                                overflow: 'hidden',
+                                position: 'relative'
+                              }}
+                            >
+                              {isImage && docUrl ? (
+                                <img 
+                                  src={docUrl} 
+                                  alt={docName} 
+                                  style={{width: '100%', height: '100%', objectFit: 'cover'}} 
+                                />
+                              ) : (
+                                <FileText size={26} color="#2563eb" />
+                              )}
                             </div>
-                            <div style={{fontSize: 11, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4}}>
-                              <span style={{backgroundColor: '#dbeafe', color: '#1e40af', padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontSize: 10}}>
-                                {doc.type || 'Identity Proof'}
-                              </span>
-                              <span>• Verified</span>
+
+                            <div style={{minWidth: 0, flex: 1}}>
+                              <div style={{fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                                {docName}
+                              </div>
+                              <div style={{fontSize: 11, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4}}>
+                                <span style={{backgroundColor: '#dbeafe', color: '#1e40af', padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontSize: 10}}>
+                                  {doc.type || 'Identity Proof'}
+                                </span>
+                                <span>• Verified</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Action Buttons: View & Auto-Download */}
-                        <div style={{display: 'flex', gap: 8, marginTop: 2}}>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadDoc(docUrl, docName)}
-                            style={{
-                              flex: 1,
-                              padding: '7px 10px',
-                              background: '#2563eb',
-                              color: '#ffffff',
-                              border: 'none',
-                              borderRadius: 6,
-                              fontSize: 12,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 5
-                            }}
-                          >
-                            <Download size={14} /> Download Proof
-                          </button>
-                          <a 
-                            href={docUrl} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            style={{
-                              padding: '7px 12px',
-                              background: '#ffffff',
-                              color: '#475569',
-                              border: '1px solid #cbd5e1',
-                              borderRadius: 6,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              textDecoration: 'none',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4
-                            }}
-                          >
-                            <ExternalLink size={13} /> View
-                          </a>
+                          <div style={{display: 'flex', gap: 8, marginTop: 2}}>
+                            {docUrl ? (
+                              <button 
+                                className="action-btn"
+                                onClick={() => handleDownloadDoc(docUrl, docName)}
+                                style={{flex: 1, padding: '5px 10px', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4}}
+                              >
+                                <Download size={12} /> Download Proof
+                              </button>
+                            ) : null}
+                            {docUrl ? (
+                              <a 
+                                href={docUrl} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="date-picker-btn"
+                                style={{padding: '5px 10px', fontSize: 11, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4}}
+                              >
+                                <ExternalLink size={12} /> View Full
+                              </a>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: '24px 16px',
+                    textAlign: 'center',
+                    background: '#f8fafc',
+                    borderRadius: 10,
+                    border: '1px dashed #cbd5e1',
+                    color: '#64748b',
+                    fontSize: 13
+                  }}>
+                    No document proofs were attached with this citizen application.
+                  </div>
+                )}
               </div>
 
               {/* Section 3: Payment & Processing Info */}
