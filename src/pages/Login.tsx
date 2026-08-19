@@ -28,7 +28,25 @@ const Login: React.FC = () => {
 
       const { token, admin } = response.data;
       login(token, admin);
-      navigate('/');
+      
+      // Smart navigation based on assigned permissions
+      if (admin?.permissions && !admin.permissions.includes('DASHBOARD') && admin.email !== 'admin@cybersave.com') {
+        if (admin.permissions.includes('APPLICATIONS')) {
+          navigate('/applications');
+        } else if (admin.permissions.includes('USERS')) {
+          navigate('/users');
+        } else if (admin.permissions.includes('OPERATORS')) {
+          navigate('/operators');
+        } else if (admin.permissions.includes('REPORTS')) {
+          navigate('/analytics');
+        } else if (admin.permissions.includes('SETTINGS')) {
+          navigate('/settings');
+        } else {
+          navigate('/applications');
+        }
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       // Fallback for default super admin if remote backend is restarting or syncing
       if (cleanEmail === 'admin@cybersave.com' && password === 'admin123') {
