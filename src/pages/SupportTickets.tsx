@@ -9,9 +9,14 @@ export default function SupportTickets() {
   const [data, setData] = useState<any>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newCat, setNewCat] = useState('Technical');
+  const [newCat, setNewCat] = useState('Technical Support');
   const [newPri, setNewPri] = useState('Medium');
   const [newDesc, setNewDesc] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All Categories');
+  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [priorityFilter, setPriorityFilter] = useState('All Priority');
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   useEffect(() => {
     if (socket && connected) {
@@ -43,9 +48,24 @@ export default function SupportTickets() {
     }
   };
 
-  if (!data) return <div>Connecting to live support tickets...</div>;
+  if (!data) return <div style={{ padding: 24, color: '#6b7280' }}>Connecting to live support tickets...</div>;
 
   const { stats, tickets } = data;
+
+  const filteredTickets = (tickets || []).filter((t: any) => {
+    if (categoryFilter !== 'All Categories' && t.category !== categoryFilter) return false;
+    if (statusFilter !== 'All Status' && t.status !== statusFilter) return false;
+    if (priorityFilter !== 'All Priority' && t.priority !== priorityFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchId = t.id?.toLowerCase().includes(q);
+      const matchTitle = t.title?.toLowerCase().includes(q);
+      const matchDesc = t.description?.toLowerCase().includes(q);
+      const matchReporter = t.reporter?.name?.toLowerCase().includes(q);
+      if (!matchId && !matchTitle && !matchDesc && !matchReporter) return false;
+    }
+    return true;
+  });
 
   return (
     <>
@@ -84,106 +104,159 @@ export default function SupportTickets() {
       </div>
 
       <div className="table-card" style={{marginTop: 24, padding: 0, background: 'transparent', boxShadow: 'none'}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 24, padding: '12px 16px', background: 'white', borderRadius: 12, border: '1px solid #e5e7eb', alignItems: 'center'}}>
-          <div style={{display: 'flex', gap: 16, alignItems: 'center'}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 24, padding: '12px 16px', background: 'white', borderRadius: 12, border: '1px solid #e5e7eb', alignItems: 'center', flexWrap: 'wrap', gap: 12}}>
+          <div style={{display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap'}}>
             <div className="search-bar" style={{width: 250, padding: '4px 8px', background: '#f9fafb'}}>
-              <input type="text" placeholder="Filter tickets..." style={{background: 'transparent'}}/>
+              <input 
+                type="text" 
+                placeholder="Filter tickets..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                style={{background: 'transparent', border: 'none', outline: 'none', width: '100%'}}
+              />
             </div>
-            <div style={{fontSize: 13, fontWeight: 500}}>Category: <select style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent'}}><option>All Categories</option></select></div>
-            <div style={{fontSize: 13, fontWeight: 500}}>Status: <select style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent'}}><option>All Status</option></select></div>
-            <div style={{fontSize: 13, fontWeight: 500}}>Priority: <select style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent'}}><option>All Priority</option></select></div>
+            <div style={{fontSize: 13, fontWeight: 500}}>
+              Category: 
+              <select 
+                value={categoryFilter} 
+                onChange={e => setCategoryFilter(e.target.value)}
+                style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent', marginLeft: 4, cursor: 'pointer'}}
+              >
+                <option>All Categories</option>
+                <option>Technical Support</option>
+                <option>Document Rejection</option>
+                <option>Payment Issue</option>
+                <option>Application Delay</option>
+                <option>General Inquiry</option>
+              </select>
+            </div>
+            <div style={{fontSize: 13, fontWeight: 500}}>
+              Status: 
+              <select 
+                value={statusFilter} 
+                onChange={e => setStatusFilter(e.target.value)}
+                style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent', marginLeft: 4, cursor: 'pointer'}}
+              >
+                <option>All Status</option>
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="RESOLVED">Resolved</option>
+                <option value="ESCALATED">Escalated</option>
+              </select>
+            </div>
+            <div style={{fontSize: 13, fontWeight: 500}}>
+              Priority: 
+              <select 
+                value={priorityFilter} 
+                onChange={e => setPriorityFilter(e.target.value)}
+                style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent', marginLeft: 4, cursor: 'pointer'}}
+              >
+                <option>All Priority</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Low</option>
+              </select>
+            </div>
           </div>
           <div style={{display: 'flex', gap: 16, alignItems: 'center'}}>
-            <span style={{fontSize: 13, color: '#6b7280'}}>Showing 1-9 of {stats?.totalTickets}</span>
+            <span style={{fontSize: 13, color: '#6b7280'}}>Showing {filteredTickets.length} of {stats?.totalTickets || 0}</span>
             <button className="date-picker-btn" style={{border: 'none', fontWeight: 600}}>Export Report</button>
           </div>
         </div>
 
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24}}>
-          {(tickets || []).map((t: any, i: number) => {
-            let statusColor = '#2563eb';
-            let statusBg = '#eff6ff';
-            if (t.status === 'IN_PROGRESS') { statusColor = '#f59e0b'; statusBg = '#fef3c7'; }
-            if (t.status === 'RESOLVED') { statusColor = '#10b981'; statusBg = '#d1fae5'; }
-            if (t.status === 'ESCALATED') { statusColor = '#ef4444'; statusBg = '#fee2e2'; }
+        {filteredTickets.length === 0 ? (
+          <div style={{ background: '#fff', borderRadius: 12, padding: 48, textAlign: 'center', border: '1px solid #e2e8f0' }}>
+            <HelpCircle size={44} color="#94a3b8" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>No Support Tickets Found</h3>
+            <p style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>No tickets match the selected filters or search query.</p>
+          </div>
+        ) : (
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24}}>
+            {filteredTickets.map((t: any, i: number) => {
+              let statusColor = '#2563eb';
+              let statusBg = '#eff6ff';
+              if (t.status === 'IN_PROGRESS') { statusColor = '#f59e0b'; statusBg = '#fef3c7'; }
+              if (t.status === 'RESOLVED') { statusColor = '#10b981'; statusBg = '#d1fae5'; }
+              if (t.status === 'ESCALATED') { statusColor = '#ef4444'; statusBg = '#fee2e2'; }
 
-            return (
-              <div key={i} style={{background: 'white', borderRadius: 12, padding: 24, border: '1px solid #e5e7eb'}}>
-                <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 12}}>
-                  <span style={{fontSize: 11, color: '#6b7280', fontWeight: 600}}>{t.id}</span>
-                  <span style={{background: statusBg, color: statusColor, padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600}}>
-                    {t.status === 'IN_PROGRESS' ? 'In Progress' : t.status === 'OPEN' ? 'Open' : t.status === 'RESOLVED' ? 'Resolved' : 'Escalated'}
-                  </span>
-                </div>
-                <h3 style={{fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 24, minHeight: 48}}>{t.title}</h3>
-                
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 12}}>
-                  <span style={{color: '#6b7280'}}>Category</span>
-                  <span style={{fontWeight: 600}}>{t.category}</span>
-                </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 12}}>
-                  <span style={{color: '#6b7280'}}>Priority</span>
-                  <span style={{fontWeight: 700, color: t.priority === 'High' || t.priority === 'Critical' ? '#ef4444' : t.priority === 'Medium' ? '#f59e0b' : '#6b7280'}}>{t.priority}</span>
-                </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 12}}>
-                  <span style={{color: '#6b7280'}}>Created On</span>
-                  <span style={{fontWeight: 600}}>{t.createdOn}</span>
-                </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 12}}>
-                  <span style={{color: '#6b7280'}}>Last Updated</span>
-                  <span style={{fontWeight: 600}}>{t.lastUpdated}</span>
-                </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 16}}>
-                  <span style={{color: '#6b7280'}}>Assigned To</span>
-                  <span style={{fontWeight: 700}}>{t.assignedTo}</span>
-                </div>
-
-                {t.attachmentUrl ? (
-                  <div style={{
-                    marginBottom: 16,
-                    padding: '8px 12px',
-                    background: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    borderRadius: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8
-                  }}>
-                    <div style={{display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden'}}>
-                      <img 
-                        src={t.attachmentUrl} 
-                        alt="Proof" 
-                        style={{width: 32, height: 32, borderRadius: 6, objectFit: 'cover', border: '1px solid #86efac'}}
-                      />
-                      <span style={{fontSize: 12, fontWeight: 600, color: '#166534', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden'}}>
-                        📎 Uploaded Proof Image
-                      </span>
-                    </div>
-                    <a 
-                      href={t.attachmentUrl} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      style={{fontSize: 11, color: '#2563eb', fontWeight: 700, textDecoration: 'none'}}
-                    >
-                      Inspect &rarr;
-                    </a>
+              return (
+                <div key={i} style={{background: 'white', borderRadius: 12, padding: 24, border: '1px solid #e5e7eb'}}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 12}}>
+                    <span style={{fontSize: 11, color: '#6b7280', fontWeight: 600}}>{t.id}</span>
+                    <span style={{background: statusBg, color: statusColor, padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600}}>
+                      {t.status === 'IN_PROGRESS' ? 'In Progress' : t.status === 'OPEN' ? 'Open' : t.status === 'RESOLVED' ? 'Resolved' : 'Escalated'}
+                    </span>
                   </div>
-                ) : null}
+                  <h3 style={{fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 14, minHeight: 48}}>{t.title}</h3>
+                  
+                  <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 10}}>
+                    <span style={{color: '#6b7280'}}>Reporter</span>
+                    <span style={{fontWeight: 600, color: '#1e293b'}}>{t.reporter?.name || 'Citizen User'}</span>
+                  </div>
+                  <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 10}}>
+                    <span style={{color: '#6b7280'}}>Category</span>
+                    <span style={{fontWeight: 600}}>{t.category}</span>
+                  </div>
+                  <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 10}}>
+                    <span style={{color: '#6b7280'}}>Priority</span>
+                    <span style={{fontWeight: 700, color: t.priority === 'High' || t.priority === 'Critical' ? '#ef4444' : t.priority === 'Medium' ? '#f59e0b' : '#6b7280'}}>{t.priority}</span>
+                  </div>
+                  <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 10}}>
+                    <span style={{color: '#6b7280'}}>Created On</span>
+                    <span style={{fontWeight: 600}}>{t.createdOn}</span>
+                  </div>
+                  <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 16}}>
+                    <span style={{color: '#6b7280'}}>Assigned To</span>
+                    <span style={{fontWeight: 700}}>{t.assignedTo}</span>
+                  </div>
 
-                <div style={{display: 'flex', gap: 12}}>
-                  <Link to={`/support/${t.id}`} className="date-picker-btn" style={{flex: 1, justifyContent: 'center', textDecoration: 'none'}}>View</Link>
-                  <Link to={`/support/${t.id}`} className="action-btn" style={{flex: 1, justifyContent: 'center', textDecoration: 'none'}}>Respond</Link>
+                  {t.attachmentUrl ? (
+                    <div style={{
+                      marginBottom: 16,
+                      padding: '8px 12px',
+                      background: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8
+                    }}>
+                      <div 
+                        onClick={() => setPreviewImage({ url: t.attachmentUrl, title: t.title })}
+                        style={{display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', cursor: 'pointer'}}
+                      >
+                        <img 
+                          src={t.attachmentUrl} 
+                          alt="Proof" 
+                          style={{width: 32, height: 32, borderRadius: 6, objectFit: 'cover', border: '1px solid #86efac'}}
+                        />
+                        <span style={{fontSize: 12, fontWeight: 600, color: '#166534', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden'}}>
+                          📎 Verified Proof Image
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => setPreviewImage({ url: t.attachmentUrl, title: t.title })}
+                        style={{background: 'none', border: 'none', fontSize: 11, color: '#2563eb', fontWeight: 700, cursor: 'pointer'}}
+                      >
+                        Inspect &rarr;
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div style={{display: 'flex', gap: 12}}>
+                    <Link to={`/support/${t.id}`} className="date-picker-btn" style={{flex: 1, justifyContent: 'center', textDecoration: 'none'}}>View</Link>
+                    <Link to={`/support/${t.id}`} className="action-btn" style={{flex: 1, justifyContent: 'center', textDecoration: 'none'}}>Respond</Link>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
         
-        <div style={{padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', borderRadius: 12, border: '1px solid #e5e7eb', marginTop: 24}}>
-          <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
-            <div style={{width: 32, height: 32, borderRadius: 8, background: '#f3f4f6'}}></div>
-            <div style={{width: 32, height: 32, borderRadius: 8, background: '#f3f4f6'}}></div>
+        <div style={{padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', borderRadius: 12, border: '1px solid #e5e7eb', marginTop: 24}}>
+          <div style={{fontSize: 13, color: '#64748b'}}>
+            Total Tickets: <strong style={{color: '#0f172a'}}>{filteredTickets.length}</strong>
           </div>
           <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
             <button className="date-picker-btn">Previous</button>
@@ -192,6 +265,83 @@ export default function SupportTickets() {
           </div>
         </div>
       </div>
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div 
+          onClick={() => setPreviewImage(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: 24
+          }}
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: 16,
+              maxWidth: 720,
+              width: '100%',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            }}
+          >
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                  {previewImage.title || 'Support Proof Document'}
+                </h3>
+                <span style={{ fontSize: 12, color: '#15803d', fontWeight: 600 }}>✓ Verified Cloudinary CDN Image</span>
+              </div>
+              <button 
+                onClick={() => setPreviewImage(null)}
+                style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#64748b' }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: 20, textAlign: 'center', backgroundColor: '#0f172a' }}>
+              <img 
+                src={previewImage.url} 
+                alt="Support Proof" 
+                style={{ maxHeight: 480, maxWidth: '100%', objectFit: 'contain', borderRadius: 8 }}
+              />
+            </div>
+            <div style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <a 
+                href={previewImage.url} 
+                target="_blank" 
+                rel="noreferrer"
+                download="support_proof.jpg"
+                className="action-btn"
+                style={{ textDecoration: 'none', padding: '8px 16px', fontSize: 13 }}
+              >
+                Download Original 📥
+              </a>
+              <button 
+                onClick={() => setPreviewImage(null)}
+                className="date-picker-btn"
+                style={{ padding: '8px 16px', fontSize: 13 }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreateModal && (
         <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000}}>
