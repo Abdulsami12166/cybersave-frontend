@@ -1,95 +1,158 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
-import { FileText, CheckCircle, Clock, FileBadge, ArrowRight } from 'lucide-react';
+import { FileText, CheckCircle, Clock, FileBadge, ArrowRight, ShieldCheck, Check, X, AlertTriangle } from 'lucide-react';
 
 export default function ApplicationDetail() {
   const { id } = useParams();
   const { socket, connected } = useSocket();
   const [app, setApp] = useState<any>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (socket && connected) {
       socket.emit('request_application_detail', { id });
-      socket.on('response_application_detail', (data) => setApp(data));
+      
+      const handleDetail = (data: any) => {
+        setApp(data);
+        setActionLoading(false);
+      };
+
+      const handleUpdate = () => {
+        socket.emit('request_application_detail', { id });
+      };
+
+      socket.on('response_application_detail', handleDetail);
+      socket.on('applications_updated', handleUpdate);
+      socket.on('update_application_status_success', handleUpdate);
+
+      return () => {
+        socket.off('response_application_detail', handleDetail);
+        socket.off('applications_updated', handleUpdate);
+        socket.off('update_application_status_success', handleUpdate);
+      };
     }
-    return () => {
-      if (socket) socket.off('response_application_detail');
-    };
   }, [socket, connected, id]);
 
-  if (!app) return <div style={{padding: 24}}>Loading Application Data...</div>;
+  const handleStatusChange = (newStatus: 'APPROVED' | 'REJECTED' | 'IN_PROGRESS') => {
+    if (!socket || !app) return;
+    setActionLoading(true);
+    socket.emit('update_application_status', {
+      id: app.rawId || app.id,
+      applicationId: app.rawId || app.id,
+      refNumber: app.id || app.refNumber,
+      status: newStatus,
+      rejectionReason: newStatus === 'REJECTED' ? 'Documents could not be verified by the administrative officer.' : undefined,
+    });
+  };
+
+  if (!app) return <div style={{ padding: 32, textAlign: 'center', color: '#6b7280' }}>Loading Application Data...</div>;
+
+  const applicant = app.applicant || {};
+  const formData = app.formData || {};
+  const applicantName = applicant.name || formData.fullName || 'Citizen Applicant';
+  const applicantPhone = applicant.phone || formData.phone || 'Not Provided';
+  const applicantAadhaar = applicant.aadhaar || formData.aadhaarNumber || 'Verified ID Vault';
+  const fullAddress = applicant.address || (formData.district ? `${formData.district}, ${formData.stateName || formData.state || ''} - ${formData.pinCode || ''}` : 'National ID Vault');
+
+  const isApproved = app.status === 'APPROVED' || app.status === 'Approved' || app.status === 'COMPLETED';
+  const isRejected = app.status === 'REJECTED' || app.status === 'Rejected';
 
   return (
     <>
-      <div style={{fontSize: '13px', color: '#6b7280', marginBottom: 24}}>
-        <Link to="/" style={{color: 'inherit', textDecoration: 'none'}}>Dashboard</Link> &rarr; <Link to="/applications" style={{color: 'inherit', textDecoration: 'none'}}>Applications</Link> &rarr; <span style={{color: '#2563eb'}}>{app.id}</span>
+      <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: 24 }}>
+        <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>Dashboard</Link> &rarr; <Link to="/applications" style={{ color: 'inherit', textDecoration: 'none' }}>Applications</Link> &rarr; <span style={{ color: '#2563eb' }}>{app.id}</span>
       </div>
 
-      <div className="table-card" style={{padding: '24px 32px', marginBottom: 24}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+      <div className="table-card" style={{ padding: '24px 32px', marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <div>
-            <div style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8}}>
-              <h1 style={{fontSize: 24, fontWeight: 700, margin: 0, color: '#111827'}}>{app.id}</h1>
-              <span style={{background: '#fef3c7', color: '#f59e0b', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600}}>In Review</span>
-              <span style={{background: '#fee2e2', color: '#ef4444', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600}}>High Priority</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: '#111827' }}>{app.id}</h1>
+              <span style={{
+                background: isApproved ? '#d1fae5' : isRejected ? '#fee2e2' : '#fef3c7',
+                color: isApproved ? '#10b981' : isRejected ? '#ef4444' : '#f59e0b',
+                padding: '3px 10px',
+                borderRadius: 12,
+                fontSize: 12,
+                fontWeight: 700,
+                textTransform: 'uppercase'
+              }}>
+                {app.status || 'In Review'}
+              </span>
+              <span style={{ background: '#eff6ff', color: '#2563eb', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+                {app.paymentStatus ? `Payment: ${app.paymentStatus}` : 'Paid'}
+              </span>
             </div>
-            <div style={{display: 'flex', gap: 16, alignItems: 'center', fontSize: 13, color: '#6b7280'}}>
-              <div style={{display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: '#111827'}}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 13, color: '#6b7280' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: '#111827' }}>
                 <FileBadge size={16} color="#2563eb" /> {app.serviceName}
               </div>
-              <div style={{color: '#ef4444', fontWeight: 600}}>| SLA: {app.sla} remaining</div>
+              <div style={{ color: '#2563eb', fontWeight: 600 }}>| SLA: {app.sla || '24h'} remaining</div>
             </div>
-            <div style={{fontSize: 12, color: '#6b7280', marginTop: 12}}>
-              Submitted: {app.submitted} • Assigned Operator: <span style={{color: '#2563eb', fontWeight: 500}}>{app.assignedTo}</span> • Centre: {app.centre}
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 12 }}>
+              Submitted: {app.submitted} • Assigned Officer: <span style={{ color: '#2563eb', fontWeight: 500 }}>{app.assignedTo}</span> • Centre: {app.centre}
             </div>
           </div>
-          <div style={{display: 'flex', gap: 12}}>
-            <select className="date-picker-btn" style={{border: '1px solid #e5e7eb'}}>
-              <option>Assign To</option>
-            </select>
-            <button className="date-picker-btn" style={{color: '#f59e0b', borderColor: '#fef3c7'}}>Escalate</button>
-            <button className="date-picker-btn" style={{color: '#ef4444', borderColor: '#fee2e2'}}>Reject</button>
-            <button className="action-btn" style={{background: '#10b981'}}>✓ Approve</button>
+          
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button 
+              className="date-picker-btn" 
+              style={{ color: '#ef4444', borderColor: '#fee2e2', opacity: actionLoading ? 0.7 : 1 }}
+              onClick={() => handleStatusChange('REJECTED')}
+              disabled={actionLoading}
+            >
+              <X size={15} style={{ marginRight: 4 }} /> Reject
+            </button>
+            <button 
+              className="action-btn" 
+              style={{ background: '#10b981', color: '#fff', opacity: actionLoading ? 0.7 : 1 }}
+              onClick={() => handleStatusChange('APPROVED')}
+              disabled={actionLoading}
+            >
+              <Check size={16} style={{ marginRight: 4 }} /> ✓ Approve
+            </button>
           </div>
         </div>
       </div>
 
-      <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24}}>
-        <div style={{display: 'flex', flexDirection: 'column', gap: 24}}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           
-          <div className="table-card" style={{padding: 24}}>
-            <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 24}}>
-              <h3 style={{fontSize: 16, fontWeight: 700}}>Applicant Details</h3>
-              <span style={{color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer'}}>View Profile &rarr;</span>
+          <div className="table-card" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>Applicant Details</h3>
+              <span style={{ color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>National Vault Verified &rarr;</span>
             </div>
-            <div style={{display: 'flex', gap: 16, alignItems: 'center', marginBottom: 24}}>
-              <img src="https://i.pravatar.cc/150?img=9" alt="User" style={{width: 48, height: 48, borderRadius: '50%'}} />
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 24 }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18 }}>
+                {applicantName.substring(0, 2).toUpperCase()}
+              </div>
               <div>
-                <div style={{fontWeight: 700}}>{app.applicant.name}</div>
-                <div style={{fontSize: 12, color: '#6b7280'}}>Citizen ID: {app.applicant.id}</div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{applicantName}</div>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>Email: {applicant.email || 'N/A'}</div>
               </div>
             </div>
-            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24}}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               <div>
-                <div style={{fontSize: 12, color: '#6b7280', marginBottom: 4}}>Aadhaar Number</div>
-                <div style={{fontWeight: 600}}>{app.applicant.aadhaar}</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Aadhaar Number</div>
+                <div style={{ fontWeight: 600 }}>{applicantAadhaar}</div>
               </div>
               <div>
-                <div style={{fontSize: 12, color: '#6b7280', marginBottom: 4}}>Mobile Number</div>
-                <div style={{fontWeight: 600}}>{app.applicant.mobile}</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Mobile Number</div>
+                <div style={{ fontWeight: 600 }}>{applicantPhone}</div>
               </div>
-              <div style={{gridColumn: '1 / -1'}}>
-                <div style={{fontSize: 12, color: '#6b7280', marginBottom: 4}}>Current Registered Address</div>
-                <div style={{fontWeight: 600}}>42, Hazratganj, Lucknow, UP - 226001</div>
+              <div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Father's Name</div>
+                <div style={{ fontWeight: 600 }}>{formData.fatherName || 'Not Provided'}</div>
               </div>
-              <div style={{gridColumn: '1 / -1', background: '#eff6ff', padding: 16, borderRadius: 8, borderLeft: '4px solid #2563eb'}}>
-                <div style={{fontSize: 12, color: '#2563eb', fontWeight: 700, marginBottom: 4}}>PROPOSED NEW ADDRESS (REQUESTED)</div>
-                <div style={{fontWeight: 600}}>78, Civil Lines, Allahabad, UP - 211001</div>
+              <div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Date of Birth / Gender</div>
+                <div style={{ fontWeight: 600 }}>{formData.dob || applicant.dob || 'Not Provided'} • {formData.gender || applicant.gender || 'Not Provided'}</div>
               </div>
-              <div style={{gridColumn: '1 / -1'}}>
-                <div style={{fontSize: 12, color: '#6b7280', marginBottom: 4}}>Reason for Update</div>
-                <div style={{fontWeight: 600}}>Relocated for employment</div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Current Registered Address</div>
+                <div style={{ fontWeight: 600 }}>{fullAddress}</div>
               </div>
             </div>
           </div>
