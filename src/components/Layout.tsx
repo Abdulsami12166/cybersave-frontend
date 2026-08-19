@@ -73,6 +73,27 @@ export default function Layout() {
         ))}
 
         <div className="sidebar-spacer"></div>
+        <div 
+          onClick={logout}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 14px',
+            margin: '0 12px 10px 12px',
+            borderRadius: 8,
+            color: '#dc2626',
+            backgroundColor: '#fef2f2',
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: 'pointer',
+            border: '1px solid #fecaca',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <LogOut size={17} color="#dc2626" />
+          <span>Sign Out</span>
+        </div>
         <div className="collapse-menu">
           <PanelLeftClose size={20} /> Collapse Menu
         </div>
@@ -96,20 +117,29 @@ export default function Layout() {
               <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(admin?.name || admin?.email || 'Admin')}&background=0D8ABC&color=fff`} alt="Profile" />
               <div className="profile-info">
                 <span className="profile-name">{admin?.name || (admin?.email === 'admin@cybersave.com' ? 'Super Administrator' : admin?.email?.split('@')[0])}</span>
-                <span className="profile-role">{admin?.role || (admin?.email === 'admin@cybersave.com' ? 'Super Admin' : 'Operator')}</span>
+                <span className="profile-role">{admin?.role || (admin?.email === 'admin@cybersave.com' ? 'Super Admin' : 'Sub-Admin / Operator')}</span>
               </div>
             </div>
             <button 
               onClick={logout} 
-              title="Sign Out"
+              title="Sign Out of Session"
               style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA',
-                borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 700,
-                cursor: 'pointer'
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 8,
+                padding: '8px 14px',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 4px rgba(220, 38, 38, 0.25)',
               }}
             >
-              <LogOut size={15} /> Logout
+              <LogOut size={15} color="#ffffff" />
+              <span>Logout</span>
             </button>
           </div>
         </div>
