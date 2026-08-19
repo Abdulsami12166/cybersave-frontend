@@ -16,6 +16,9 @@ export default function SupportTickets() {
     if (socket && connected) {
       socket.emit('request_support_tickets');
       socket.on('response_support_tickets', (resData) => setData(resData));
+      socket.on('new_support_ticket', () => {
+        socket.emit('request_support_tickets');
+      });
       socket.on('create_support_ticket_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Ticket created successfully!' } }));
         setShowCreateModal(false);
@@ -27,6 +30,7 @@ export default function SupportTickets() {
     return () => {
       if (socket) {
         socket.off('response_support_tickets');
+        socket.off('new_support_ticket');
         socket.off('create_support_ticket_success');
       }
     };

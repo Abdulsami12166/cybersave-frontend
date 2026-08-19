@@ -645,9 +645,9 @@ export default function Applications() {
                     gap: 6
                   }}>
                     <FileCheck size={16} color="#059669" /> Uploaded Document Proofs ({((selectedApp.documents && selectedApp.documents.length > 0) ? selectedApp.documents : [
-                      { fileName: 'Aadhaar_Card_Front_Back.pdf', type: 'Aadhaar Identity Proof', fileUrl: 'https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/aadhaar_sample.png' },
+                      { fileName: 'Aadhaar_Card_Front_Back.pdf', type: 'Aadhaar Identity Proof', fileUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800' },
                       { fileName: 'Passport_Size_Photograph.jpg', type: 'Applicant Photograph', fileUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500' },
-                      { fileName: 'Income_Certificate_Verified.pdf', type: 'Income Certificate Proof', fileUrl: 'https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/income_cert_sample.png' }
+                      { fileName: 'Income_Certificate_Verified.pdf', type: 'Income Certificate Proof', fileUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800' }
                     ]).length})
                   </div>
                   <span style={{fontSize: 12, color: '#2563eb', fontWeight: 600}}>
@@ -661,12 +661,12 @@ export default function Applications() {
                   gap: 14
                 }}>
                   {((selectedApp.documents && selectedApp.documents.length > 0) ? selectedApp.documents : [
-                    { fileName: 'Aadhaar_Card_Front_Back.pdf', type: 'Aadhaar Identity Proof', fileUrl: 'https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/aadhaar_sample.png' },
+                    { fileName: 'Aadhaar_Card_Front_Back.pdf', type: 'Aadhaar Identity Proof', fileUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800' },
                     { fileName: 'Passport_Size_Photograph.jpg', type: 'Applicant Photograph', fileUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500' },
-                    { fileName: 'Income_Certificate_Verified.pdf', type: 'Income Certificate Proof', fileUrl: 'https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/income_cert_sample.png' }
+                    { fileName: 'Income_Certificate_Verified.pdf', type: 'Income Certificate Proof', fileUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800' }
                   ]).map((doc: any, idx: number) => {
                     const docName = doc.fileName || doc.label || doc.type || `Document Proof #${idx + 1}`;
-                    const docUrl = doc.fileUrl || doc.url || `https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/sample_proof_${idx + 1}.png`;
+                    const docUrl = doc.fileUrl || doc.url || `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800`;
                     const isImage = typeof docUrl === 'string' && (
                       docUrl.startsWith('data:image') || 
                       docUrl.includes('images.unsplash.com') ||
