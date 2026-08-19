@@ -45,7 +45,46 @@ export default function SupportTicketDetail() {
       <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24}}>
         <div style={{display: 'flex', flexDirection: 'column', gap: 24}}>
           <div className="table-card" style={{padding: 24}}>
-            <h3 style={{fontSize: 16, fontWeight: 700, marginBottom: 24}}>Conversation Thread</h3>
+            <h3 style={{fontSize: 16, fontWeight: 700, marginBottom: 20}}>Conversation & Attachments</h3>
+
+            {ticket.attachmentUrl ? (
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 24
+              }}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                    <span style={{fontSize: 14, fontWeight: 700, color: '#0f172a'}}>📎 Citizen Document Proof / Screenshot</span>
+                    <span style={{background: '#dcfce7', color: '#15803d', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6}}>
+                      Verified via Cloudinary
+                    </span>
+                  </div>
+                  <a 
+                    href={ticket.attachmentUrl} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    download="support_proof_document.png"
+                    className="action-btn"
+                    style={{padding: '4px 12px', fontSize: 12, textDecoration: 'none'}}
+                  >
+                    Download Proof 📥
+                  </a>
+                </div>
+
+                <div style={{textAlign: 'center', background: '#fff', borderRadius: 8, padding: 8, border: '1px solid #e2e8f0'}}>
+                  <a href={ticket.attachmentUrl} target="_blank" rel="noreferrer">
+                    <img 
+                      src={ticket.attachmentUrl} 
+                      alt="Citizen Support Proof" 
+                      style={{maxHeight: 280, maxWidth: '100%', objectFit: 'contain', borderRadius: 6, cursor: 'pointer'}}
+                    />
+                  </a>
+                </div>
+              </div>
+            ) : null}
             
             <div style={{display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24}}>
               {(ticket.messages || []).map((msg: any, i: number) => (

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { HelpCircle, Clock, CheckCircle } from 'lucide-react';
+import { HelpCircle, Clock, CheckCircle, Image as ImageIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { StatCard } from '../components/Dashboard';
 
@@ -132,14 +133,47 @@ export default function SupportTickets() {
                   <span style={{color: '#6b7280'}}>Last Updated</span>
                   <span style={{fontWeight: 600}}>{t.lastUpdated}</span>
                 </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 24}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 16}}>
                   <span style={{color: '#6b7280'}}>Assigned To</span>
                   <span style={{fontWeight: 700}}>{t.assignedTo}</span>
                 </div>
 
+                {t.attachmentUrl ? (
+                  <div style={{
+                    marginBottom: 16,
+                    padding: '8px 12px',
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8
+                  }}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden'}}>
+                      <img 
+                        src={t.attachmentUrl} 
+                        alt="Proof" 
+                        style={{width: 32, height: 32, borderRadius: 6, objectFit: 'cover', border: '1px solid #86efac'}}
+                      />
+                      <span style={{fontSize: 12, fontWeight: 600, color: '#166534', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden'}}>
+                        📎 Uploaded Proof Image
+                      </span>
+                    </div>
+                    <a 
+                      href={t.attachmentUrl} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      style={{fontSize: 11, color: '#2563eb', fontWeight: 700, textDecoration: 'none'}}
+                    >
+                      Inspect &rarr;
+                    </a>
+                  </div>
+                ) : null}
+
                 <div style={{display: 'flex', gap: 12}}>
-                  <button className="date-picker-btn" style={{flex: 1, justifyContent: 'center'}}>View</button>
-                  <button className="action-btn" style={{flex: 1, justifyContent: 'center'}}>Respond</button>
+                  <Link to={`/support/${t.id}`} className="date-picker-btn" style={{flex: 1, justifyContent: 'center', textDecoration: 'none'}}>View</Link>
+                  <Link to={`/support/${t.id}`} className="action-btn" style={{flex: 1, justifyContent: 'center', textDecoration: 'none'}}>Respond</Link>
                 </div>
               </div>
             );
