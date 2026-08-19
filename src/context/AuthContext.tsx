@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 interface Admin {
   id: string;
   email: string;
+  name?: string;
+  role?: string;
   permissions: string[];
 }
 

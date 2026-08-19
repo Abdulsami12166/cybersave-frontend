@@ -3,7 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, FileText, Grid, UserSquare2, 
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
-  Settings, Search, Sun, PanelLeftClose, CheckCircle2, X
+  Settings, Search, Sun, PanelLeftClose, CheckCircle2, X, LogOut
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,7 +13,7 @@ export const showToast = (message: string, type: 'success' | 'error' = 'success'
 
 export default function Layout() {
   const [toast, setToast] = useState<{message: string, type: string} | null>(null);
-  const { admin } = useAuth();
+  const { admin, logout } = useAuth();
 
   useEffect(() => {
     const handleToast = (e: any) => {
@@ -39,9 +39,9 @@ export default function Layout() {
   ];
 
   const defaultPermissions = ['DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'];
-  const adminPermissions = (admin?.email === 'admin@cybersave.com' || !admin?.permissions || admin.permissions.length === 0)
+  const adminPermissions = (admin?.email === 'admin@cybersave.com')
     ? defaultPermissions
-    : admin.permissions;
+    : (admin?.permissions && admin.permissions.length > 0 ? admin.permissions : ['DASHBOARD', 'APPLICATIONS']);
 
   const filteredNavItems = navItems.filter(item => !item.requiredPermission || adminPermissions.includes(item.requiredPermission));
 
@@ -93,12 +93,24 @@ export default function Layout() {
             </div>
             <button className="action-btn">Quick Actions</button>
             <div className="profile-widget">
-              <img src="https://i.pravatar.cc/150?img=11" alt="Profile" />
+              <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(admin?.name || admin?.email || 'Admin')}&background=0D8ABC&color=fff`} alt="Profile" />
               <div className="profile-info">
-                <span className="profile-name">Rajesh Kumar</span>
-                <span className="profile-role">Super Admin</span>
+                <span className="profile-name">{admin?.name || (admin?.email === 'admin@cybersave.com' ? 'Super Administrator' : admin?.email?.split('@')[0])}</span>
+                <span className="profile-role">{admin?.role || (admin?.email === 'admin@cybersave.com' ? 'Super Admin' : 'Operator')}</span>
               </div>
             </div>
+            <button 
+              onClick={logout} 
+              title="Sign Out"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA',
+                borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              <LogOut size={15} /> Logout
+            </button>
           </div>
         </div>
 
