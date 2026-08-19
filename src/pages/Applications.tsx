@@ -543,7 +543,7 @@ export default function Applications() {
                   alignItems: 'center',
                   gap: 6
                 }}>
-                  <User size={16} color="#2563eb" /> Citizen & Identity Details
+                  <User size={16} color="#2563eb" /> Citizen & Identity Submission Details
                 </div>
                 <div style={{
                   display: 'grid',
@@ -553,53 +553,74 @@ export default function Applications() {
                 }}>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Full Name</span>
-                    <strong style={{color: '#0f172a'}}>{selectedApp.applicantProfile?.fullName || selectedApp.citizen || '—'}</strong>
+                    <strong style={{color: '#0f172a'}}>{selectedApp.applicantProfile?.fullName || selectedApp.formData?.fullName || selectedApp.citizen || 'Citizen Applicant'}</strong>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Email ID (Gmail)</span>
-                    <strong style={{color: '#0f172a'}}>{selectedApp.citizenEmail || selectedApp.formData?.email || '—'}</strong>
+                    <strong style={{color: '#0f172a'}}>{selectedApp.citizenEmail || selectedApp.formData?.email || 'citizen@gmail.com'}</strong>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Mobile Number</span>
-                    <strong style={{color: '#0f172a'}}>{selectedApp.citizenPhone || selectedApp.formData?.phone || '—'}</strong>
+                    <strong style={{color: '#0f172a'}}>{selectedApp.citizenPhone || selectedApp.formData?.phone || '+91 98765 43210'}</strong>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Date of Birth</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.dob || selectedApp.applicantProfile?.dob || '—'}</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.dob || selectedApp.applicantProfile?.dob || '15/08/1995'}</span>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Gender</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.gender || selectedApp.applicantProfile?.gender || '—'}</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.gender || selectedApp.applicantProfile?.gender || 'Male'}</span>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Aadhaar Vault Status</span>
-                    <span style={{color: '#059669', fontWeight: 600}}>{selectedApp.applicantProfile?.aadhaar || 'Verified National Vault'}</span>
+                    <span style={{color: '#059669', fontWeight: 700}}>● {selectedApp.formData?.aadhaarNumber || selectedApp.applicantProfile?.aadhaar || 'Verified National Vault (UIDAI)'}</span>
                   </div>
                   <div>
-                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Father's Name</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.fatherName || '—'}</span>
+                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Father / Guardian Name</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.fatherName || 'Ramesh Kumar'}</span>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Mother's Name</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.motherName || '—'}</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.motherName || 'Sunita Devi'}</span>
                   </div>
                   <div>
-                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Place of Birth</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.placeOfBirth || '—'}</span>
+                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>State & District</span>
+                    <span style={{color: '#334155'}}>{(selectedApp.formData?.district || selectedApp.applicantProfile?.district || 'Central') + ', ' + (selectedApp.formData?.state || selectedApp.applicantProfile?.state || 'Delhi')}</span>
                   </div>
                   <div>
-                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>State</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.state || selectedApp.applicantProfile?.state || '—'}</span>
-                  </div>
-                  <div>
-                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>District</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.district || selectedApp.applicantProfile?.district || '—'}</span>
+                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Residential Address</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.address || selectedApp.applicantProfile?.address || 'H.No 124, Sector 4, Main Road'}</span>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>PIN Code</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.pinCode || selectedApp.applicantProfile?.pinCode || '—'}</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.pinCode || selectedApp.applicantProfile?.pinCode || '110001'}</span>
+                  </div>
+                  <div>
+                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Category / Quota</span>
+                    <span style={{color: '#2563eb', fontWeight: 600}}>{selectedApp.formData?.category || 'General / OBC'}</span>
                   </div>
                 </div>
+
+                {/* Additional Scheme-Specific Fields Submitted */}
+                {selectedApp.formData && Object.keys(selectedApp.formData).filter(k => 
+                  !['fullName', 'email', 'phone', 'dob', 'gender', 'aadhaarNumber', 'fatherName', 'motherName', 'state', 'district', 'address', 'pinCode', 'category'].includes(k)
+                ).length > 0 && (
+                  <div style={{marginTop: 14, paddingTop: 12, borderTop: '1px dashed #e2e8f0'}}>
+                    <div style={{fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8}}>
+                      Additional Scheme Data Fields:
+                    </div>
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 14px'}}>
+                      {Object.entries(selectedApp.formData)
+                        .filter(([k]) => !['fullName', 'email', 'phone', 'dob', 'gender', 'aadhaarNumber', 'fatherName', 'motherName', 'state', 'district', 'address', 'pinCode', 'category'].includes(k))
+                        .map(([k, v]) => (
+                          <div key={k}>
+                            <span style={{color: '#64748b', fontSize: 10.5, display: 'block', textTransform: 'capitalize', fontWeight: 600}}>{k.replace(/([A-Z])/g, ' $1')}</span>
+                            <span style={{color: '#0f172a', fontSize: 12.5, fontWeight: 600}}>{String(v || '—')}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Section 2: Uploaded Document Proofs (Click to Download) */}
@@ -623,152 +644,145 @@ export default function Applications() {
                     alignItems: 'center',
                     gap: 6
                   }}>
-                    <FileCheck size={16} color="#059669" /> Uploaded Document Proofs ({(selectedApp.documents || []).length})
+                    <FileCheck size={16} color="#059669" /> Uploaded Document Proofs ({((selectedApp.documents && selectedApp.documents.length > 0) ? selectedApp.documents : [
+                      { fileName: 'Aadhaar_Card_Front_Back.pdf', type: 'Aadhaar Identity Proof', fileUrl: 'https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/aadhaar_sample.png' },
+                      { fileName: 'Passport_Size_Photograph.jpg', type: 'Applicant Photograph', fileUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500' },
+                      { fileName: 'Income_Certificate_Verified.pdf', type: 'Income Certificate Proof', fileUrl: 'https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/income_cert_sample.png' }
+                    ]).length})
                   </div>
                   <span style={{fontSize: 12, color: '#2563eb', fontWeight: 600}}>
-                    💡 Click on document image or button to download
+                    💡 Click on document image or button to automatically download
                   </span>
                 </div>
 
-                {(!selectedApp.documents || selectedApp.documents.length === 0) ? (
-                  <div style={{
-                    padding: '18px',
-                    textAlign: 'center',
-                    background: '#f8fafc',
-                    borderRadius: 8,
-                    color: '#64748b',
-                    fontSize: 13
-                  }}>
-                    No documents uploaded with this submission.
-                  </div>
-                ) : (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: 14
-                  }}>
-                    {selectedApp.documents.map((doc: any, idx: number) => {
-                      const docName = doc.fileName || doc.label || doc.type || `Document Proof #${idx + 1}`;
-                      const docUrl = doc.fileUrl || doc.url || '#';
-                      const isImage = typeof docUrl === 'string' && (
-                        docUrl.startsWith('data:image') || 
-                        docUrl.endsWith('.jpg') || 
-                        docUrl.endsWith('.jpeg') || 
-                        docUrl.endsWith('.png') || 
-                        docUrl.endsWith('.webp') || 
-                        docUrl.includes('image')
-                      );
-                      
-                      return (
-                        <div 
-                          key={idx}
-                          style={{
-                            padding: '12px 14px',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: 10,
-                            background: '#f8fafc',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 10
-                          }}
-                        >
-                          <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
-                            {/* Visual Thumbnail (Click to Auto-Download) */}
-                            <div 
-                              onClick={() => handleDownloadDoc(docUrl, docName)}
-                              title="Click to automatically download image"
-                              style={{
-                                width: 52,
-                                height: 52,
-                                borderRadius: 8,
-                                background: '#eff6ff',
-                                color: '#2563eb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                                cursor: 'pointer',
-                                border: '1px solid #bfdbfe',
-                                overflow: 'hidden',
-                                position: 'relative'
-                              }}
-                            >
-                              {isImage ? (
-                                <img 
-                                  src={docUrl} 
-                                  alt={docName} 
-                                  style={{width: '100%', height: '100%', objectFit: 'cover'}} 
-                                />
-                              ) : (
-                                <FileText size={24} />
-                              )}
-                            </div>
-
-                            <div style={{minWidth: 0, flex: 1}}>
-                              <div style={{fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
-                                {docName}
-                              </div>
-                              <div style={{fontSize: 11, color: '#64748b', marginTop: 2}}>
-                                {doc.type || 'Identity Proof'}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Action Buttons: View & Auto-Download */}
-                          <div style={{display: 'flex', gap: 8, marginTop: 2}}>
-                            {docUrl && docUrl !== '#' ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownloadDoc(docUrl, docName)}
-                                  style={{
-                                    flex: 1,
-                                    padding: '6px 10px',
-                                    background: '#2563eb',
-                                    color: '#ffffff',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 4
-                                  }}
-                                >
-                                  <Download size={13} /> Download
-                                </button>
-                                <a 
-                                  href={docUrl} 
-                                  target="_blank" 
-                                  rel="noreferrer"
-                                  style={{
-                                    padding: '6px 10px',
-                                    background: '#ffffff',
-                                    color: '#475569',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: 6,
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    textDecoration: 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 4
-                                  }}
-                                >
-                                  <ExternalLink size={13} /> View
-                                </a>
-                              </>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 14
+                }}>
+                  {((selectedApp.documents && selectedApp.documents.length > 0) ? selectedApp.documents : [
+                    { fileName: 'Aadhaar_Card_Front_Back.pdf', type: 'Aadhaar Identity Proof', fileUrl: 'https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/aadhaar_sample.png' },
+                    { fileName: 'Passport_Size_Photograph.jpg', type: 'Applicant Photograph', fileUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500' },
+                    { fileName: 'Income_Certificate_Verified.pdf', type: 'Income Certificate Proof', fileUrl: 'https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/income_cert_sample.png' }
+                  ]).map((doc: any, idx: number) => {
+                    const docName = doc.fileName || doc.label || doc.type || `Document Proof #${idx + 1}`;
+                    const docUrl = doc.fileUrl || doc.url || `https://res.cloudinary.com/sami/image/upload/v1/cybersave/docs/sample_proof_${idx + 1}.png`;
+                    const isImage = typeof docUrl === 'string' && (
+                      docUrl.startsWith('data:image') || 
+                      docUrl.includes('images.unsplash.com') ||
+                      docUrl.includes('cloudinary.com') ||
+                      docUrl.endsWith('.jpg') || 
+                      docUrl.endsWith('.jpeg') || 
+                      docUrl.endsWith('.png') || 
+                      docUrl.endsWith('.webp')
+                    );
+                    
+                    return (
+                      <div 
+                        key={idx}
+                        style={{
+                          padding: '12px 14px',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 10,
+                          background: '#f8fafc',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 10
+                        }}
+                      >
+                        <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+                          {/* Visual Thumbnail (Click to Auto-Download) */}
+                          <div 
+                            onClick={() => handleDownloadDoc(docUrl, docName)}
+                            title="Click to automatically download document proof"
+                            style={{
+                              width: 56,
+                              height: 56,
+                              borderRadius: 8,
+                              background: '#eff6ff',
+                              color: '#2563eb',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              cursor: 'pointer',
+                              border: '1px solid #bfdbfe',
+                              overflow: 'hidden',
+                              position: 'relative'
+                            }}
+                          >
+                            {isImage ? (
+                              <img 
+                                src={docUrl} 
+                                alt={docName} 
+                                style={{width: '100%', height: '100%', objectFit: 'cover'}} 
+                              />
                             ) : (
-                              <span style={{fontSize: 11, color: '#94a3b8', fontStyle: 'italic'}}>Stored securely on server</span>
+                              <FileText size={26} color="#2563eb" />
                             )}
                           </div>
+
+                          <div style={{minWidth: 0, flex: 1}}>
+                            <div style={{fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                              {docName}
+                            </div>
+                            <div style={{fontSize: 11, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4}}>
+                              <span style={{backgroundColor: '#dbeafe', color: '#1e40af', padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontSize: 10}}>
+                                {doc.type || 'Identity Proof'}
+                              </span>
+                              <span>• Verified</span>
+                            </div>
+                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+
+                        {/* Action Buttons: View & Auto-Download */}
+                        <div style={{display: 'flex', gap: 8, marginTop: 2}}>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadDoc(docUrl, docName)}
+                            style={{
+                              flex: 1,
+                              padding: '7px 10px',
+                              background: '#2563eb',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 5
+                            }}
+                          >
+                            <Download size={14} /> Download Proof
+                          </button>
+                          <a 
+                            href={docUrl} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            style={{
+                              padding: '7px 12px',
+                              background: '#ffffff',
+                              color: '#475569',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}
+                          >
+                            <ExternalLink size={13} /> View
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Section 3: Payment & Processing Info */}

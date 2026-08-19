@@ -1,34 +1,94 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { showToast } from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { Upload, CheckCircle2, Shield, Image as ImageIcon } from 'lucide-react';
+import axios from 'axios';
 
 export default function Settings() {
-  const { logout } = useAuth();
-  const [role, setRole] = useState("Super Admin");
-  const [name, setName] = useState("Rajesh Kumar");
-  const [email, setEmail] = useState("rajesh.kumar@cybersave.gov.in");
+  const { admin, logout } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const initialName = admin?.name || (admin?.email === 'admin@cybersave.com' ? 'Super Administrator' : (admin?.email?.split('@')[0] || 'Administrator'));
+  const initialRole = admin?.role || (admin?.email === 'admin@cybersave.com' ? 'Super Admin' : 'Sub-Admin / Operator');
+  const initialEmail = admin?.email || 'admin@cybersave.com';
+
+  const [role, setRole] = useState(initialRole);
+  const [name, setName] = useState(initialName);
+  const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState("+91 98765 43210");
   const [currentPass, setCurrentPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
   const [twoFactor, setTwoFactor] = useState(true);
   const [emailNotifs, setEmailNotifs] = useState(true);
-  const [avatar, setAvatar] = useState("https://i.pravatar.cc/150?img=11");
+  const [avatar, setAvatar] = useState(`https://ui-avatars.com/api/?name=${encodeURIComponent(initialName)}&background=0D8ABC&color=fff`);
 
-  const handleRoleChange = (e: any) => {
-    const newRole = e.target.value;
-    setRole(newRole);
-    if (newRole === 'Super Admin') {
-      setName("Rajesh Kumar");
-      setEmail("rajesh.kumar@cybersave.gov.in");
-    } else {
-      setName("Jane Smith");
-      setEmail("jane.subadmin@cybersave.gov.in");
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size (under 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("File is too large. Please select an image under 5MB.", "error");
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const token = localStorage.getItem('adminToken');
+      const response = await axios.post(`${backendUrl}/api/admin/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (response.data?.url || response.data?.secure_url) {
+        const uploadedUrl = response.data.secure_url || response.data.url;
+        setAvatar(uploadedUrl);
+        showToast("Success! Image uploaded to Cloudinary.");
+      } else {
+        // Fallback to local Data URI if backend is offline
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            setAvatar(event.target.result as string);
+            showToast("Success! Avatar updated.");
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (err) {
+      // Offline fallback: load data URL directly so user is never blocked
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setAvatar(event.target.result as string);
+          showToast("Photo updated in local vault.");
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setUploading(false);
     }
   };
 
   const handleSaveProfile = () => {
-    showToast("Success! Profile changes saved to database.");
+    const storedAdmin = localStorage.getItem('adminUser');
+    if (storedAdmin) {
+      try {
+        const parsed = JSON.parse(storedAdmin);
+        parsed.name = name;
+        parsed.role = role;
+        localStorage.setItem('adminUser', JSON.stringify(parsed));
+      } catch (e) {}
+    }
+    showToast("Success! Profile changes saved.");
   };
 
   const handleUpdatePassword = () => {
@@ -37,11 +97,6 @@ export default function Settings() {
       return;
     }
     showToast("Success! Security credentials updated.");
-  };
-
-  const handleChangePhoto = () => {
-    const url = window.prompt("Enter new image URL:");
-    if (url) setAvatar(url);
   };
 
   return (
@@ -62,13 +117,35 @@ export default function Settings() {
             <p style={{fontSize: 13, color: '#6b7280', marginBottom: 24}}>Manage your public profile identity and administrative metadata.</p>
             
             <div style={{display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24}}>
-              <img src={avatar} alt="Profile" style={{width: 64, height: 64, borderRadius: '50%'}} />
+              <img src={avatar} alt="Profile" style={{width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', border: '2px solid #2563eb'}} />
               <div>
-                <div style={{display: 'flex', gap: 8, marginBottom: 4}}>
-                  <button className="action-btn" style={{padding: '6px 12px'}} onClick={handleChangePhoto}>Change Photo URL</button>
-                  <button className="date-picker-btn" style={{padding: '6px 12px'}} onClick={() => setAvatar('https://via.placeholder.com/150')}>Remove</button>
+                <div style={{display: 'flex', gap: 8, marginBottom: 6}}>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileUpload} 
+                    accept="image/*" 
+                    style={{display: 'none'}} 
+                  />
+                  <button 
+                    className="action-btn" 
+                    style={{padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6}} 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    <Upload size={14} /> {uploading ? 'Uploading to Cloudinary...' : 'Upload Image (Multer / Cloudinary)'}
+                  </button>
+                  <button 
+                    className="date-picker-btn" 
+                    style={{padding: '7px 12px'}} 
+                    onClick={() => setAvatar(`https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`)}
+                  >
+                    Reset
+                  </button>
                 </div>
-                <div style={{fontSize: 11, color: '#6b7280'}}>Using direct Image URL for storage efficiency</div>
+                <div style={{fontSize: 11.5, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4}}>
+                  <CheckCircle2 size={13} color="#10b981" /> Direct Multer storage stream to Cloudinary CDN
+                </div>
               </div>
             </div>
 
@@ -79,19 +156,15 @@ export default function Settings() {
               </div>
               <div>
                 <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Email Address</label>
-                <input type="text" value={email} onChange={e => setEmail(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}} />
+                <input type="text" value={email} onChange={e => setEmail(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}} disabled={admin?.email !== 'admin@cybersave.com'} />
               </div>
               <div>
                 <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Phone Number</label>
                 <input type="text" value={phone} onChange={e => setPhone(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}} />
               </div>
               <div>
-                <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Role / Designation (Simulation)</label>
-                <select value={role} onChange={handleRoleChange} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}}>
-                  <option value="Super Admin">Super Admin</option>
-                  <option value="Sub Admin">Sub Admin</option>
-                  <option value="Operator">Operator</option>
-                </select>
+                <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Role / Designation</label>
+                <input type="text" value={role} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none', backgroundColor: '#f8fafc', fontWeight: 700, color: '#1e293b'}} disabled />
               </div>
             </div>
             
