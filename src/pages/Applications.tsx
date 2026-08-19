@@ -39,6 +39,7 @@ export default function Applications() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   useEffect(() => {
     if (socket && connected) {
@@ -661,16 +662,10 @@ export default function Applications() {
                   }}>
                     {selectedApp.documents.map((doc: any, idx: number) => {
                       const docName = doc.fileName || doc.label || doc.name || `Document Proof #${idx + 1}`;
-                      const docUrl = doc.fileUrl || doc.url || '';
-                      const isImage = typeof docUrl === 'string' && (
-                        docUrl.startsWith('data:image') || 
-                        docUrl.includes('cloudinary.com') ||
-                        docUrl.includes('images.unsplash.com') ||
-                        docUrl.endsWith('.jpg') || 
-                        docUrl.endsWith('.jpeg') || 
-                        docUrl.endsWith('.png') || 
-                        docUrl.endsWith('.webp')
-                      );
+                      const docUrl = typeof doc === 'string'
+                        ? doc
+                        : (doc.fileUrl || doc.url || doc.uri || doc.path || doc.documentUrl || doc.secure_url || doc.attachmentUrl || doc.base64 || (doc.base64Data ? `data:image/jpeg;base64,${doc.base64Data}` : '') || '');
+                      const isImage = typeof docUrl === 'string' && docUrl.length > 0 && !docUrl.endsWith('.pdf');
                       
                       return (
                         <div 
@@ -687,11 +682,17 @@ export default function Applications() {
                         >
                           <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
                             <div 
-                              onClick={() => handleDownloadDoc(docUrl, docName)}
-                              title="Click to download document proof"
+                              onClick={() => {
+                                if (docUrl && isImage) {
+                                  setPreviewImage({ url: docUrl, title: docName });
+                                } else {
+                                  handleDownloadDoc(docUrl, docName);
+                                }
+                              }}
+                              title={docUrl ? "Click to inspect full resolution image proof" : "No file uploaded"}
                               style={{
-                                width: 56,
-                                height: 56,
+                                width: 58,
+                                height: 58,
                                 borderRadius: 8,
                                 background: '#eff6ff',
                                 color: '#2563eb',
@@ -699,20 +700,20 @@ export default function Applications() {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 flexShrink: 0,
-                                cursor: 'pointer',
+                                cursor: docUrl ? 'pointer' : 'default',
                                 border: '1px solid #bfdbfe',
                                 overflow: 'hidden',
                                 position: 'relative'
                               }}
                             >
-                              {isImage && docUrl ? (
+                              {docUrl ? (
                                 <img 
                                   src={docUrl} 
                                   alt={docName} 
                                   style={{width: '100%', height: '100%', objectFit: 'cover'}} 
                                 />
                               ) : (
-                                <FileText size={26} color="#2563eb" />
+                                <FileText size={26} color="#94a3b8" />
                               )}
                             </div>
 
@@ -720,11 +721,18 @@ export default function Applications() {
                               <div style={{fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
                                 {docName}
                               </div>
-                              <div style={{fontSize: 11, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4}}>
-                                <span style={{backgroundColor: '#dbeafe', color: '#1e40af', padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontSize: 10}}>
+                              <div style={{fontSize: 11, color: docUrl ? '#166534' : '#b45309', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4}}>
+                                <span style={{
+                                  backgroundColor: docUrl ? '#dcfce7' : '#fef3c7', 
+                                  color: docUrl ? '#15803d' : '#b45309', 
+                                  padding: '1px 6px', 
+                                  borderRadius: 4, 
+                                  fontWeight: 700, 
+                                  fontSize: 10
+                                }}>
                                   {doc.type || 'Identity Proof'}
                                 </span>
-                                <span>• Verified</span>
+                                <span>{docUrl ? '• Uploaded Proof' : '• Pending Upload'}</span>
                               </div>
                             </div>
                           </div>
@@ -740,15 +748,13 @@ export default function Applications() {
                               </button>
                             ) : null}
                             {docUrl ? (
-                              <a 
-                                href={docUrl} 
-                                target="_blank" 
-                                rel="noreferrer" 
+                              <button 
+                                onClick={() => setPreviewImage({ url: docUrl, title: docName })}
                                 className="date-picker-btn"
-                                style={{padding: '5px 10px', fontSize: 11, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4}}
+                                style={{padding: '5px 10px', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4}}
                               >
-                                <ExternalLink size={12} /> View Full
-                              </a>
+                                <Eye size={12} /> View Full
+                              </button>
                             ) : null}
                           </div>
                         </div>
@@ -974,6 +980,83 @@ export default function Applications() {
             <div style={{display: 'flex', gap: 12, justifyContent: 'flex-end'}}>
               <button className="date-picker-btn" onClick={() => setShowCreateModal(false)}>Cancel</button>
               <button className="action-btn" onClick={handleCreate}>Create Flow</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Image Zoom Preview Modal ─── */}
+      {previewImage && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 24
+          }}
+          onClick={() => setPreviewImage(null)}
+        >
+          <div 
+            style={{
+              background: '#ffffff',
+              borderRadius: 16,
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{
+              padding: '14px 20px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#f8fafc'
+            }}>
+              <div style={{fontWeight: 700, fontSize: 14, color: '#0f172a'}}>
+                🔍 Document Inspection: {previewImage.title}
+              </div>
+              <div style={{display: 'flex', gap: 10, alignItems: 'center'}}>
+                <button
+                  className="action-btn"
+                  onClick={() => handleDownloadDoc(previewImage.url, previewImage.title)}
+                  style={{padding: '5px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6}}
+                >
+                  <Download size={13} /> Download
+                </button>
+                <button
+                  onClick={() => setPreviewImage(null)}
+                  style={{background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', padding: 4}}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div style={{
+              padding: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'auto',
+              background: '#0f172a'
+            }}>
+              <img 
+                src={previewImage.url} 
+                alt={previewImage.title}
+                style={{maxWidth: '100%', maxHeight: '78vh', objectFit: 'contain', borderRadius: 8}}
+              />
             </div>
           </div>
         </div>

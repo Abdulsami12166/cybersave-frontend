@@ -108,16 +108,10 @@ export default function ApplicationDetail() {
               {(app.documents && app.documents.length > 0) ? (
                 app.documents.map((doc: any, i: number) => {
                   const docName = doc.fileName || doc.label || doc.name || `Document Proof #${i + 1}`;
-                  const docUrl = doc.fileUrl || doc.url || '';
-                  const isImage = typeof docUrl === 'string' && (
-                    docUrl.startsWith('data:image') ||
-                    docUrl.includes('cloudinary.com') ||
-                    docUrl.includes('images.unsplash.com') ||
-                    docUrl.endsWith('.jpg') ||
-                    docUrl.endsWith('.jpeg') ||
-                    docUrl.endsWith('.png') ||
-                    docUrl.endsWith('.webp')
-                  );
+                  const docUrl = typeof doc === 'string'
+                    ? doc
+                    : (doc.fileUrl || doc.url || doc.uri || doc.path || doc.documentUrl || doc.secure_url || doc.attachmentUrl || doc.base64 || (doc.base64Data ? `data:image/jpeg;base64,${doc.base64Data}` : '') || '');
+                  const isImage = typeof docUrl === 'string' && docUrl.length > 0 && !docUrl.endsWith('.pdf');
 
                   return (
                     <div key={i} style={{border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f9fafb'}}>
