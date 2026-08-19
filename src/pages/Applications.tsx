@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { 
   FileText, 
@@ -14,7 +14,9 @@ import {
   AlertTriangle,
   X,
   FileCheck,
-  Search
+  Search,
+  Download,
+  Users
 } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
@@ -100,9 +102,55 @@ export default function Applications() {
     });
   };
 
+  const handleDownloadDoc = (url: string, filename: string) => {
+    if (!url || url === '#') {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'File is stored on secure vault' } }));
+      return;
+    }
+    // Handle data URLs or blobs
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'document_proof';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+    // Fetch blob for cross-origin downloads
+    fetch(url)
+      .then(response => response.blob())
+      .then(blob => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename || 'document_proof';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(blobUrl);
+        document.body.removeChild(a);
+      })
+      .catch(() => {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'document_proof';
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      });
+  };
+
   if (loading) return <div>Loading applications...</div>;
 
   const { stats, applications } = data || {};
+
+  // Compute number of applicants applied for each service/scheme
+  const schemeApplicantCounts = ((applications || []) as any[]).reduce((acc: Record<string, number>, app: any) => {
+    const sType = app.serviceType || 'Government Service';
+    acc[sType] = (acc[sType] || 0) + 1;
+    return acc;
+  }, {});
 
   const filteredApplications = ((applications || []) as any[]).filter(app => {
     if (filterType !== 'All' && !app.serviceType?.toLowerCase().includes(filterType.toLowerCase())) return false;
@@ -126,7 +174,7 @@ export default function Applications() {
       <div className="dashboard-title-row" style={{marginBottom: 24}}>
         <div className="dashboard-title">
           <h1>Citizen Applications</h1>
-          <p>Inspect applicant data, verify uploaded proofs, and approve or reject submissions in real time</p>
+          <p>Inspect applicant data, verify uploaded proofs with instant click-to-download, and manage scheme pipelines</p>
         </div>
         <div style={{display: 'flex', gap: 12}}>
           <button className="date-picker-btn">Export Report</button>
@@ -162,7 +210,58 @@ export default function Applications() {
         />
       </div>
 
-      <div className="table-card" style={{marginTop: 24, padding: 24}}>
+      {/* ─── Scheme Breakdown Bar: Total Applicants per Application ─── */}
+      <div style={{
+        marginTop: 20,
+        padding: '16px 20px',
+        backgroundColor: '#ffffff',
+        border: '1px solid #e2e8f0',
+        borderRadius: 12,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 12,
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#1e293b'
+        }}>
+          <Users size={16} color="#2563eb" /> Total Applicants by Application / Scheme ({Object.keys(schemeApplicantCounts).length} Schemes)
+        </div>
+        <div style={{display: 'flex', gap: 10, flexWrap: 'wrap'}}>
+          {Object.entries(schemeApplicantCounts).map(([schemeName, count]) => (
+            <div 
+              key={schemeName}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 12px',
+                backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 20,
+                fontSize: 12
+              }}
+            >
+              <span style={{fontWeight: 600, color: '#334155'}}>{schemeName}</span>
+              <span style={{
+                backgroundColor: '#dbeafe',
+                color: '#1e40af',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: 10,
+                fontSize: 11
+              }}>
+                {count} {count === 1 ? 'applicant' : 'applicants'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="table-card" style={{marginTop: 20, padding: 24}}>
         <h3 style={{marginBottom: 16}}>Live Application Pipeline</h3>
         <div style={{display: 'flex', gap: 32, marginBottom: 32}}>
           <div style={{flex: 1}}>
@@ -228,6 +327,7 @@ export default function Applications() {
               <th><input type="checkbox" /> APP ID</th>
               <th>CITIZEN</th>
               <th>SCHEME / SERVICE</th>
+              <th>SCHEME APPLICANTS</th>
               <th>STATUS</th>
               <th>FEE</th>
               <th>SUBMITTED</th>
@@ -237,66 +337,84 @@ export default function Applications() {
           <tbody>
             {filteredApplications.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{textAlign: 'center', padding: '32px', color: '#6b7280'}}>
+                <td colSpan={8} style={{textAlign: 'center', padding: '32px', color: '#6b7280'}}>
                   No applications found matching your search or filters.
                 </td>
               </tr>
             ) : (
-              filteredApplications.map((app: any, i: number) => (
-                <tr 
-                  key={i} 
-                  style={{cursor: 'pointer', transition: 'background 0.15s'}}
-                  onClick={() => { setSelectedApp(app); setShowRejectBox(false); setRejectionReason(''); }}
-                  className="table-row-hover"
-                >
-                  <td style={{fontWeight: 600, color: '#2563eb'}}>
-                    <span style={{fontFamily: 'monospace'}}>{app.id}</span>
-                  </td>
-                  <td style={{fontWeight: 600, color: '#111827'}}>
-                    <div>{app.citizen}</div>
-                    {app.citizenEmail ? <div style={{fontSize: 11, color: '#9ca3af', fontWeight: 400}}>{app.citizenEmail}</div> : null}
-                  </td>
-                  <td style={{color: '#4b5563', fontWeight: 500}}>{app.serviceType}</td>
-                  <td>
-                    <span className={`badge ${app.status.toLowerCase().replace(' ', '')}`} style={{
-                      backgroundColor: app.status === 'Approved' ? '#d1fae5' : app.status === 'Rejected' ? '#fee2e2' : app.status === 'Processing' ? '#cffafe' : '#fef3c7',
-                      color: app.status === 'Approved' ? '#065f46' : app.status === 'Rejected' ? '#991b1b' : app.status === 'Processing' ? '#0e7490' : '#92400e',
-                      padding: '4px 10px',
-                      borderRadius: 12,
-                      fontSize: 12,
-                      fontWeight: 600
-                    }}>
-                      {app.status}
-                    </span>
-                  </td>
-                  <td style={{fontWeight: 600, color: '#111827'}}>₹{app.amount}</td>
-                  <td style={{color: '#6b7280', fontSize: 13}}>{app.submitted}</td>
-                  <td style={{textAlign: 'center'}}>
-                    <button 
-                      className="date-picker-btn"
-                      style={{
-                        padding: '4px 12px',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: '#2563eb',
-                        borderColor: '#bfdbfe',
-                        background: '#eff6ff',
+              filteredApplications.map((app: any, i: number) => {
+                const totalForScheme = schemeApplicantCounts[app.serviceType] || 1;
+                return (
+                  <tr 
+                    key={i} 
+                    style={{cursor: 'pointer', transition: 'background 0.15s'}}
+                    onClick={() => { setSelectedApp(app); setShowRejectBox(false); setRejectionReason(''); }}
+                    className="table-row-hover"
+                  >
+                    <td style={{fontWeight: 600, color: '#2563eb'}}>
+                      <span style={{fontFamily: 'monospace'}}>{app.id}</span>
+                    </td>
+                    <td style={{fontWeight: 600, color: '#111827'}}>
+                      <div>{app.citizen}</div>
+                      {app.citizenEmail ? <div style={{fontSize: 11, color: '#9ca3af', fontWeight: 400}}>{app.citizenEmail}</div> : null}
+                    </td>
+                    <td style={{color: '#4b5563', fontWeight: 500}}>{app.serviceType}</td>
+                    <td>
+                      <span style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 4
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedApp(app);
-                        setShowRejectBox(false);
-                        setRejectionReason('');
-                      }}
-                    >
-                      <Eye size={13} /> View & Verify
-                    </button>
-                  </td>
-                </tr>
-              ))
+                        gap: 4,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        backgroundColor: '#f1f5f9',
+                        color: '#475569',
+                        padding: '3px 8px',
+                        borderRadius: 12
+                      }}>
+                        <Users size={12} color="#64748b" /> {totalForScheme} {totalForScheme === 1 ? 'person' : 'people'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge ${app.status.toLowerCase().replace(' ', '')}`} style={{
+                        backgroundColor: app.status === 'Approved' ? '#d1fae5' : app.status === 'Rejected' ? '#fee2e2' : app.status === 'Processing' ? '#cffafe' : '#fef3c7',
+                        color: app.status === 'Approved' ? '#065f46' : app.status === 'Rejected' ? '#991b1b' : app.status === 'Processing' ? '#0e7490' : '#92400e',
+                        padding: '4px 10px',
+                        borderRadius: 12,
+                        fontSize: 12,
+                        fontWeight: 600
+                      }}>
+                        {app.status}
+                      </span>
+                    </td>
+                    <td style={{fontWeight: 600, color: '#111827'}}>₹{app.amount}</td>
+                    <td style={{color: '#6b7280', fontSize: 13}}>{app.submitted}</td>
+                    <td style={{textAlign: 'center'}}>
+                      <button 
+                        className="date-picker-btn"
+                        style={{
+                          padding: '4px 12px',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: '#2563eb',
+                          borderColor: '#bfdbfe',
+                          background: '#eff6ff',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedApp(app);
+                          setShowRejectBox(false);
+                          setRejectionReason('');
+                        }}
+                      >
+                        <Eye size={13} /> View & Verify
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -331,7 +449,7 @@ export default function Applications() {
             background: '#ffffff',
             borderRadius: 16,
             width: '100%',
-            maxWidth: 780,
+            maxWidth: 820,
             maxHeight: '92vh',
             display: 'flex',
             flexDirection: 'column',
@@ -364,7 +482,10 @@ export default function Applications() {
                   </span>
                 </div>
                 <div style={{fontSize: 12, color: '#64748b', marginTop: 3}}>
-                  Scheme: <strong>{selectedApp.serviceType}</strong> • Submitted: {selectedApp.submittedAtFull || selectedApp.submitted}
+                  Scheme: <strong>{selectedApp.serviceType}</strong> • Submitted: {selectedApp.submittedAtFull || selectedApp.submitted} • 
+                  <span style={{color: '#2563eb', fontWeight: 600, marginLeft: 4}}>
+                    {schemeApplicantCounts[selectedApp.serviceType] || 1} Total Applicants
+                  </span>
                 </div>
               </div>
               <button 
@@ -481,7 +602,7 @@ export default function Applications() {
                 </div>
               </div>
 
-              {/* Section 2: Uploaded Document Proofs */}
+              {/* Section 2: Uploaded Document Proofs (Click to Download) */}
               <div style={{
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',
@@ -489,15 +610,24 @@ export default function Applications() {
                 padding: '16px 18px'
               }}>
                 <div style={{
-                  fontSize: 14,
-                  fontWeight: 700,
-                  color: '#1e293b',
-                  marginBottom: 12,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6
+                  justifyContent: 'space-between',
+                  marginBottom: 12
                 }}>
-                  <FileCheck size={16} color="#059669" /> Uploaded Document Proofs ({(selectedApp.documents || []).length})
+                  <div style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: '#1e293b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                    <FileCheck size={16} color="#059669" /> Uploaded Document Proofs ({(selectedApp.documents || []).length})
+                  </div>
+                  <span style={{fontSize: 12, color: '#2563eb', fontWeight: 600}}>
+                    💡 Click on document image or button to download
+                  </span>
                 </div>
 
                 {(!selectedApp.documents || selectedApp.documents.length === 0) ? (
@@ -515,11 +645,19 @@ export default function Applications() {
                   <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: 12
+                    gap: 14
                   }}>
                     {selectedApp.documents.map((doc: any, idx: number) => {
                       const docName = doc.fileName || doc.label || doc.type || `Document Proof #${idx + 1}`;
                       const docUrl = doc.fileUrl || doc.url || '#';
+                      const isImage = typeof docUrl === 'string' && (
+                        docUrl.startsWith('data:image') || 
+                        docUrl.endsWith('.jpg') || 
+                        docUrl.endsWith('.jpeg') || 
+                        docUrl.endsWith('.png') || 
+                        docUrl.endsWith('.webp') || 
+                        docUrl.includes('image')
+                      );
                       
                       return (
                         <div 
@@ -527,62 +665,105 @@ export default function Applications() {
                           style={{
                             padding: '12px 14px',
                             border: '1px solid #e2e8f0',
-                            borderRadius: 8,
+                            borderRadius: 10,
                             background: '#f8fafc',
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
+                            flexDirection: 'column',
                             gap: 10
                           }}
                         >
-                          <div style={{display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1}}>
-                            <div style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: 6,
-                              background: '#eff6ff',
-                              color: '#2563eb',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
-                            }}>
-                              <FileText size={18} />
+                          <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                            {/* Visual Thumbnail (Click to Auto-Download) */}
+                            <div 
+                              onClick={() => handleDownloadDoc(docUrl, docName)}
+                              title="Click to automatically download image"
+                              style={{
+                                width: 52,
+                                height: 52,
+                                borderRadius: 8,
+                                background: '#eff6ff',
+                                color: '#2563eb',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                cursor: 'pointer',
+                                border: '1px solid #bfdbfe',
+                                overflow: 'hidden',
+                                position: 'relative'
+                              }}
+                            >
+                              {isImage ? (
+                                <img 
+                                  src={docUrl} 
+                                  alt={docName} 
+                                  style={{width: '100%', height: '100%', objectFit: 'cover'}} 
+                                />
+                              ) : (
+                                <FileText size={24} />
+                              )}
                             </div>
+
                             <div style={{minWidth: 0, flex: 1}}>
-                              <div style={{fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                              <div style={{fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
                                 {docName}
                               </div>
-                              <div style={{fontSize: 11, color: '#64748b'}}>
-                                {doc.type || 'Identity / Supporting Proof'}
+                              <div style={{fontSize: 11, color: '#64748b', marginTop: 2}}>
+                                {doc.type || 'Identity Proof'}
                               </div>
                             </div>
                           </div>
 
-                          {docUrl && docUrl !== '#' ? (
-                            <a 
-                              href={docUrl} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              style={{
-                                padding: '6px 12px',
-                                background: '#2563eb',
-                                color: '#ffffff',
-                                borderRadius: 6,
-                                fontSize: 12,
-                                fontWeight: 600,
-                                textDecoration: 'none',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                flexShrink: 0
-                              }}
-                            >
-                              <ExternalLink size={13} /> View
-                            </a>
-                          ) : (
-                            <span style={{fontSize: 11, color: '#94a3b8', fontStyle: 'italic'}}>File on server</span>
-                          )}
+                          {/* Action Buttons: View & Auto-Download */}
+                          <div style={{display: 'flex', gap: 8, marginTop: 2}}>
+                            {docUrl && docUrl !== '#' ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadDoc(docUrl, docName)}
+                                  style={{
+                                    flex: 1,
+                                    padding: '6px 10px',
+                                    background: '#2563eb',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 4
+                                  }}
+                                >
+                                  <Download size={13} /> Download
+                                </button>
+                                <a 
+                                  href={docUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  style={{
+                                    padding: '6px 10px',
+                                    background: '#ffffff',
+                                    color: '#475569',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: 6,
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4
+                                  }}
+                                >
+                                  <ExternalLink size={13} /> View
+                                </a>
+                              </>
+                            ) : (
+                              <span style={{fontSize: 11, color: '#94a3b8', fontStyle: 'italic'}}>Stored securely on server</span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
