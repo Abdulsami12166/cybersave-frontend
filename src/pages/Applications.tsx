@@ -488,7 +488,7 @@ export default function Applications() {
               <th>STATUS</th>
               <th>FEE</th>
               <th>SUBMITTED</th>
-              <th style={{textAlign: 'center'}}>ACTIONS</th>
+              <th style={{textAlign: 'center', width: 140, whiteSpace: 'nowrap', padding: '12px 16px'}}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -545,29 +545,37 @@ export default function Applications() {
                     </td>
                     <td style={{fontWeight: 600, color: '#111827'}}>₹{app.amount}</td>
                     <td style={{color: '#6b7280', fontSize: 13}}>{app.submitted}</td>
-                    <td style={{textAlign: 'center'}}>
-                      <button 
-                        className="date-picker-btn"
-                        style={{
-                          padding: '4px 12px',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: '#2563eb',
-                          borderColor: '#bfdbfe',
-                          background: '#eff6ff',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedApp(app);
-                          setShowRejectBox(false);
-                          setRejectionReason('');
-                        }}
-                      >
-                        <Eye size={13} /> View & Verify
-                      </button>
+                    <td style={{textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', width: 140, padding: '10px 16px'}}>
+                      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        <button 
+                          className="action-view-verify-btn"
+                          style={{
+                            padding: '6px 14px',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: '#2563eb',
+                            border: '1px solid #bfdbfe',
+                            background: '#eff6ff',
+                            borderRadius: 8,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(37, 99, 235, 0.08)',
+                            transition: 'all 0.15s ease-in-out',
+                            whiteSpace: 'nowrap'
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedApp(app);
+                            setShowRejectBox(false);
+                            setRejectionReason('');
+                          }}
+                        >
+                          <Eye size={13} /> View & Verify
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

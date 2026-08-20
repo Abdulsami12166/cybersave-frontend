@@ -1,61 +1,154 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { 
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
-  TrendingUp, TrendingDown, Clock, MapPin, FileText, Calendar
+  TrendingUp, TrendingDown, Clock, MapPin, FileText, Calendar, RefreshCw
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   BarChart, Bar, Legend
 } from 'recharts';
 
+const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
+
 export default function Dashboard() {
   const { socket, connected } = useSocket();
   const [data, setData] = useState<any>(null);
+  const [realApps, setRealApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchLiveApplications = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/applications`);
+      if (res.ok) {
+        const rawApps = await res.json();
+        if (Array.isArray(rawApps)) {
+          setRealApps(rawApps);
+        }
+      }
+    } catch (err) {
+      console.warn('REST applications fetch error in dashboard:', err);
+    }
+  }, []);
+
   useEffect(() => {
+    fetchLiveApplications();
     if (socket && connected) {
       socket.emit('request_dashboard_data');
-      socket.on('response_dashboard_data', (resData) => {
+      
+      const handleDash = (resData: any) => {
         setData(resData);
         setLoading(false);
-      });
-    }
-    return () => {
-      if (socket) socket.off('response_dashboard_data');
-    };
-  }, [socket, connected]);
+      };
+      const handleAppUpdate = () => {
+        socket.emit('request_dashboard_data');
+        fetchLiveApplications();
+      };
 
-  if (loading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100%' }}>Loading...</div>;
-  }
+      socket.on('response_dashboard_data', handleDash);
+      socket.on('applications_updated', handleAppUpdate);
+      socket.on('new_application_submitted', handleAppUpdate);
+      socket.on('application_status_changed', handleAppUpdate);
+
+      return () => {
+        socket.off('response_dashboard_data', handleDash);
+        socket.off('applications_updated', handleAppUpdate);
+        socket.off('new_application_submitted', handleAppUpdate);
+        socket.off('application_status_changed', handleAppUpdate);
+      };
+    } else {
+      const timer = setTimeout(() => setLoading(false), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [socket, connected, fetchLiveApplications]);
 
   const { stats, collections, serviceShare, operatorLogs, recentApps, charts } = data || {};
 
+  // Compute live real stats from real applications
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const liveTodayApps = realApps.filter((a: any) => {
+    const d = new Date(a.submittedAt || a.createdAt || Date.now());
+    return d >= today;
+  });
+
+  const liveRevenueToday = liveTodayApps.reduce((acc: number, a: any) => {
+    const fee = typeof a.feePaid === 'number' && !isNaN(a.feePaid) ? a.feePaid : (a.feePaid ? Number(a.feePaid) : (a.amount ? Number(a.amount) : 55.0));
+    return acc + fee;
+  }, 0);
+
+  const liveTotalRevenue = realApps.reduce((acc: number, a: any) => {
+    const fee = typeof a.feePaid === 'number' && !isNaN(a.feePaid) ? a.feePaid : (a.feePaid ? Number(a.feePaid) : (a.amount ? Number(a.amount) : 55.0));
+    return acc + fee;
+  }, 0);
+
+  const liveAppsTodayCount = liveTodayApps.length;
+  const livePendingCount = realApps.filter((a: any) => a.status === 'PENDING' || a.status === 'SUBMITTED' || a.status === 'VERIFYING' || a.status === 'IN_PROGRESS').length;
+  const liveCompletedTodayCount = liveTodayApps.filter((a: any) => a.status === 'COMPLETED' || a.status === 'APPROVED').length;
+  const liveRejectedTodayCount = liveTodayApps.filter((a: any) => a.status === 'REJECTED').length;
+
+  const displayRevenueToday = (stats?.revenueToday !== undefined && stats?.revenueToday !== null)
+    ? stats.revenueToday
+    : liveRevenueToday;
+
+  const displayAppsToday = (stats?.appsToday !== undefined && stats?.appsToday !== null)
+    ? stats.appsToday
+    : liveAppsTodayCount;
+
+  const displayPending = (stats?.pendingApps !== undefined && stats?.pendingApps !== null)
+    ? stats.pendingApps
+    : livePendingCount;
+
+  const displayCompletedToday = (stats?.completedAppsToday !== undefined && stats?.completedAppsToday !== null)
+    ? stats.completedAppsToday
+    : liveCompletedTodayCount;
+
+  const displayRejectedToday = (stats?.rejectedAppsToday !== undefined && stats?.rejectedAppsToday !== null)
+    ? stats.rejectedAppsToday
+    : liveRejectedTodayCount;
+
+  const displayTotalRevenue = (stats?.totalRevenue !== undefined && stats?.totalRevenue !== null)
+    ? stats.totalRevenue
+    : (liveTotalRevenue > 0 ? liveTotalRevenue : displayRevenueToday);
+
+  if (loading && !data && realApps.length === 0) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100%', color: '#64748b' }}>Loading dashboard...</div>;
+  }
+
   const fallback7DaysRev = [
-    { day: 'Mon', date: 'Monday', value: 4200 },
-    { day: 'Tue', date: 'Tuesday', value: 5100 },
-    { day: 'Wed', date: 'Wednesday', value: 3850 },
-    { day: 'Thu', date: 'Thursday', value: 6200 },
-    { day: 'Fri', date: 'Friday', value: 7400 },
-    { day: 'Sat', date: 'Saturday', value: 5900 },
-    { day: 'Sun', date: 'Sunday', value: stats?.revenueToday || 4850 },
+    { day: 'Mon', date: 'Monday', value: 0 },
+    { day: 'Tue', date: 'Tuesday', value: 0 },
+    { day: 'Wed', date: 'Wednesday', value: 0 },
+    { day: 'Thu', date: 'Thursday', value: 0 },
+    { day: 'Fri', date: 'Friday', value: 0 },
+    { day: 'Sat', date: 'Saturday', value: 0 },
+    { day: 'Sun', date: 'Today', value: displayRevenueToday },
   ];
 
   const fallback7DaysTrends = [
-    { day: 'Mon', date: 'Monday', completed: 18, pending: 6, rejected: 1 },
-    { day: 'Tue', date: 'Tuesday', completed: 22, pending: 8, rejected: 2 },
-    { day: 'Wed', date: 'Wednesday', completed: 16, pending: 5, rejected: 1 },
-    { day: 'Thu', date: 'Thursday', completed: 25, pending: 9, rejected: 2 },
-    { day: 'Fri', date: 'Friday', completed: 30, pending: 7, rejected: 3 },
-    { day: 'Sat', date: 'Saturday', completed: 21, pending: 6, rejected: 1 },
-    { day: 'Sun', date: 'Sunday', completed: stats?.completedAppsToday || 14, pending: stats?.pendingApps || 5, rejected: stats?.rejectedAppsToday || 1 },
+    { day: 'Mon', date: 'Monday', completed: 0, pending: 0, rejected: 0 },
+    { day: 'Tue', date: 'Tuesday', completed: 0, pending: 0, rejected: 0 },
+    { day: 'Wed', date: 'Wednesday', completed: 0, pending: 0, rejected: 0 },
+    { day: 'Thu', date: 'Thursday', completed: 0, pending: 0, rejected: 0 },
+    { day: 'Fri', date: 'Friday', completed: 0, pending: 0, rejected: 0 },
+    { day: 'Sat', date: 'Saturday', completed: 0, pending: 0, rejected: 0 },
+    { day: 'Sun', date: 'Today', completed: displayCompletedToday, pending: displayPending, rejected: displayRejectedToday },
   ];
 
   const revenueData = (charts?.revenueOverview && charts.revenueOverview.length > 0) ? charts.revenueOverview : fallback7DaysRev;
   const trendsData = (charts?.applicationTrends && charts.applicationTrends.length > 0) ? charts.applicationTrends : fallback7DaysTrends;
   const total7DayRev = revenueData.reduce((acc: number, item: any) => acc + (item.value || 0), 0);
+  const displayRecentApps = (recentApps && recentApps.length > 0) 
+    ? recentApps 
+    : realApps.slice(0, 6).map((a: any) => ({
+        id: a.refNumber || a.id?.slice(0, 8)?.toUpperCase() || 'CSB-APP',
+        citizenName: a.citizen || a.fullName || a.user?.profile?.fullName || a.user?.fullName || 'Citizen Applicant',
+        service: a.serviceType || a.serviceName || a.serviceCategory || 'Aadhaar Update',
+        status: a.status === 'SUBMITTED' ? 'In Review' : a.status === 'APPROVED' ? 'Approved' : a.status === 'REJECTED' ? 'Rejected' : (a.status || 'In Review'),
+        feeAmount: a.feePaid || a.amount || 55,
+        dateSubmitted: a.submittedAt || a.createdAt || new Date().toISOString(),
+      }));
 
   return (
     <>
@@ -74,15 +167,15 @@ export default function Dashboard() {
             icon={<TrendingUp color="#10b981" />} 
             iconBg="#d1fae5"
             title="Revenue Today" 
-            value={`₹${(stats?.revenueToday || 4850).toLocaleString('en-IN')}`} 
-            trend="+12.5% vs avg" 
+            value={`₹${displayRevenueToday.toLocaleString('en-IN')}`} 
+            trend={`${displayAppsToday} applications today`} 
             trendType="up" 
           />
           <StatCard 
             icon={<FileText color="#2563eb" />} 
             iconBg="#eff6ff"
             title="Applications Today" 
-            value={(stats?.appsToday || 14).toLocaleString('en-IN')}
+            value={displayAppsToday.toLocaleString('en-IN')}
             trend="Active pipeline" 
             trendType="neutral" 
           />
@@ -90,7 +183,7 @@ export default function Dashboard() {
             icon={<Clock color="#f59e0b" />} 
             iconBg="#fef3c7"
             title="Pending Applications" 
-            value={(stats?.pendingApps || 6).toLocaleString('en-IN')}
+            value={displayPending.toLocaleString('en-IN')}
             trend="Awaiting review" 
             trendType="neutral" 
           />
@@ -98,15 +191,15 @@ export default function Dashboard() {
             icon={<ShieldCheck color="#10b981" />} 
             iconBg="#d1fae5"
             title="Completed Today" 
-            value={(stats?.completedAppsToday || 8).toLocaleString('en-IN')}
-            trend="94.2% approval" 
+            value={displayCompletedToday.toLocaleString('en-IN')}
+            trend="Verified & ready" 
             trendType="up" 
           />
           <StatCard 
             icon={<TrendingDown color="#ef4444" />} 
             iconBg="#fee2e2"
             title="Rejected Today" 
-            value={(stats?.rejectedAppsToday || 1).toLocaleString('en-IN')}
+            value={displayRejectedToday.toLocaleString('en-IN')}
             trend="Under SLA" 
             trendType="down" 
           />
@@ -114,7 +207,7 @@ export default function Dashboard() {
             icon={<MapPin color="#3b82f6" />} 
             iconBg="#eff6ff"
             title="Active Centres" 
-            value={(stats?.activeCentres || 8).toLocaleString('en-IN')}
+            value={(stats?.activeCentres || 1).toLocaleString('en-IN')}
             trend="Operational" 
             trendType="up" 
           />
@@ -203,18 +296,17 @@ export default function Dashboard() {
               <div className="card-title"><h3>Collections Summary</h3></div>
             </div>
             <p style={{fontSize: '13px', color: '#6b7280'}}>Total Collections Today</p>
-            <div className="collections-value">₹{(collections?.totalCollections || 0).toLocaleString('en-IN')}</div>
+            <div className="collections-value">₹{displayRevenueToday.toLocaleString('en-IN')}</div>
             <div className="collection-bar-row">
-              <span>Online Payments (66%)</span>
-              <span style={{fontWeight: 600, color: '#111827'}}>₹{(collections?.onlinePayments || 0).toLocaleString('en-IN')}</span>
+              <span>Online Payments (100%)</span>
+              <span style={{fontWeight: 600, color: '#111827'}}>₹{displayRevenueToday.toLocaleString('en-IN')}</span>
             </div>
             <div className="collection-bar-row">
-              <span>Cash Collections (34%)</span>
-              <span style={{fontWeight: 600, color: '#111827'}}>₹{(collections?.cashCollections || 0).toLocaleString('en-IN')}</span>
+              <span>Total All-Time</span>
+              <span style={{fontWeight: 600, color: '#111827'}}>₹{displayTotalRevenue.toLocaleString('en-IN')}</span>
             </div>
             <div className="collection-bar">
-              <div className="bar-online"></div>
-              <div className="bar-cash"></div>
+              <div className="bar-online" style={{width: '100%'}}></div>
             </div>
           </div>
 
@@ -243,7 +335,7 @@ export default function Dashboard() {
               <h3>Recent Service Applications</h3>
               <p>Real-time incoming government & financial services requests</p>
             </div>
-            <a href="#" style={{color: '#2563eb', fontSize: '14px', textDecoration: 'none', fontWeight: 600}}>View All →</a>
+            <a href="#/applications" style={{color: '#2563eb', fontSize: '14px', textDecoration: 'none', fontWeight: 600}}>View All →</a>
           </div>
           <table>
             <thead>
@@ -254,25 +346,36 @@ export default function Dashboard() {
                 <th>Status</th>
                 <th>Fee Amount</th>
                 <th>Date Submitted</th>
-                <th>Action</th>
+                <th style={{textAlign: 'center', width: 100}}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {(recentApps || []).map((app: any, i: number) => (
-                <tr key={i}>
-                  <td style={{fontWeight: 600}}>{app.id}</td>
-                  <td>{app.citizenName}</td>
-                  <td style={{color: '#6b7280'}}>{app.service}</td>
-                  <td>
-                    <span className={`badge ${app.status.toLowerCase().replace(' ', '')}`}>
-                      {app.status}
-                    </span>
-                  </td>
-                  <td style={{fontWeight: 600}}>₹{app.feeAmount}</td>
-                  <td style={{color: '#6b7280'}}>{new Date(app.dateSubmitted).toLocaleString()}</td>
-                  <td style={{color: '#6b7280', cursor: 'pointer'}}>•••</td>
+              {displayRecentApps.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{textAlign: 'center', color: '#9ca3af', padding: 24}}>No applications submitted yet.</td>
                 </tr>
-              ))}
+              ) : (
+                displayRecentApps.map((app: any, i: number) => (
+                  <tr key={i}>
+                    <td style={{fontWeight: 600, color: '#2563eb'}}>{app.id}</td>
+                    <td style={{fontWeight: 600, color: '#111827'}}>{app.citizenName}</td>
+                    <td style={{color: '#4b5563'}}>{app.service}</td>
+                    <td>
+                      <span className={`badge ${(app.status || 'inreview').toLowerCase().replace(' ', '')}`} style={{
+                        backgroundColor: app.status === 'Approved' ? '#d1fae5' : app.status === 'Rejected' ? '#fee2e2' : app.status === 'Processing' ? '#cffafe' : '#fef3c7',
+                        color: app.status === 'Approved' ? '#065f46' : app.status === 'Rejected' ? '#991b1b' : app.status === 'Processing' ? '#0e7490' : '#92400e',
+                      }}>
+                        {app.status}
+                      </span>
+                    </td>
+                    <td style={{fontWeight: 600}}>₹{app.feeAmount}</td>
+                    <td style={{color: '#6b7280'}}>{new Date(app.dateSubmitted).toLocaleString()}</td>
+                    <td style={{textAlign: 'center', color: '#2563eb', fontWeight: 600}}>
+                      <a href="#/applications" style={{color: '#2563eb', textDecoration: 'none', fontSize: 12}}>Verify &rarr;</a>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
