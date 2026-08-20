@@ -16,7 +16,8 @@ import {
   FileCheck,
   Search,
   Download,
-  Users
+  Users,
+  RefreshCw
 } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
@@ -34,20 +35,137 @@ export default function Applications() {
   const [newAppTitle, setNewAppTitle] = useState('');
   const [newAppDesc, setNewAppDesc] = useState('');
 
-  // Selected Application for Inspection Modal
+  // Selected Application for Inspection Modal (View & Verify)
   const [selectedApp, setSelectedApp] = useState<any>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
+  const formatApplication = (a: any) => {
+    const userProfile = a.user?.profile;
+    const formData = (a.formData as any) || {};
+    let docs = (a.documents as any) || [];
+
+    const cleanedDocs = (Array.isArray(docs) ? docs : [])
+      .filter((d: any) => d && typeof d === 'object' && !Array.isArray(d) && (d.fileUrl || d.url || d.uri || d.fileName || d.label))
+      .map((d: any, idx: number) => ({
+        label: d.label || `Document Proof #${idx + 1}`,
+        fileName: d.fileName || `proof_${idx + 1}.jpg`,
+        fileUrl: d.fileUrl || d.url || d.uri || '',
+        type: d.type || 'Identity Proof',
+      }));
+
+    return {
+      id: a.refNumber || `APP-2026-${(a.id || '').substring(0, 4).toUpperCase()}`,
+      rawId: a.id,
+      refNumber: a.refNumber,
+      citizen: userProfile?.fullName || formData.fullName || a.user?.email || 'Citizen Applicant',
+      citizenEmail: a.user?.email || formData.email || '',
+      citizenPhone: a.user?.phone || userProfile?.phone || formData.phone || '',
+      serviceType: a.serviceTitle || a.service?.title || 'Government Service',
+      serviceCategory: a.service?.category || 'Government',
+      priority: 'Medium',
+      rawStatus: a.status,
+      status:
+        a.status === 'SUBMITTED'
+          ? 'In Review'
+          : a.status === 'VERIFYING'
+            ? 'Pending'
+            : a.status === 'IN_PROGRESS'
+              ? 'Processing'
+              : a.status === 'APPROVED'
+                ? 'Approved'
+                : a.status === 'COMPLETED'
+                  ? 'Completed'
+                  : a.status === 'REJECTED'
+                    ? 'Rejected'
+                    : 'Pending',
+      assigned: a.officialOfficer || 'Auto Assigned (SDM)',
+      submitted: a.submittedAt ? new Date(a.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today',
+      submittedAtFull: a.submittedAt ? new Date(a.submittedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : new Date().toLocaleString('en-IN'),
+      sla: '24h',
+      amount: a.feePaid || 50.0,
+      paymentStatus: a.paymentStatus || 'Success',
+      razorpayPaymentId: a.razorpayPaymentId || '',
+      razorpayOrderId: a.razorpayOrderId || '',
+      rejectionReason: a.rejectionReason || '',
+      formData: {
+        fullName: formData.fullName || userProfile?.fullName || '',
+        email: formData.email || a.user?.email || '',
+        phone: formData.phone || a.user?.phone || userProfile?.phone || '',
+        dob: formData.dob || userProfile?.dob || '',
+        gender: formData.gender || userProfile?.gender || '',
+        fatherName: formData.fatherName || '',
+        motherName: formData.motherName || '',
+        placeOfBirth: formData.placeOfBirth || '',
+        state: formData.state || formData.stateName || userProfile?.state || '',
+        district: formData.district || userProfile?.district || '',
+        pinCode: formData.pinCode || userProfile?.pinCode || '',
+        address: formData.address || userProfile?.address || '',
+        ...formData,
+      },
+      documents: cleanedDocs,
+      applicantProfile: {
+        fullName: userProfile?.fullName || formData.fullName || 'Citizen Applicant',
+        aadhaar: (userProfile as any)?.aadhaarNumber || formData.aadhaarNumber || 'Verified ID Vault',
+        dob: userProfile?.dob || formData.dob || 'Not Provided',
+        gender: userProfile?.gender || formData.gender || 'Not Provided',
+        fatherName: formData.fatherName || 'Not Provided',
+        motherName: formData.motherName || 'Not Provided',
+        placeOfBirth: formData.placeOfBirth || 'Not Provided',
+        state: userProfile?.state || formData.stateName || formData.state || 'Not Provided',
+        district: userProfile?.district || formData.district || 'Not Provided',
+        pinCode: userProfile?.pinCode || formData.pinCode || 'Not Provided',
+        address: userProfile?.address || formData.address || 'Not Provided',
+      },
+      rawApp: a,
+    };
+  };
+
+  const fetchApplicationsRest = async () => {
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const res = await fetch(`${backendUrl}/api/v1/applications`);
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list)) {
+          const formatted = list.map(formatApplication);
+          const totalApps = formatted.length;
+          const pending = formatted.filter(a => a.rawStatus === 'SUBMITTED' || a.rawStatus === 'VERIFYING' || a.rawStatus === 'PENDING').length;
+          const processing = formatted.filter(a => a.rawStatus === 'IN_PROGRESS').length;
+          const completed = formatted.filter(a => a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
+          const todayApps = formatted.filter(a => {
+            const sub = new Date(a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
+            const today = new Date();
+            return sub.toDateString() === today.toDateString();
+          }).length;
+
+          setData({
+            stats: { totalApps, todayApps, pending, processing, completed },
+            applications: formatted,
+          });
+          setLoading(false);
+          return formatted;
+        }
+      }
+    } catch (e) {
+      console.warn('[Applications] REST fetch error:', e);
+    }
+    return null;
+  };
+
   useEffect(() => {
-    if (socket && connected) {
+    // Initial fetch via REST to immediately populate data
+    fetchApplicationsRest();
+
+    // WebSocket real-time subscription
+    if (socket) {
       socket.emit('request_applications_data');
-      socket.on('response_applications_data', (resData) => {
+
+      const handleSocketData = (resData: any) => {
         setData(resData);
         setLoading(false);
-        // If an app is currently open in modal, keep it updated with latest data
         if (selectedApp) {
           const updatedSelected = resData?.applications?.find(
             (a: any) => a.id === selectedApp.id || a.rawId === selectedApp.rawId || a.refNumber === selectedApp.refNumber
@@ -56,34 +174,42 @@ export default function Applications() {
             setSelectedApp(updatedSelected);
           }
         }
-      });
+      };
+
+      const handleRefresh = () => {
+        socket.emit('request_applications_data');
+        fetchApplicationsRest();
+      };
+
+      socket.on('response_applications_data', handleSocketData);
+      socket.on('applications_updated', handleRefresh);
+      socket.on('new_application_submitted', handleRefresh);
+      socket.on('application_status_changed', handleRefresh);
       socket.on('create_application_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Application Workflow Created Successfully!' } }));
         setShowCreateModal(false);
         setNewAppTitle('');
         setNewAppDesc('');
-        socket.emit('request_applications_data');
+        handleRefresh();
       });
       socket.on('update_application_status_success', (res: any) => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Application ${res.refNumber || res.id} updated to ${res.status}!` } }));
         setActionLoading(false);
         setShowRejectBox(false);
         setRejectionReason('');
-        socket.emit('request_applications_data');
+        handleRefresh();
       });
-      socket.on('applications_updated', () => {
-        socket.emit('request_applications_data');
-      });
-    }
-    return () => {
-      if (socket) {
-        socket.off('response_applications_data');
+
+      return () => {
+        socket.off('response_applications_data', handleSocketData);
+        socket.off('applications_updated', handleRefresh);
+        socket.off('new_application_submitted', handleRefresh);
+        socket.off('application_status_changed', handleRefresh);
         socket.off('create_application_success');
         socket.off('update_application_status_success');
-        socket.off('applications_updated');
-      }
-    };
-  }, [socket, connected, selectedApp]);
+      };
+    }
+  }, [socket, connected]);
 
   const handleCreate = () => {
     if (socket && newAppTitle && newAppDesc) {
@@ -91,16 +217,39 @@ export default function Applications() {
     }
   };
 
-  const handleStatusUpdate = (app: any, newStatus: 'APPROVED' | 'REJECTED' | 'IN_PROGRESS', reason?: string) => {
-    if (!socket) return;
+  const handleStatusUpdate = async (app: any, newStatus: 'APPROVED' | 'REJECTED' | 'IN_PROGRESS', reason?: string) => {
     setActionLoading(true);
-    socket.emit('update_application_status', {
-      id: app.rawId || app.id,
-      applicationId: app.rawId || app.id,
-      refNumber: app.refNumber || app.id,
-      status: newStatus,
-      rejectionReason: reason || (newStatus === 'REJECTED' ? (rejectionReason || 'Document verification failed.') : undefined),
-    });
+    const rejReason = reason || (newStatus === 'REJECTED' ? (rejectionReason || 'Document verification failed. Please re-submit with clear scanned copies.') : undefined);
+
+    // 1. Emit via socket for instant live sync
+    if (socket) {
+      socket.emit('update_application_status', {
+        id: app.rawId || app.id,
+        applicationId: app.rawId || app.id,
+        refNumber: app.refNumber || app.id,
+        status: newStatus,
+        rejectionReason: rejReason,
+      });
+    }
+
+    // 2. Also call REST API to guarantee persistence
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const targetId = app.rawId || app.id || app.refNumber;
+      await fetch(`${backendUrl}/api/v1/applications/${targetId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, rejectionReason: rejReason }),
+      });
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Application ${app.refNumber || app.id} marked as ${newStatus}!` } }));
+    } catch (e) {
+      console.warn('REST status update error:', e);
+    } finally {
+      setActionLoading(false);
+      setShowRejectBox(false);
+      setRejectionReason('');
+      fetchApplicationsRest();
+    }
   };
 
   const handleDownloadDoc = (url: string, filename: string) => {
@@ -108,7 +257,6 @@ export default function Applications() {
       window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'File is stored on secure vault' } }));
       return;
     }
-    // Handle data URLs or blobs
     if (url.startsWith('data:') || url.startsWith('blob:')) {
       const a = document.createElement('a');
       a.href = url;
@@ -118,7 +266,6 @@ export default function Applications() {
       document.body.removeChild(a);
       return;
     }
-    // Fetch blob for cross-origin downloads
     fetch(url)
       .then(response => response.blob())
       .then(blob => {
@@ -142,7 +289,14 @@ export default function Applications() {
       });
   };
 
-  if (loading) return <div>Loading applications...</div>;
+  if (loading && !data) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
+        <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 12px' }} />
+        <div>Loading citizen applications from database...</div>
+      </div>
+    );
+  }
 
   const { stats, applications } = data || {};
 
@@ -178,7 +332,9 @@ export default function Applications() {
           <p>Inspect applicant data, verify uploaded proofs with instant click-to-download, and manage scheme pipelines</p>
         </div>
         <div style={{display: 'flex', gap: 12}}>
-          <button className="date-picker-btn">Export Report</button>
+          <button className="date-picker-btn" onClick={() => fetchApplicationsRest()}>
+            <RefreshCw size={14} style={{ marginRight: 6 }} /> Refresh
+          </button>
           <button className="action-btn" onClick={() => setShowCreateModal(true)}>+ New Application</button>
         </div>
       </div>
@@ -192,7 +348,7 @@ export default function Applications() {
         <StatCard 
           icon={<Sun color="#2563eb" />} iconBg="#eff6ff"
           title="TODAY's RECEIVED" value={(stats?.todayApps || 0).toLocaleString()} 
-          trend="+8.3% vs yesterday" trendType="up" 
+          trend="Active Submissions" trendType="up" 
         />
         <StatCard 
           icon={<Clock color="#f59e0b" />} iconBg="#fef3c7"
@@ -430,41 +586,48 @@ export default function Applications() {
         </div>
       </div>
       
-      {/* ─── Applicant & Verification Inspection Modal ─── */}
+      {/* ─── Applicant & Verification Inspection Modal (View & Verify) ─── */}
       {selectedApp && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(17, 24, 39, 0.65)',
-          backdropFilter: 'blur(3px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000,
-          padding: 20
-        }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: 16,
-            width: '100%',
-            maxWidth: 820,
-            maxHeight: '92vh',
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(6px)',
             display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-            overflow: 'hidden'
-          }}>
-            {/* Modal Header */}
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px',
+            boxSizing: 'border-box'
+          }}
+          onClick={() => setSelectedApp(null)}
+        >
+          <div 
+            style={{
+              background: '#ffffff',
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 860,
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              boxSizing: 'border-box'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header (Fixed at top) */}
             <div style={{
-              padding: '18px 24px',
-              borderBottom: '1px solid #e5e7eb',
+              padding: '16px 24px',
+              borderBottom: '1px solid #e2e8f0',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: '#f8fafc'
+              background: '#f8fafc',
+              flexShrink: 0
             }}>
               <div>
                 <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
@@ -507,8 +670,17 @@ export default function Applications() {
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div style={{padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 20}}>
+            {/* Modal Body (Properly Scrollable with minHeight 0) */}
+            <div style={{
+              padding: '20px 24px', 
+              overflowY: 'auto', 
+              flex: 1, 
+              minHeight: 0,
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: 18,
+              boxSizing: 'border-box'
+            }}>
               {/* If Rejected, show reason alert */}
               {selectedApp.status === 'Rejected' && selectedApp.rejectionReason && (
                 <div style={{
@@ -520,7 +692,7 @@ export default function Applications() {
                   gap: 12,
                   alignItems: 'flex-start'
                 }}>
-                  <AlertTriangle size={18} color="#dc2626" style={{marginTop: 2}} />
+                  <AlertTriangle size={18} color="#dc2626" style={{marginTop: 2, flexShrink: 0}} />
                   <div>
                     <div style={{fontSize: 13, fontWeight: 700, color: '#991b1b'}}>Application Rejected</div>
                     <div style={{fontSize: 13, color: '#b91c1c', marginTop: 2}}>{selectedApp.rejectionReason}</div>
@@ -533,7 +705,8 @@ export default function Applications() {
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',
                 borderRadius: 12,
-                padding: '16px 18px'
+                padding: '16px 18px',
+                boxSizing: 'border-box'
               }}>
                 <div style={{
                   fontSize: 14,
@@ -548,17 +721,17 @@ export default function Applications() {
                 </div>
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                   gap: '12px 16px',
                   fontSize: 13
                 }}>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Full Name</span>
-                    <strong style={{color: '#0f172a'}}>{selectedApp.applicantProfile?.fullName || selectedApp.formData?.fullName || selectedApp.citizen || 'Citizen Applicant'}</strong>
+                    <strong style={{color: '#0f172a', wordBreak: 'break-word'}}>{selectedApp.applicantProfile?.fullName || selectedApp.formData?.fullName || selectedApp.citizen || 'Citizen Applicant'}</strong>
                   </div>
                   <div>
-                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Email ID (Gmail)</span>
-                    <strong style={{color: '#0f172a'}}>{selectedApp.citizenEmail || selectedApp.formData?.email || 'citizen@gmail.com'}</strong>
+                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Email Address</span>
+                    <strong style={{color: '#0f172a', wordBreak: 'break-all'}}>{selectedApp.citizenEmail || selectedApp.formData?.email || 'citizen@cybersave.app'}</strong>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Mobile Number</span>
@@ -566,11 +739,11 @@ export default function Applications() {
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Date of Birth</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.dob || selectedApp.applicantProfile?.dob || '15/08/1995'}</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.dob || selectedApp.applicantProfile?.dob || 'Not Provided'}</span>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Gender</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.gender || selectedApp.applicantProfile?.gender || 'Male'}</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.gender || selectedApp.applicantProfile?.gender || 'Not Provided'}</span>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Aadhaar Vault Status</span>
@@ -578,45 +751,41 @@ export default function Applications() {
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Father / Guardian Name</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.fatherName || 'Ramesh Kumar'}</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.fatherName || 'Not Provided'}</span>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Mother's Name</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.motherName || 'Sunita Devi'}</span>
+                    <span style={{color: '#334155'}}>{selectedApp.formData?.motherName || 'Not Provided'}</span>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>State & District</span>
-                    <span style={{color: '#334155'}}>{(selectedApp.formData?.district || selectedApp.applicantProfile?.district || 'Central') + ', ' + (selectedApp.formData?.state || selectedApp.applicantProfile?.state || 'Delhi')}</span>
+                    <span style={{color: '#334155'}}>{(selectedApp.formData?.district || selectedApp.applicantProfile?.district || 'New Delhi') + ', ' + (selectedApp.formData?.stateName || selectedApp.formData?.state || selectedApp.applicantProfile?.state || 'Delhi')}</span>
                   </div>
-                  <div>
+                  <div style={{ gridColumn: 'span 2' }}>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Residential Address</span>
-                    <span style={{color: '#334155'}}>{selectedApp.formData?.address || selectedApp.applicantProfile?.address || 'H.No 124, Sector 4, Main Road'}</span>
+                    <span style={{color: '#334155', wordBreak: 'break-word'}}>{selectedApp.formData?.address || selectedApp.applicantProfile?.address || 'H.No 124, Sector 4, Main Road, New Delhi'}</span>
                   </div>
                   <div>
                     <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>PIN Code</span>
                     <span style={{color: '#334155'}}>{selectedApp.formData?.pinCode || selectedApp.applicantProfile?.pinCode || '110001'}</span>
                   </div>
-                  <div>
-                    <span style={{color: '#64748b', fontSize: 11, display: 'block', textTransform: 'uppercase', fontWeight: 600}}>Category / Quota</span>
-                    <span style={{color: '#2563eb', fontWeight: 600}}>{selectedApp.formData?.category || 'General / OBC'}</span>
-                  </div>
                 </div>
 
                 {/* Additional Scheme-Specific Fields Submitted */}
                 {selectedApp.formData && Object.keys(selectedApp.formData).filter(k => 
-                  !['fullName', 'email', 'phone', 'dob', 'gender', 'aadhaarNumber', 'fatherName', 'motherName', 'state', 'district', 'address', 'pinCode', 'category'].includes(k)
+                  !['fullName', 'email', 'phone', 'dob', 'gender', 'aadhaarNumber', 'fatherName', 'motherName', 'state', 'stateName', 'district', 'address', 'pinCode', 'category'].includes(k)
                 ).length > 0 && (
                   <div style={{marginTop: 14, paddingTop: 12, borderTop: '1px dashed #e2e8f0'}}>
                     <div style={{fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8}}>
                       Additional Scheme Data Fields:
                     </div>
-                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 14px'}}>
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px 14px'}}>
                       {Object.entries(selectedApp.formData)
-                        .filter(([k]) => !['fullName', 'email', 'phone', 'dob', 'gender', 'aadhaarNumber', 'fatherName', 'motherName', 'state', 'district', 'address', 'pinCode', 'category'].includes(k))
+                        .filter(([k]) => !['fullName', 'email', 'phone', 'dob', 'gender', 'aadhaarNumber', 'fatherName', 'motherName', 'state', 'stateName', 'district', 'address', 'pinCode', 'category'].includes(k))
                         .map(([k, v]) => (
                           <div key={k}>
                             <span style={{color: '#64748b', fontSize: 10.5, display: 'block', textTransform: 'capitalize', fontWeight: 600}}>{k.replace(/([A-Z])/g, ' $1')}</span>
-                            <span style={{color: '#0f172a', fontSize: 12.5, fontWeight: 600}}>{String(v || '—')}</span>
+                            <span style={{color: '#0f172a', fontSize: 12.5, fontWeight: 600, wordBreak: 'break-word'}}>{String(v || '—')}</span>
                           </div>
                         ))}
                     </div>
@@ -624,12 +793,13 @@ export default function Applications() {
                 )}
               </div>
 
-              {/* Section 2: Uploaded Document Proofs (Click to Download) */}
+              {/* Section 2: Uploaded Document Proofs (Cloudinary Images) */}
               <div style={{
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',
                 borderRadius: 12,
-                padding: '16px 18px'
+                padding: '16px 18px',
+                boxSizing: 'border-box'
               }}>
                 <div style={{
                   display: 'flex',
@@ -649,7 +819,7 @@ export default function Applications() {
                   </div>
                   {(selectedApp.documents || []).length > 0 && (
                     <span style={{fontSize: 12, color: '#2563eb', fontWeight: 600}}>
-                      💡 Click on document image or button to view / download
+                      💡 Click document thumbnail to inspect full resolution
                     </span>
                   )}
                 </div>
@@ -657,7 +827,7 @@ export default function Applications() {
                 {(selectedApp.documents && selectedApp.documents.length > 0) ? (
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                     gap: 14
                   }}>
                     {selectedApp.documents.map((doc: any, idx: number) => {
@@ -677,7 +847,8 @@ export default function Applications() {
                             background: '#f8fafc',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 10
+                            gap: 10,
+                            boxSizing: 'border-box'
                           }}
                         >
                           <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
@@ -685,14 +856,14 @@ export default function Applications() {
                               onClick={() => {
                                 if (docUrl && isImage) {
                                   setPreviewImage({ url: docUrl, title: docName });
-                                } else {
+                                } else if (docUrl) {
                                   handleDownloadDoc(docUrl, docName);
                                 }
                               }}
                               title={docUrl ? "Click to inspect full resolution image proof" : "No file uploaded"}
                               style={{
-                                width: 58,
-                                height: 58,
+                                width: 56,
+                                height: 56,
                                 borderRadius: 8,
                                 background: '#eff6ff',
                                 color: '#2563eb',
@@ -711,9 +882,12 @@ export default function Applications() {
                                   src={docUrl} 
                                   alt={docName} 
                                   style={{width: '100%', height: '100%', objectFit: 'cover'}} 
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
                                 />
                               ) : (
-                                <FileText size={26} color="#94a3b8" />
+                                <FileText size={24} color="#94a3b8" />
                               )}
                             </div>
 
@@ -732,7 +906,7 @@ export default function Applications() {
                                 }}>
                                   {doc.type || 'Identity Proof'}
                                 </span>
-                                <span>{docUrl ? '• Uploaded Proof' : '• Pending Upload'}</span>
+                                <span>{docUrl ? '• Uploaded to Cloudinary' : '• Pending Upload'}</span>
                               </div>
                             </div>
                           </div>
@@ -785,7 +959,8 @@ export default function Applications() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                fontSize: 13
+                fontSize: 13,
+                boxSizing: 'border-box'
               }}>
                 <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
                   <CreditCard size={16} color="#64748b" />
@@ -802,7 +977,8 @@ export default function Applications() {
                   padding: 16,
                   backgroundColor: '#fff1f2',
                   border: '1px solid #fecdd3',
-                  borderRadius: 12
+                  borderRadius: 12,
+                  boxSizing: 'border-box'
                 }}>
                   <label style={{display: 'block', fontSize: 13, fontWeight: 700, color: '#9f1239', marginBottom: 8}}>
                     Specify Rejection Reason (Will be sent to Citizen's Mobile App):
@@ -876,17 +1052,18 @@ export default function Applications() {
               )}
             </div>
 
-            {/* Modal Actions Footer */}
+            {/* Modal Actions Footer (Fixed at bottom) */}
             <div style={{
               padding: '16px 24px',
               borderTop: '1px solid #e5e7eb',
               background: '#f8fafc',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between'
+              justifyContent: 'space-between',
+              flexShrink: 0
             }}>
               <div style={{fontSize: 12, color: '#64748b'}}>
-                Status changes immediately sync with Citizen's Mobile App
+                Status changes immediately sync with Citizen's Mobile App via WebSockets
               </div>
               <div style={{display: 'flex', gap: 12}}>
                 {selectedApp.status !== 'Approved' && (
@@ -912,6 +1089,25 @@ export default function Applications() {
                   </button>
                 )}
 
+                {selectedApp.status !== 'Processing' && selectedApp.status !== 'Approved' && (
+                  <button 
+                    onClick={() => handleStatusUpdate(selectedApp, 'IN_PROGRESS')}
+                    disabled={actionLoading}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#0284c7',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Mark In Progress
+                  </button>
+                )}
+
                 {selectedApp.status !== 'Rejected' && !showRejectBox && (
                   <button 
                     onClick={() => setShowRejectBox(true)}
@@ -934,23 +1130,6 @@ export default function Applications() {
                   </button>
                 )}
 
-                {selectedApp.status === 'Approved' && (
-                  <button 
-                    onClick={() => setShowRejectBox(true)}
-                    style={{
-                      padding: '8px 16px',
-                      backgroundColor: '#f8fafc',
-                      color: '#64748b',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: 8,
-                      fontSize: 13,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Revoke / Reject
-                  </button>
-                )}
-
                 <button 
                   className="date-picker-btn"
                   onClick={() => setSelectedApp(null)}
@@ -966,7 +1145,7 @@ export default function Applications() {
 
       {/* ─── Workflow Creation Modal ─── */}
       {showCreateModal && (
-        <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000}}>
+        <div style={{position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000}}>
           <div style={{background: 'white', padding: 24, borderRadius: 12, width: 400}}>
             <h3 style={{marginBottom: 16}}>Create New Application Workflow</h3>
             <div style={{marginBottom: 12}}>
@@ -990,16 +1169,13 @@ export default function Applications() {
         <div 
           style={{
             position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            inset: 0,
             background: 'rgba(15, 23, 42, 0.85)',
             backdropFilter: 'blur(6px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 9999,
+            zIndex: 10000,
             padding: 24
           }}
           onClick={() => setPreviewImage(null)}
@@ -1054,7 +1230,7 @@ export default function Applications() {
             }}>
               <img 
                 src={previewImage.url} 
-                alt={previewImage.title}
+                alt={previewImage.title} 
                 style={{maxWidth: '100%', maxHeight: '78vh', objectFit: 'contain', borderRadius: 8}}
               />
             </div>
