@@ -478,106 +478,111 @@ export default function Applications() {
           </div>
         </div>
 
-        <table style={{marginBottom: 24, width: '100%', borderCollapse: 'collapse'}}>
-          <thead>
-            <tr>
-              <th><input type="checkbox" /> APP ID</th>
-              <th>CITIZEN</th>
-              <th>SCHEME / SERVICE</th>
-              <th>SCHEME APPLICANTS</th>
-              <th>STATUS</th>
-              <th>FEE</th>
-              <th>SUBMITTED</th>
-              <th style={{textAlign: 'right', paddingRight: 24, whiteSpace: 'nowrap'}}>ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredApplications.length === 0 ? (
+        <div style={{width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: 20}}>
+          <table style={{width: '100%', minWidth: 920, borderCollapse: 'collapse'}}>
+            <thead>
               <tr>
-                <td colSpan={8} style={{textAlign: 'center', padding: '32px', color: '#6b7280'}}>
-                  No applications found matching your search or filters.
-                </td>
+                <th style={{padding: '12px 14px', whiteSpace: 'nowrap', width: '12%'}}><input type="checkbox" style={{marginRight: 6}} /> APP ID</th>
+                <th style={{padding: '12px 14px', minWidth: 160, width: '22%'}}>CITIZEN</th>
+                <th style={{padding: '12px 14px', minWidth: 140, width: '18%'}}>SCHEME / SERVICE</th>
+                <th style={{padding: '12px 14px', whiteSpace: 'nowrap', width: '14%'}}>SCHEME APPLICANTS</th>
+                <th style={{padding: '12px 14px', whiteSpace: 'nowrap', width: '11%'}}>STATUS</th>
+                <th style={{padding: '12px 14px', whiteSpace: 'nowrap', width: '8%'}}>FEE</th>
+                <th style={{padding: '12px 14px', whiteSpace: 'nowrap', width: '10%'}}>SUBMITTED</th>
+                <th style={{textAlign: 'center', padding: '12px 14px', whiteSpace: 'nowrap', width: '14%'}}>ACTIONS</th>
               </tr>
-            ) : (
-              filteredApplications.map((app: any, i: number) => {
-                const totalForScheme = schemeApplicantCounts[app.serviceType] || 1;
-                return (
-                  <tr 
-                    key={i} 
-                    style={{cursor: 'pointer', transition: 'background 0.15s'}}
-                    onClick={() => { setSelectedApp(app); setShowRejectBox(false); setRejectionReason(''); }}
-                    className="table-row-hover"
-                  >
-                    <td style={{fontWeight: 600, color: '#2563eb'}}>
-                      <span style={{fontFamily: 'monospace'}}>{app.id}</span>
-                    </td>
-                    <td style={{fontWeight: 600, color: '#111827'}}>
-                      <div>{app.citizen}</div>
-                      {app.citizenEmail ? <div style={{fontSize: 11, color: '#9ca3af', fontWeight: 400}}>{app.citizenEmail}</div> : null}
-                    </td>
-                    <td style={{color: '#4b5563', fontWeight: 500}}>{app.serviceType}</td>
-                    <td>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        backgroundColor: '#f1f5f9',
-                        color: '#475569',
-                        padding: '3px 8px',
-                        borderRadius: 12
-                      }}>
-                        <Users size={12} color="#64748b" /> {totalForScheme} {totalForScheme === 1 ? 'person' : 'people'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge ${app.status.toLowerCase().replace(' ', '')}`} style={{
-                        backgroundColor: app.status === 'Approved' ? '#d1fae5' : app.status === 'Rejected' ? '#fee2e2' : app.status === 'Processing' ? '#cffafe' : '#fef3c7',
-                        color: app.status === 'Approved' ? '#065f46' : app.status === 'Rejected' ? '#991b1b' : app.status === 'Processing' ? '#0e7490' : '#92400e',
-                        padding: '4px 10px',
-                        borderRadius: 12,
-                        fontSize: 12,
-                        fontWeight: 600
-                      }}>
-                        {app.status}
-                      </span>
-                    </td>
-                    <td style={{fontWeight: 600, color: '#111827'}}>₹{app.amount}</td>
-                    <td style={{color: '#6b7280', fontSize: 13}}>{app.submitted}</td>
-                    <td style={{textAlign: 'right', verticalAlign: 'middle', whiteSpace: 'nowrap', paddingRight: 24}}>
-                      <button 
-                        className="action-view-verify-btn"
-                        style={{
-                          padding: '6px 14px',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: '#2563eb',
-                          border: '1px solid #bfdbfe',
-                          background: '#eff6ff',
-                          borderRadius: 6,
+            </thead>
+            <tbody>
+              {filteredApplications.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{textAlign: 'center', padding: '32px', color: '#6b7280'}}>
+                    No applications found matching your search or filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredApplications.map((app: any, i: number) => {
+                  const totalForScheme = schemeApplicantCounts[app.serviceType] || 1;
+                  return (
+                    <tr 
+                      key={i} 
+                      style={{cursor: 'pointer', transition: 'background 0.15s'}}
+                      onClick={() => { setSelectedApp(app); setShowRejectBox(false); setRejectionReason(''); }}
+                      className="table-row-hover"
+                    >
+                      <td style={{fontWeight: 600, color: '#2563eb', padding: '14px 14px', whiteSpace: 'nowrap'}}>
+                        <span style={{fontFamily: 'monospace'}}>{app.id}</span>
+                      </td>
+                      <td style={{fontWeight: 600, color: '#111827', padding: '14px 14px'}}>
+                        <div>{app.citizen}</div>
+                        {app.citizenEmail ? <div style={{fontSize: 11, color: '#9ca3af', fontWeight: 400}}>{app.citizenEmail}</div> : null}
+                      </td>
+                      <td style={{color: '#4b5563', fontWeight: 500, padding: '14px 14px'}}>{app.serviceType}</td>
+                      <td style={{padding: '14px 14px', whiteSpace: 'nowrap'}}>
+                        <span style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 6,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap'
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedApp(app);
-                          setShowRejectBox(false);
-                          setRejectionReason('');
-                        }}
-                      >
-                        <Eye size={13} /> View & Verify
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                          gap: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          backgroundColor: '#f1f5f9',
+                          color: '#475569',
+                          padding: '3px 8px',
+                          borderRadius: 12
+                        }}>
+                          <Users size={12} color="#64748b" /> {totalForScheme} {totalForScheme === 1 ? 'person' : 'people'}
+                        </span>
+                      </td>
+                      <td style={{padding: '14px 14px', whiteSpace: 'nowrap'}}>
+                        <span className={`badge ${app.status.toLowerCase().replace(' ', '')}`} style={{
+                          backgroundColor: app.status === 'Approved' ? '#d1fae5' : app.status === 'Rejected' ? '#fee2e2' : app.status === 'Processing' ? '#cffafe' : '#fef3c7',
+                          color: app.status === 'Approved' ? '#065f46' : app.status === 'Rejected' ? '#991b1b' : app.status === 'Processing' ? '#0e7490' : '#92400e',
+                          padding: '4px 10px',
+                          borderRadius: 12,
+                          fontSize: 12,
+                          fontWeight: 600
+                        }}>
+                          {app.status}
+                        </span>
+                      </td>
+                      <td style={{fontWeight: 600, color: '#111827', padding: '14px 14px', whiteSpace: 'nowrap'}}>₹{app.amount}</td>
+                      <td style={{color: '#6b7280', fontSize: 13, padding: '14px 14px', whiteSpace: 'nowrap'}}>{app.submitted}</td>
+                      <td style={{textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '14px 14px'}}>
+                        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                          <button 
+                            className="action-view-verify-btn"
+                            style={{
+                              padding: '6px 14px',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: '#2563eb',
+                              border: '1px solid #bfdbfe',
+                              background: '#eff6ff',
+                              borderRadius: 6,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 6,
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedApp(app);
+                              setShowRejectBox(false);
+                              setRejectionReason('');
+                            }}
+                          >
+                            <Eye size={13} /> View & Verify
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
 
         <div style={{padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)'}}>
           <div style={{fontSize: 13, color: '#6b7280'}}>Showing {filteredApplications.length} applications</div>
