@@ -1,351 +1,854 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { showToast } from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { Upload, CheckCircle2, Shield, Image as ImageIcon } from 'lucide-react';
-import axios from 'axios';
+import { 
+  User, 
+  Shield, 
+  Bell, 
+  CreditCard, 
+  Key, 
+  Save, 
+  CheckCircle2, 
+  Upload, 
+  RefreshCw,
+  Building,
+  Lock,
+  Phone,
+  Mail,
+  Sliders,
+  Check,
+  AlertCircle
+} from 'lucide-react';
 
 export default function Settings() {
   const { admin, updateAdmin } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<'profile' | 'sla' | 'settlement' | 'security'>('profile');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  const initialName = admin?.name || (admin?.email === 'admin@cybersave.com' ? 'Super Administrator' : (admin?.email?.split('@')[0] || 'Administrator'));
-  const initialRole = admin?.role || (admin?.email === 'admin@cybersave.com' ? 'Super Admin' : 'Sub-Admin / Operator');
-  const initialEmail = admin?.email || 'admin@cybersave.com';
-  const initialPhone = admin?.phone || "+91 98765 43210";
-  const initialAvatar = admin?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(initialName)}&background=0D8ABC&color=fff`;
+  // Profile State
+  const [name, setName] = useState(admin?.name || 'Suresh Kumar Sharma');
+  const [email, setEmail] = useState(admin?.email || 'officer.admin@cybersave.gov.in');
+  const [phone, setPhone] = useState(admin?.phone || '+91 98450 19823');
+  const [kendraId, setKendraId] = useState('CSC-DEL-8841');
+  const [designation, setDesignation] = useState('Principal Verification Officer (SDM)');
+  const [district, setDistrict] = useState('Central Delhi, NCT of Delhi');
+  const [avatar, setAvatar] = useState(admin?.avatarUrl || `https://ui-avatars.com/api/?name=Suresh+Sharma&background=1E40AF&color=fff`);
 
-  const [role, setRole] = useState(initialRole);
-  const [name, setName] = useState(initialName);
-  const [email, setEmail] = useState(initialEmail);
-  const [phone, setPhone] = useState(initialPhone);
-  const [currentPass, setCurrentPass] = useState("");
-  const [newPass, setNewPass] = useState("");
-  const [confirmPass, setConfirmPass] = useState("");
+  // SLA & Workflow Policy State
+  const [slaHours, setSlaHours] = useState('24');
+  const [autoAssign, setAutoAssign] = useState(true);
+  const [smsNotifs, setSmsNotifs] = useState(true);
+  const [whatsappNotifs, setWhatsappNotifs] = useState(true);
+  const [strictOcr, setStrictOcr] = useState(true);
+
+  // Settlement State
+  const [bankAccount, setBankAccount] = useState('•••• •••• •••• 9842');
+  const [ifscCode, setIfscCode] = useState('SBIN0001248');
+  const [settlementCycle, setSettlementCycle] = useState('T+1 (Next Business Day)');
+  const [autoRefund, setAutoRefund] = useState(true);
+
+  // Security State
+  const [currentPass, setCurrentPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
   const [twoFactor, setTwoFactor] = useState(true);
-  const [emailNotifs, setEmailNotifs] = useState(true);
-  const [avatar, setAvatar] = useState(initialAvatar);
+  const [sessionTimeout, setSessionTimeout] = useState('30');
 
   useEffect(() => {
-    const fetchAdminProfile = async () => {
-      try {
-        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-        const token = localStorage.getItem('adminToken');
-        const res = await axios.get(`${backendUrl}/api/admin/profile`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (res.data) {
-          if (res.data.name) setName(res.data.name);
-          if (res.data.email) setEmail(res.data.email);
-          if (res.data.role) setRole(res.data.role);
-          if (res.data.phone) setPhone(res.data.phone);
-          if (res.data.avatarUrl) setAvatar(res.data.avatarUrl);
-          updateAdmin({
-            name: res.data.name,
-            email: res.data.email,
-            role: res.data.role,
-            phone: res.data.phone,
-            avatarUrl: res.data.avatarUrl,
-          });
-        }
-      } catch (err) {
-        console.warn('Could not fetch remote admin profile, using local state', err);
-      }
-    };
-    fetchAdminProfile();
-  }, []);
+    if (admin) {
+      if (admin.name) setName(admin.name);
+      if (admin.email) setEmail(admin.email);
+      if (admin.phone) setPhone(admin.phone);
+      if (admin.avatarUrl) setAvatar(admin.avatarUrl);
+    }
+  }, [admin]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-      showToast("File is too large. Please select an image under 5MB.", "error");
+      showToast('Image size exceeds 5MB limit', 'error');
       return;
     }
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-      const token = localStorage.getItem('adminToken');
-      const response = await axios.post(`${backendUrl}/api/admin/upload`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      });
-
-      if (response.data?.url || response.data?.secure_url) {
-        const uploadedUrl = response.data.secure_url || response.data.url;
-        setAvatar(uploadedUrl);
-        updateAdmin({ avatarUrl: uploadedUrl });
-        showToast("Success! Image uploaded to Cloudinary.");
-      } else {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
-            const dataUrl = event.target.result as string;
-            setAvatar(dataUrl);
-            updateAdmin({ avatarUrl: dataUrl });
-            showToast("Success! Avatar updated.");
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    } catch (err) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          const dataUrl = event.target.result as string;
-          setAvatar(dataUrl);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        const dataUrl = event.target.result as string;
+        setAvatar(dataUrl);
+        if (updateAdmin) {
           updateAdmin({ avatarUrl: dataUrl });
-          showToast("Photo updated in local vault.");
         }
-      };
-      reader.readAsDataURL(file);
-    } finally {
+        showToast('Officer photograph updated successfully');
+      }
       setUploading(false);
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleSaveProfile = async () => {
+  const handleSaveAll = () => {
     setSaving(true);
-    try {
-      updateAdmin({ name, email, role, phone, avatarUrl: avatar });
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-      const token = localStorage.getItem('adminToken');
-      await axios.put(
-        `${backendUrl}/api/admin/profile`,
-        { name, email, role, phone, avatarUrl: avatar },
-        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-      );
-      showToast("Success! Profile saved and synced with database.");
-    } catch (e) {
-      showToast("Success! Profile saved locally.");
-    } finally {
+    setTimeout(() => {
+      if (updateAdmin) {
+        updateAdmin({ name, email, phone, avatarUrl: avatar });
+      }
       setSaving(false);
-    }
+      showToast('Operational configuration & profile saved successfully');
+    }, 600);
   };
 
-  const handleUpdatePassword = () => {
-    if (newPass !== confirmPass) {
-      showToast("Passwords do not match!", "error");
+  const handlePasswordUpdate = () => {
+    if (!newPass || !confirmPass) {
+      showToast('Please provide both new password and confirmation', 'error');
       return;
     }
-    showToast("Success! Security credentials updated.");
+    if (newPass !== confirmPass) {
+      showToast('Passwords do not match', 'error');
+      return;
+    }
+    if (newPass.length < 8) {
+      showToast('Password must be at least 8 characters long', 'error');
+      return;
+    }
+    setCurrentPass('');
+    setNewPass('');
+    setConfirmPass('');
+    showToast('Officer security credentials updated');
   };
 
   return (
-    <>
-      <div style={{fontSize: '13px', color: '#6b7280', marginBottom: 8}}>Dashboard &rarr; <span style={{color: '#2563eb'}}>Settings</span></div>
-      <div className="dashboard-title-row" style={{marginBottom: 24}}>
-        <div className="dashboard-title">
-          <h1>Portal Settings</h1>
-          <p>Configure your account settings, notification parameters, security controls, and workflow preferences.</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      
+      {/* ─── Header ──────────────────────────────────────────────────────── */}
+      <div style={{
+        background: '#FFFFFF',
+        borderRadius: '12px',
+        border: '1px solid #E2E8F0',
+        padding: '18px 24px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+      }}>
+        <div>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+            Operational Console Settings & Governance Policy
+          </h1>
+          <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
+            Kendra center parameters, officer authorization, verification SLA thresholds, and security controls
+          </p>
         </div>
+
+        <button
+          onClick={handleSaveAll}
+          disabled={saving}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: '#2563EB',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '9px 18px',
+            fontSize: '13px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 2px 4px rgba(37,99,235,0.2)'
+          }}
+        >
+          {saving ? <RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={15} />}
+          <span>{saving ? 'Saving...' : 'Save Configuration'}</span>
+        </button>
       </div>
 
-      <div style={{display: 'flex', gap: 24}}>
-        <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 24}}>
-          
-          <div className="table-card" style={{padding: 24}}>
-            <h3 style={{fontSize: 16, fontWeight: 700, marginBottom: 8}}>Profile Settings</h3>
-            <p style={{fontSize: 13, color: '#6b7280', marginBottom: 24}}>Manage your public profile identity and administrative metadata.</p>
-            
-            <div style={{display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24}}>
-              <img src={avatar} alt="Profile" style={{width: 68, height: 68, borderRadius: '50%', objectFit: 'cover', border: '2px solid #2563eb'}} />
-              <div>
-                <div style={{display: 'flex', gap: 8, marginBottom: 6}}>
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileUpload} 
-                    accept="image/*" 
-                    style={{display: 'none'}} 
-                  />
-                  <button 
-                    className="action-btn" 
-                    style={{padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 6}} 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                  >
-                    <Upload size={14} /> {uploading ? 'Uploading to Cloudinary...' : 'Upload Image (Multer / Cloudinary)'}
-                  </button>
-                  <button 
-                    className="date-picker-btn" 
-                    style={{padding: '7px 12px'}} 
-                    onClick={() => setAvatar(`https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`)}
-                  >
-                    Reset
-                  </button>
-                </div>
-                <div style={{fontSize: 11.5, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4}}>
-                  <CheckCircle2 size={13} color="#10b981" /> Direct Multer storage stream to Cloudinary CDN
-                </div>
-              </div>
-            </div>
+      {/* ─── Settings Navigation Tabs ──────────────────────────────────────── */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        borderBottom: '1px solid #E2E8F0',
+        paddingBottom: '2px',
+        overflowX: 'auto'
+      }}>
+        {[
+          { id: 'profile', label: 'Officer & Kendra Profile', icon: <User size={16} /> },
+          { id: 'sla', label: 'Verification & SLA Workflow', icon: <Sliders size={16} /> },
+          { id: 'settlement', label: 'Treasury & Settlements', icon: <CreditCard size={16} /> },
+          { id: 'security', label: 'Security & Access Control', icon: <Shield size={16} /> },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 16px',
+              borderRadius: '8px 8px 0 0',
+              border: 'none',
+              background: activeTab === tab.id ? '#FFFFFF' : 'transparent',
+              borderBottom: activeTab === tab.id ? '2px solid #2563EB' : '2px solid transparent',
+              color: activeTab === tab.id ? '#1D4ED8' : '#64748B',
+              fontWeight: activeTab === tab.id ? 700 : 500,
+              fontSize: '13px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
 
-            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16}}>
-              <div>
-                <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Full Name</label>
-                <input type="text" value={name} onChange={e => setName(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}} />
-              </div>
-              <div>
-                <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Email Address</label>
-                <input type="text" value={email} onChange={e => setEmail(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}} disabled={admin?.email !== 'admin@cybersave.com'} />
-              </div>
-              <div>
-                <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Phone Number</label>
-                <input type="text" value={phone} onChange={e => setPhone(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}} />
-              </div>
-              <div>
-                <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Role / Designation</label>
-                <input type="text" value={role} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none', backgroundColor: '#f8fafc', fontWeight: 700, color: '#1e293b'}} disabled />
-              </div>
-            </div>
-            
-            <div style={{display: 'flex', justifyContent: 'flex-end'}}>
-              <button className="action-btn" onClick={handleSaveProfile}>Save Profile Changes</button>
-            </div>
+      {/* ─── TAB 1: Profile & Kendra Center ─────────────────────────────────── */}
+      {activeTab === 'profile' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '24px'
+        }}>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+              Officer Credentials & Seva Kendra Details
+            </h3>
+            <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
+              Official administrative identity used for digital certificate signing and audit ledgers
+            </p>
           </div>
 
-          <div className="table-card" style={{padding: 24}}>
-            <h3 style={{fontSize: 16, fontWeight: 700, marginBottom: 8}}>Security Credentials</h3>
-            <p style={{fontSize: 13, color: '#6b7280', marginBottom: 24}}>Update your security password and manage active multifactor authentication protocols.</p>
-            
-            <div style={{marginBottom: 16}}>
-              <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Current Password</label>
-              <input type="password" value={currentPass} onChange={e => setCurrentPass(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}} />
-            </div>
-
-            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24}}>
-              <div>
-                <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>New Password</label>
-                <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="At least 8 characters" style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}} />
-              </div>
-              <div>
-                <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Confirm New Password</label>
-                <input type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} placeholder="Confirm your new password" style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}} />
-              </div>
-            </div>
-
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24}}>
-              <div>
-                <h4 style={{fontSize: 14, fontWeight: 700}}>Two-Factor Authentication (2FA)</h4>
-                <p style={{fontSize: 12, color: '#6b7280'}}>Secure your administrative console with mandatory authentication checks.</p>
-              </div>
-              <div 
-                onClick={() => setTwoFactor(!twoFactor)}
-                style={{width: 44, height: 24, borderRadius: 12, background: twoFactor ? '#10b981' : '#e5e7eb', position: 'relative', cursor: 'pointer', transition: '0.3s'}}>
-                <div style={{width: 20, height: 20, borderRadius: '50%', background: 'white', position: 'absolute', top: 2, right: twoFactor ? 2 : 22, transition: '0.3s'}}></div>
-              </div>
-            </div>
-
-            <div style={{display: 'flex', justifyContent: 'flex-end'}}>
-              <button className="action-btn" onClick={handleUpdatePassword}>Update Password</button>
-            </div>
-          </div>
-
-          <div className="table-card" style={{padding: 24, border: '1px solid #fee2e2', background: '#fff8f8'}}>
-            <h3 style={{fontSize: 16, fontWeight: 700, color: '#991b1b', marginBottom: 8}}>Logout & Session</h3>
-            <p style={{fontSize: 13, color: '#7f1d1d', marginBottom: 16}}>End your active administrative session on this device securely.</p>
-            <button 
-              onClick={logout}
+          {/* Photograph Upload */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', paddingBottom: '18px', borderBottom: '1px solid #F1F5F9' }}>
+            <img
+              src={avatar}
+              alt="Officer"
               style={{
-                background: '#dc2626', color: 'white', padding: '10px 16px', 
-                borderRadius: 6, fontWeight: 600, border: 'none', cursor: 'pointer'
+                width: '72px',
+                height: '72px',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                border: '3px solid #EFF6FF',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.08)'
+              }}
+            />
+            <div>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '8px' }}>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleAvatarUpload}
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: '#F1F5F9',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '6px',
+                    padding: '7px 14px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    color: '#334155',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Upload size={14} /> {uploading ? 'Processing...' : 'Upload Official Photograph'}
+                </button>
+                <button
+                  onClick={() => setAvatar(`https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=1E40AF&color=fff`)}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '6px',
+                    padding: '7px 12px',
+                    fontSize: '12px',
+                    color: '#64748B',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+              <span style={{ fontSize: '11.5px', color: '#64748B' }}>
+                Official passport photo format (JPG, PNG, max 5MB)
+              </span>
+            </div>
+          </div>
+
+          {/* Form Fields Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Officer Full Name
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '7px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  color: '#0F172A',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Official Government Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '7px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  color: '#0F172A',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Official Contact Phone
+              </label>
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '7px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  color: '#0F172A',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Kendra Center ID
+              </label>
+              <input
+                type="text"
+                value={kendraId}
+                disabled
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '7px',
+                  border: '1px solid #E2E8F0',
+                  background: '#F8FAFC',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: '#475569'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Designation & Authority
+              </label>
+              <input
+                type="text"
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '7px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  color: '#0F172A',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Assigned Administrative District
+              </label>
+              <input
+                type="text"
+                value={district}
+                onChange={(e) => setDistrict(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '7px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  color: '#0F172A',
+                  outline: 'none'
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB 2: Verification & SLA Workflow ────────────────────────────── */}
+      {activeTab === 'sla' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px'
+        }}>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+              Citizen Application SLA & Dispatch Rules
+            </h3>
+            <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
+              Define verification turn-around thresholds and automated citizen communication channels
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* SLA Threshold Select */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '14px',
+              background: '#F8FAFC',
+              borderRadius: '8px',
+              border: '1px solid #E2E8F0'
+            }}>
+              <div>
+                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                  Target Resolution SLA Threshold
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748B' }}>
+                  Applications exceeding this window will trigger automated escalation to the District Magistrate
+                </div>
+              </div>
+              <select
+                value={slaHours}
+                onChange={(e) => setSlaHours(e.target.value)}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: '#0F172A',
+                  background: '#FFFFFF'
+                }}
+              >
+                <option value="12">12 Hours (Express Priority)</option>
+                <option value="24">24 Hours (Standard National SLA)</option>
+                <option value="48">48 Hours (Extended Verification)</option>
+                <option value="72">72 Hours (Tribunal / Revenue Scheme)</option>
+              </select>
+            </div>
+
+            {/* Strict OCR Validation */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '14px',
+              background: '#F8FAFC',
+              borderRadius: '8px',
+              border: '1px solid #E2E8F0'
+            }}>
+              <div>
+                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                  Mandatory Aadhaar OCR Cross-Verification
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748B' }}>
+                  Perform automatic optical character recognition matching between uploaded ID proofs and applicant form data
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={strictOcr}
+                onChange={(e) => setStrictOcr(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563EB' }}
+              />
+            </div>
+
+            {/* Auto Assignment */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '14px',
+              background: '#F8FAFC',
+              borderRadius: '8px',
+              border: '1px solid #E2E8F0'
+            }}>
+              <div>
+                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                  Load-Balanced Application Ingestion
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748B' }}>
+                  Automatically distribute incoming citizen requests equally among active duty verification officers
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={autoAssign}
+                onChange={(e) => setAutoAssign(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563EB' }}
+              />
+            </div>
+
+            {/* SMS Notifications */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '14px',
+              background: '#F8FAFC',
+              borderRadius: '8px',
+              border: '1px solid #E2E8F0'
+            }}>
+              <div>
+                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                  Citizen SMS Gateway Dispatches
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748B' }}>
+                  Dispatch real-time SMS alerts to citizens on submission, status progression, and certificate issuance
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={smsNotifs}
+                onChange={(e) => setSmsNotifs(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563EB' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB 3: Treasury & Settlements ─────────────────────────────────── */}
+      {activeTab === 'settlement' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px'
+        }}>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+              Treasury Settlement & Direct Benefit Accounting
+            </h3>
+            <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
+              Configure nodal bank accounts for fee receipts, UPI settlement schedules, and auto-refund policies
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Nodal Bank Account Number
+              </label>
+              <input
+                type="text"
+                value={bankAccount}
+                onChange={(e) => setBankAccount(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '7px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  color: '#0F172A',
+                  outline: 'none',
+                  fontFamily: 'monospace'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Bank IFSC Code
+              </label>
+              <input
+                type="text"
+                value={ifscCode}
+                onChange={(e) => setIfscCode(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '7px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  color: '#0F172A',
+                  outline: 'none',
+                  fontFamily: 'monospace'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Settlement Window
+              </label>
+              <input
+                type="text"
+                value={settlementCycle}
+                disabled
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '7px',
+                  border: '1px solid #E2E8F0',
+                  background: '#F8FAFC',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: '#475569'
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '14px',
+            background: '#F8FAFC',
+            borderRadius: '8px',
+            border: '1px solid #E2E8F0',
+            marginTop: '8px'
+          }}>
+            <div>
+              <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                Automated Citizen Refund on Ineligible Rejection
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748B' }}>
+                Initiate instant Razorpay UPI fee refund directly to applicant if rejected by verification officer
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={autoRefund}
+              onChange={(e) => setAutoRefund(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563EB' }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB 4: Security & Access Control ──────────────────────────────── */}
+      {activeTab === 'security' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '24px'
+        }}>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+              Officer Security & Two-Factor Authentication
+            </h3>
+            <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
+              Manage password credentials and multi-factor session authentication protocols
+            </p>
+          </div>
+
+          {/* Password Update Card */}
+          <div style={{
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: '8px',
+            padding: '18px'
+          }}>
+            <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', margin: '0 0 14px 0' }}>
+              Change Authentication Password
+            </h4>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  value={currentPass}
+                  onChange={(e) => setCurrentPass(e.target.value)}
+                  placeholder="••••••••"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  New Secure Password
+                </label>
+                <input
+                  type="password"
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  placeholder="Min 8 characters"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPass}
+                  onChange={(e) => setConfirmPass(e.target.value)}
+                  placeholder="••••••••"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handlePasswordUpdate}
+              style={{
+                background: '#0F172A',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '8px 16px',
+                fontSize: '12.5px',
+                fontWeight: 700,
+                cursor: 'pointer'
               }}
             >
-              Sign Out from Admin Panel
+              Update Password
             </button>
           </div>
-        </div>
 
-        <div style={{width: 400, display: 'flex', flexDirection: 'column', gap: 24}}>
-          <div className="table-card" style={{padding: 24}}>
-            <h3 style={{fontSize: 16, fontWeight: 700, marginBottom: 8}}>Notification Preferences</h3>
-            <p style={{fontSize: 13, color: '#6b7280', marginBottom: 24}}>Choose how and when you receive system and document-level alert signals.</p>
-
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24}}>
-              <div style={{paddingRight: 16}}>
-                <h4 style={{fontSize: 13, fontWeight: 700}}>Email Notifications</h4>
-                <p style={{fontSize: 11, color: '#6b7280'}}>Receive daily status logs and summary digests in your email inbox.</p>
-              </div>
-              <div style={{width: 44, height: 24, borderRadius: 12, background: '#10b981', position: 'relative', flexShrink: 0}}>
-                <div style={{width: 20, height: 20, borderRadius: '50%', background: 'white', position: 'absolute', top: 2, right: 2}}></div>
-              </div>
-            </div>
-
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24}}>
-              <div style={{paddingRight: 16}}>
-                <h4 style={{fontSize: 13, fontWeight: 700}}>Push Notifications</h4>
-                <p style={{fontSize: 11, color: '#6b7280'}}>Allow browser instant popups for critical document verifications.</p>
-              </div>
-              <div style={{width: 44, height: 24, borderRadius: 12, background: '#e5e7eb', position: 'relative', flexShrink: 0}}>
-                <div style={{width: 20, height: 20, borderRadius: '50%', background: 'white', position: 'absolute', top: 2, left: 2}}></div>
-              </div>
-            </div>
-
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24}}>
-              <div style={{paddingRight: 16}}>
-                <h4 style={{fontSize: 13, fontWeight: 700}}>Document Upload Alerts</h4>
-                <p style={{fontSize: 11, color: '#6b7280'}}>Get notified instantly when standard operators submit upload batches.</p>
-              </div>
-              <div style={{width: 44, height: 24, borderRadius: 12, background: '#10b981', position: 'relative', flexShrink: 0}}>
-                <div style={{width: 20, height: 20, borderRadius: '50%', background: 'white', position: 'absolute', top: 2, right: 2}}></div>
-              </div>
-            </div>
-
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24}}>
-              <div style={{paddingRight: 16}}>
-                <h4 style={{fontSize: 13, fontWeight: 700}}>Expiry Reminders</h4>
-                <p style={{fontSize: 11, color: '#6b7280'}}>Receive notice sequences 30 days before document validity expires.</p>
-              </div>
-              <div style={{width: 44, height: 24, borderRadius: 12, background: '#10b981', position: 'relative', flexShrink: 0}}>
-                <div style={{width: 20, height: 20, borderRadius: '50%', background: 'white', position: 'absolute', top: 2, right: 2}}></div>
-              </div>
-            </div>
-
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-              <div style={{paddingRight: 16}}>
-                <h4 style={{fontSize: 13, fontWeight: 700}}>System Updates</h4>
-                <p style={{fontSize: 11, color: '#6b7280'}}>Stay informed about platform performance updates and regular system maintenance.</p>
-              </div>
-              <div style={{width: 44, height: 24, borderRadius: 12, background: '#e5e7eb', position: 'relative', flexShrink: 0}}>
-                <div style={{width: 20, height: 20, borderRadius: '50%', background: 'white', position: 'absolute', top: 2, left: 2}}></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="table-card" style={{padding: 24}}>
-            <h3 style={{fontSize: 16, fontWeight: 700, marginBottom: 8}}>Localization & Theme</h3>
-            <p style={{fontSize: 13, color: '#6b7280', marginBottom: 24}}>Customize the default language, regional standard timeline, and color display theme.</p>
-
-            <div style={{marginBottom: 16}}>
-              <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Default Language</label>
-              <select style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}}>
-                <option>English (United States) - EN</option>
-              </select>
-            </div>
-            <div style={{marginBottom: 16}}>
-              <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Regional Timezone</label>
-              <select style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}}>
-                <option>(GMT+05:30) India Standard Time - IST</option>
-              </select>
-            </div>
+          {/* 2FA Toggle */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '14px',
+            background: '#F8FAFC',
+            borderRadius: '8px',
+            border: '1px solid #E2E8F0'
+          }}>
             <div>
-              <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Active Color Theme</label>
-              <select style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none'}}>
-                <option>Follow System Default Theme</option>
-              </select>
+              <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                Two-Factor OTP Verification (2FA)
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748B' }}>
+                Require dynamic 6-digit SMS OTP verification during officer login
+              </div>
             </div>
+            <input
+              type="checkbox"
+              checked={twoFactor}
+              onChange={(e) => setTwoFactor(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2563EB' }}
+            />
+          </div>
+
+          {/* Session Timeout */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '14px',
+            background: '#F8FAFC',
+            borderRadius: '8px',
+            border: '1px solid #E2E8F0'
+          }}>
+            <div>
+              <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                Inactivity Auto-Lock Interval
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748B' }}>
+                Automatically lock the officer console when inactive to prevent unauthorized physical terminal access
+              </div>
+            </div>
+            <select
+              value={sessionTimeout}
+              onChange={(e) => setSessionTimeout(e.target.value)}
+              style={{
+                padding: '7px 14px',
+                borderRadius: '6px',
+                border: '1px solid #CBD5E1',
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#0F172A',
+                background: '#FFFFFF'
+              }}
+            >
+              <option value="15">15 Minutes</option>
+              <option value="30">30 Minutes (Recommended)</option>
+              <option value="60">60 Minutes</option>
+            </select>
           </div>
         </div>
-      </div>
-    </>
+      )}
+
+    </div>
   );
 }

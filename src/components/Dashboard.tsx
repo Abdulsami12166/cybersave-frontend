@@ -221,54 +221,40 @@ export default function Dashboard() {
   return (
     <div className="portal-container" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      {/* ─── 1. Government Operational Status Header ──────────────────────── */}
+      {/* ─── 1. Human Operations Header ───────────────────────────────────── */}
       <div style={{
         background: '#FFFFFF',
         borderRadius: '12px',
         border: '1px solid #E2E8F0',
-        padding: '18px 24px',
+        padding: '20px 24px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: '16px',
-        boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)'
+        boxShadow: '0 1px 3px 0 rgba(0,0,0,0.03)'
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-            <span style={{
-              fontSize: '11px',
-              fontWeight: 800,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              background: '#EFF6FF',
-              color: '#1D4ED8',
-              padding: '3px 8px',
-              borderRadius: '4px',
-              border: '1px solid #BFDBFE'
-            }}>
-              Ministry of Electronics & IT • Government of India
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#10B981', fontWeight: 600 }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10B981', display: 'inline-block', boxShadow: '0 0 0 2px #A7F3D0' }}></span>
-              NIC Gateway Live
-            </span>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>Operations Desk</span>
+            <span>/</span>
+            <span style={{ color: '#2563EB' }}>Verification Dispatch</span>
           </div>
           <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
-            State Citizen Operations Center • Live Dispatch Console
+            Citizen Applications & Service Dispatch
           </h1>
           <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
-            Seva Kendra Ingestion & Verification Queue • Portal Session: <strong>CSC-IND-8841</strong>
+            Review pending identity proofs, verify eligibility credentials, and issue certificates
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{
             background: '#F8FAFC',
             border: '1px solid #E2E8F0',
             borderRadius: '8px',
             padding: '8px 14px',
-            fontSize: '12px',
+            fontSize: '12.5px',
             color: '#334155',
             fontWeight: 600,
             display: 'flex',
@@ -278,7 +264,7 @@ export default function Dashboard() {
             <Calendar size={14} color="#64748B" />
             <span>{currentTime.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
             <span style={{ color: '#94A3B8' }}>•</span>
-            <span style={{ color: '#0F172A' }}>{currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })} IST</span>
+            <span style={{ color: '#0F172A' }}>{currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
           </div>
 
           <button 
@@ -295,10 +281,10 @@ export default function Dashboard() {
               fontSize: '12.5px',
               fontWeight: 700,
               cursor: 'pointer',
-              boxShadow: '0 2px 4px rgba(15,23,42,0.15)'
+              boxShadow: '0 2px 4px rgba(15,23,42,0.12)'
             }}
           >
-            <RefreshCw size={14} /> Refresh Stream
+            <RefreshCw size={14} /> Refresh
           </button>
         </div>
       </div>

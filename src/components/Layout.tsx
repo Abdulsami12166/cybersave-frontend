@@ -56,9 +56,9 @@ export default function Layout() {
   ];
 
   const defaultPermissions = ['DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'];
-  const adminPermissions = (admin?.email === 'admin@cybersave.com')
-    ? defaultPermissions
-    : (admin?.permissions && admin.permissions.length > 0 ? admin.permissions : ['DASHBOARD', 'APPLICATIONS']);
+  const adminPermissions = (admin?.permissions && admin.permissions.length > 0)
+    ? admin.permissions
+    : defaultPermissions;
 
   const toggleDarkMode = () => {
     const root = document.documentElement;
@@ -325,7 +325,7 @@ export default function Layout() {
               borderRadius: '6px'
             }}>
               <Globe size={13} color="#2563EB" />
-              <span>National Node: DEL-01</span>
+              <span>Center Node: DEL-01</span>
             </div>
 
             <div 
@@ -407,12 +407,12 @@ export default function Layout() {
           alignItems: 'center'
         }}>
           <div>
-            Cybersave Unified E-Governance Platform • <strong>Ministry of Electronics & Information Technology (MeitY)</strong>
+            Cybersave Operations Desk • <strong>Citizen Service Delivery Network</strong>
           </div>
           <div style={{ display: 'flex', gap: '14px' }}>
-            <span>ISO 27001 Certified Security</span>
+            <span>Audit Trail Enabled</span>
             <span>•</span>
-            <span>Version 2.6.4 (Production Release)</span>
+            <span>Release 2.6.4</span>
           </div>
         </footer>
       </div>
