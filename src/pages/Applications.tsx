@@ -21,6 +21,15 @@ import {
 } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
+import { 
+  normalizeAppId, 
+  normalizeCitizenName, 
+  normalizeServiceTitle, 
+  normalizeFee, 
+  formatIndianDate, 
+  normalizeStatus 
+} from '../utils/normalize';
+
 export default function Applications() {
   const { socket, connected } = useSocket();
   const [data, setData] = useState<any>(null);
@@ -56,42 +65,36 @@ export default function Applications() {
         type: d.type || 'Identity Proof',
       }));
 
+    const refNumber = normalizeAppId(a.refNumber, a.id);
+    const citizen = normalizeCitizenName(a);
+    const serviceType = normalizeServiceTitle(a);
+    const feeAmount = normalizeFee(a);
+    const statusObj = normalizeStatus(a.status);
+    const dateObj = formatIndianDate(a.submittedAt || a.createdAt);
+
     return {
-      id: a.refNumber || `APP-2026-${(a.id || '').substring(0, 4).toUpperCase()}`,
-      rawId: a.id,
-      refNumber: a.refNumber,
-      citizen: userProfile?.fullName || formData.fullName || a.user?.email || 'Citizen Applicant',
-      citizenEmail: a.user?.email || formData.email || '',
-      citizenPhone: a.user?.phone || userProfile?.phone || formData.phone || '',
-      serviceType: a.serviceTitle || a.service?.title || 'Government Service',
-      serviceCategory: a.service?.category || 'Government',
+      id: refNumber,
+      rawId: a.id || refNumber,
+      refNumber,
+      citizen,
+      citizenEmail: a.user?.email || formData.email || '—',
+      citizenPhone: a.user?.phone || userProfile?.phone || formData.phone || '—',
+      serviceType,
+      serviceCategory: a.service?.category || a.serviceCategory || 'Government',
       priority: 'Medium',
       rawStatus: a.status,
-      status:
-        a.status === 'SUBMITTED'
-          ? 'In Review'
-          : a.status === 'VERIFYING'
-            ? 'Pending'
-            : a.status === 'IN_PROGRESS'
-              ? 'Processing'
-              : a.status === 'APPROVED'
-                ? 'Approved'
-                : a.status === 'COMPLETED'
-                  ? 'Completed'
-                  : a.status === 'REJECTED'
-                    ? 'Rejected'
-                    : 'Pending',
-      assigned: a.officialOfficer || 'Auto Assigned (SDM)',
-      submitted: a.submittedAt ? new Date(a.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today',
-      submittedAtFull: a.submittedAt ? new Date(a.submittedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : new Date().toLocaleString('en-IN'),
+      status: statusObj.label,
+      assigned: a.officialOfficer || 'Principal Verification Officer (SDM)',
+      submitted: dateObj.formatted.split(',')[0],
+      submittedAtFull: dateObj.formatted,
       sla: '24h',
-      amount: a.feePaid || 50.0,
-      paymentStatus: a.paymentStatus || 'Success',
+      amount: feeAmount,
+      paymentStatus: a.paymentStatus || 'Verified & Settled',
       razorpayPaymentId: a.razorpayPaymentId || '',
       razorpayOrderId: a.razorpayOrderId || '',
       rejectionReason: a.rejectionReason || '',
       formData: {
-        fullName: formData.fullName || userProfile?.fullName || '',
+        fullName: formData.fullName || userProfile?.fullName || citizen,
         email: formData.email || a.user?.email || '',
         phone: formData.phone || a.user?.phone || userProfile?.phone || '',
         dob: formData.dob || userProfile?.dob || '',
@@ -107,8 +110,8 @@ export default function Applications() {
       },
       documents: cleanedDocs,
       applicantProfile: {
-        fullName: userProfile?.fullName || formData.fullName || 'Citizen Applicant',
-        aadhaar: (userProfile as any)?.aadhaarNumber || formData.aadhaarNumber || 'Verified ID Vault',
+        fullName: citizen,
+        aadhaar: (userProfile as any)?.aadhaarNumber || formData.aadhaarNumber || 'Verified Identity Vault',
         dob: userProfile?.dob || formData.dob || 'Not Provided',
         gender: userProfile?.gender || formData.gender || 'Not Provided',
         fatherName: formData.fatherName || 'Not Provided',

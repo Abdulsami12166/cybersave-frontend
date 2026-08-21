@@ -3,6 +3,8 @@ import { useSocket } from '../context/SocketContext';
 import { ArrowLeftRight, CreditCard, DollarSign, Search, Download, CheckCircle, ShieldCheck } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
+import { formatIndianDate, normalizeAppId, normalizeCitizenName } from '../utils/normalize';
+
 export default function Transactions() {
   const { socket, connected } = useSocket();
   const [data, setData] = useState<any>(null);
@@ -41,7 +43,23 @@ export default function Transactions() {
 
   const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
-    return transactions.filter((txn: any) => {
+    return transactions.map((txn: any) => {
+      const dateObj = formatIndianDate(txn.date || txn.createdAt || txn.submittedAt);
+      const cleanId = normalizeAppId(txn.id, txn.id);
+      const cleanCustomer = txn.customer || txn.citizen || txn.fullName || 'Citizen Applicant';
+      const cleanService = txn.service || txn.serviceTitle || 'Government Service';
+      const cleanAmount = typeof txn.amount === 'number' && !isNaN(txn.amount) ? txn.amount : 50.0;
+
+      return {
+        ...txn,
+        id: cleanId,
+        refNumber: txn.refNumber || cleanId,
+        dateFormatted: dateObj.formatted,
+        customer: cleanCustomer,
+        service: cleanService,
+        amount: cleanAmount,
+      };
+    }).filter((txn: any) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -62,11 +80,11 @@ export default function Transactions() {
 
   const handleExportCSV = () => {
     if (!filteredTransactions || filteredTransactions.length === 0) return;
-    const headers = ['Transaction ID', 'Reference Number', 'Date & Time', 'Customer', 'Service', 'Payment Method', 'Amount (INR)', 'Status'];
+    const headers = ['Transaction ID', 'Reference Number', 'Date & Time (IST)', 'Customer', 'Service', 'Payment Method', 'Amount (INR)', 'Status'];
     const rows = filteredTransactions.map((t: any) => [
       `"${t.id || ''}"`,
       `"${t.refNumber || ''}"`,
-      `"${new Date(t.date).toLocaleString()}"`,
+      `"${t.dateFormatted}"`,
       `"${t.customer || ''}"`,
       `"${t.service || ''}"`,
       `"${t.paymentMethod || 'Govt Portal'}"`,
@@ -209,7 +227,7 @@ export default function Transactions() {
                       <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>Ref: {txn.refNumber}</div>
                     ) : null}
                   </td>
-                  <td style={{ color: '#6b7280', fontSize: 12.5 }}>{new Date(txn.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                  <td style={{ color: '#6b7280', fontSize: 12.5 }}>{txn.dateFormatted}</td>
                   <td style={{ fontWeight: 600, color: '#111827' }}>{txn.customer}</td>
                   <td style={{ color: '#4b5563', fontSize: 13 }}>{txn.service}</td>
                   <td>

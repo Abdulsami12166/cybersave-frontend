@@ -3,7 +3,8 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, FileText, Grid, UserSquare2, 
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
-  Settings, Search, Sun, PanelLeftClose, CheckCircle2, X, LogOut
+  Settings, Search, Sun, PanelLeftClose, LogOut, CheckCircle2, X,
+  Building2, Command, Globe
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,29 +14,45 @@ export const showToast = (message: string, type: 'success' | 'error' = 'success'
 
 export default function Layout() {
   const [toast, setToast] = useState<{message: string, type: string} | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const { admin, logout } = useAuth();
 
   useEffect(() => {
     const handleToast = (e: any) => {
       setToast(e.detail);
-      setTimeout(() => setToast(null), 3000);
+      setTimeout(() => setToast(null), 3500);
     };
     window.addEventListener('cybersave_toast', handleToast);
     return () => window.removeEventListener('cybersave_toast', handleToast);
   }, []);
 
-  const navItems = [
-    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/', requiredPermission: 'DASHBOARD' },
-    { icon: <Users size={20} />, label: 'User Management', path: '/users', requiredPermission: 'USERS' },
-    { icon: <FileText size={20} />, label: 'Applications', path: '/applications', requiredPermission: 'APPLICATIONS' },
-    { icon: <Grid size={20} />, label: 'Services', path: '/services', requiredPermission: 'APPLICATIONS' },
-    { icon: <UserSquare2 size={20} />, label: 'Operators', path: '/operators', requiredPermission: 'OPERATORS' },
-    { icon: <ArrowLeftRight size={20} />, label: 'Transactions', path: '/transactions', requiredPermission: 'DASHBOARD' },
-    { icon: <Bell size={20} />, label: 'Notifications', path: '/notifications', requiredPermission: 'DASHBOARD' },
-    { icon: <HelpCircle size={20} />, label: 'Support Tickets', path: '/support', requiredPermission: 'DASHBOARD' },
-    { icon: <BarChart3 size={20} />, label: 'Analytics', path: '/analytics', requiredPermission: 'REPORTS' },
-    { icon: <ShieldCheck size={20} />, label: 'Audit Logs', path: '/audit', requiredPermission: 'SETTINGS' },
-    { icon: <Settings size={20} />, label: 'Settings', path: '/settings', requiredPermission: 'SETTINGS' },
+  const navSections = [
+    {
+      title: 'OPERATIONS',
+      items: [
+        { icon: <LayoutDashboard size={18} />, label: 'Command Center', path: '/', requiredPermission: 'DASHBOARD' },
+        { icon: <FileText size={18} />, label: 'Applications Queue', path: '/applications', requiredPermission: 'APPLICATIONS' },
+        { icon: <ArrowLeftRight size={18} />, label: 'Settlement Journal', path: '/transactions', requiredPermission: 'DASHBOARD' },
+      ]
+    },
+    {
+      title: 'GOVERNANCE & REGISTRY',
+      items: [
+        { icon: <Grid size={18} />, label: 'Service Schemes', path: '/services', requiredPermission: 'APPLICATIONS' },
+        { icon: <Users size={18} />, label: 'Citizen Directory', path: '/users', requiredPermission: 'USERS' },
+        { icon: <UserSquare2 size={18} />, label: 'Seva Kendra Operators', path: '/operators', requiredPermission: 'OPERATORS' },
+      ]
+    },
+    {
+      title: 'AUDIT & COMPLIANCE',
+      items: [
+        { icon: <HelpCircle size={18} />, label: 'Citizen Grievances', path: '/support', requiredPermission: 'DASHBOARD' },
+        { icon: <BarChart3 size={18} />, label: 'SLA Analytics', path: '/analytics', requiredPermission: 'REPORTS' },
+        { icon: <ShieldCheck size={18} />, label: 'Security Audit Logs', path: '/audit', requiredPermission: 'SETTINGS' },
+        { icon: <Bell size={18} />, label: 'Broadcast Dispatches', path: '/notifications', requiredPermission: 'DASHBOARD' },
+        { icon: <Settings size={18} />, label: 'System Configuration', path: '/settings', requiredPermission: 'SETTINGS' },
+      ]
+    }
   ];
 
   const defaultPermissions = ['DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'];
@@ -43,10 +60,7 @@ export default function Layout() {
     ? defaultPermissions
     : (admin?.permissions && admin.permissions.length > 0 ? admin.permissions : ['DASHBOARD', 'APPLICATIONS']);
 
-  const filteredNavItems = navItems.filter(item => !item.requiredPermission || adminPermissions.includes(item.requiredPermission));
-
   const toggleDarkMode = () => {
-    // Ponytail minimal dark mode implementation
     const root = document.documentElement;
     const isDark = root.style.filter.includes('invert');
     if (isDark) {
@@ -54,124 +68,354 @@ export default function Layout() {
       root.style.backgroundColor = '';
     } else {
       root.style.filter = 'invert(1) hue-rotate(180deg)';
-      root.style.backgroundColor = '#ffffff'; // The root inverted #ffffff will be #000000
+      root.style.backgroundColor = '#ffffff';
     }
     root.style.transition = 'all 0.3s ease';
   };
 
   return (
     <div className="app-container">
-      <div className="sidebar">
-        <div className="brand">
-          <span style={{color: '#2563eb'}}>Cyber</span><span style={{color: '#111827'}}>save</span>
-        </div>
-        
-        {filteredNavItems.map((item, index) => (
-          <NavLink key={index} to={item.path} className={({isActive}) => isActive ? "nav-item active" : "nav-item"} end={item.path === '/'}>
-            {item.icon} {item.label}
-          </NavLink>
-        ))}
-
-        <div className="sidebar-spacer"></div>
-        <div 
-          onClick={logout}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '10px 14px',
-            margin: '0 12px 10px 12px',
-            borderRadius: 8,
-            color: '#dc2626',
-            backgroundColor: '#fef2f2',
-            fontWeight: 700,
-            fontSize: 13,
-            cursor: 'pointer',
-            border: '1px solid #fecaca',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          <LogOut size={17} color="#dc2626" />
-          <span>Sign Out</span>
-        </div>
-        <div className="collapse-menu">
-          <PanelLeftClose size={20} /> Collapse Menu
-        </div>
-      </div>
-
-      <div className="main-content">
-        <div className="header">
-          <div className="search-bar">
-            <Search size={18} color="#6b7280" />
-            <input type="text" placeholder="Search..." />
-          </div>
-          <div className="header-right">
-            <div style={{fontSize: '14px', fontWeight: 500, color: '#6b7280'}}>EN</div>
-            <Sun size={20} color="#6b7280" onClick={toggleDarkMode} style={{cursor: 'pointer'}} />
-            <div style={{position: 'relative'}}>
-              <Bell size={20} color="#6b7280" />
-              <div style={{position: 'absolute', top: -4, right: -4, background: '#ef4444', color: 'white', fontSize: '10px', borderRadius: '50%', width: 14, height: 14, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>12</div>
-            </div>
-            <button className="action-btn">Quick Actions</button>
-            <div className="profile-widget">
-              <img 
-                src={admin?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(admin?.name || admin?.email || 'Admin')}&background=0D8ABC&color=fff`} 
-                alt="Profile" 
-                style={{width: 36, height: 36, borderRadius: '50%', objectFit: 'cover'}}
-              />
-              <div className="profile-info">
-                <span className="profile-name">{admin?.name || (admin?.email === 'admin@cybersave.com' ? 'Super Administrator' : admin?.email?.split('@')[0])}</span>
-                <span className="profile-role">{admin?.role || (admin?.email === 'admin@cybersave.com' ? 'Super Admin' : 'Sub-Admin / Operator')}</span>
-              </div>
-            </div>
-            <button 
-              onClick={logout} 
-              title="Sign Out of Session"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background: '#dc2626',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 8,
-                padding: '8px 14px',
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(220, 38, 38, 0.25)',
-              }}
-            >
-              <LogOut size={15} color="#ffffff" />
-              <span>Logout</span>
-            </button>
-          </div>
-        </div>
-
-        <Outlet />
-      </div>
-
+      {/* Toast Notification Container */}
       {toast && (
         <div style={{
-          position: 'fixed', bottom: 24, right: 24, 
-          background: toast.type === 'success' ? '#10b981' : '#ef4444', 
-          color: 'white', padding: '12px 20px', borderRadius: 8, 
-          display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+          position: 'fixed',
+          top: 20,
+          right: 20,
           zIndex: 9999,
-          animation: 'slideIn 0.3s ease-out forwards'
+          background: toast.type === 'error' ? '#FEF2F2' : '#ECFDF5',
+          border: `1px solid ${toast.type === 'error' ? '#FECACA' : '#A7F3D0'}`,
+          color: toast.type === 'error' ? '#991B1B' : '#065F46',
+          padding: '12px 18px',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          fontSize: '13px',
+          fontWeight: 600,
         }}>
-          <CheckCircle2 size={20} />
-          <span style={{fontWeight: 500, fontSize: 14}}>{toast.message}</span>
-          <X size={16} style={{cursor: 'pointer', marginLeft: 8}} onClick={() => setToast(null)} />
+          {toast.type === 'error' ? <X size={16} color="#991B1B" /> : <CheckCircle2 size={16} color="#065F46" />}
+          <span>{toast.message}</span>
         </div>
       )}
-      <style>{`
-        @keyframes slideIn {
-          from { transform: translateY(100%); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-      `}</style>
+
+      {/* Sidebar Navigation */}
+      <aside className="sidebar" style={{
+        width: '270px',
+        background: '#FFFFFF',
+        borderRight: '1px solid #E2E8F0',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflowY: 'auto'
+      }}>
+        {/* Portal Branding */}
+        <div style={{
+          padding: '20px 20px 16px 20px',
+          borderBottom: '1px solid #F1F5F9'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #1E40AF 0%, #2563EB 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FFFFFF',
+              fontWeight: 900,
+              fontSize: '18px',
+              boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+            }}>
+              C
+            </div>
+            <div>
+              <div style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                <span style={{ color: '#2563EB' }}>Cyber</span>save
+              </div>
+              <div style={{ fontSize: '10.5px', color: '#64748B', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                National E-Gov Console
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Grouped Navigation */}
+        <div style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '18px', flex: 1 }}>
+          {navSections.map((section, sIdx) => {
+            const visibleItems = section.items.filter(
+              item => !item.requiredPermission || adminPermissions.includes(item.requiredPermission)
+            );
+
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <div key={sIdx}>
+                <div style={{
+                  fontSize: '10.5px',
+                  fontWeight: 800,
+                  color: '#94A3B8',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  padding: '0 10px 6px 10px'
+                }}>
+                  {section.title}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {visibleItems.map((item, iIdx) => (
+                    <NavLink
+                      key={iIdx}
+                      to={item.path}
+                      className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
+                      end={item.path === '/'}
+                      style={({ isActive }) => ({
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '8px 12px',
+                        borderRadius: '7px',
+                        fontSize: '13px',
+                        fontWeight: isActive ? 700 : 500,
+                        color: isActive ? '#1D4ED8' : '#475569',
+                        background: isActive ? '#EFF6FF' : 'transparent',
+                        textDecoration: 'none',
+                        transition: 'all 0.15s ease'
+                      })}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Operator Badge & Sign Out */}
+        <div style={{
+          padding: '14px 16px',
+          borderTop: '1px solid #F1F5F9',
+          background: '#FAFAFA'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: '#E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 700,
+                fontSize: '12px',
+                color: '#334155'
+              }}>
+                {(admin?.name || admin?.email || 'AD').slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', lineHeight: 1.2 }}>
+                  {admin?.name || 'Principal Officer'}
+                </div>
+                <div style={{ fontSize: '10.5px', color: '#64748B' }}>
+                  ID: CSC-IND-8841
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={logout}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              border: '1px solid #FCA5A5',
+              background: '#FEF2F2',
+              color: '#DC2626',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            <LogOut size={13} />
+            <span>End Officer Session</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Administrative Workplace */}
+      <div className="main-content" style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflowY: 'auto',
+        background: '#F8FAFC'
+      }}>
+        {/* Global Operational Header Bar */}
+        <header style={{
+          background: '#FFFFFF',
+          borderBottom: '1px solid #E2E8F0',
+          padding: '12px 28px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          position: 'sticky',
+          top: 0,
+          zIndex: 40
+        }}>
+          {/* Universal Registry Search */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: '#F1F5F9',
+            border: '1px solid #E2E8F0',
+            borderRadius: '8px',
+            padding: '7px 14px',
+            width: '360px',
+            gap: '8px'
+          }}>
+            <Search size={15} color="#64748B" />
+            <input
+              type="text"
+              placeholder="Search citizen, application ref, or service..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                fontSize: '12.5px',
+                color: '#0F172A',
+                width: '100%'
+              }}
+            />
+            <span style={{
+              fontSize: '10.5px',
+              fontWeight: 700,
+              background: '#FFFFFF',
+              color: '#64748B',
+              padding: '2px 5px',
+              borderRadius: '4px',
+              border: '1px solid #CBD5E1'
+            }}>
+              ⌘K
+            </span>
+          </div>
+
+          {/* Header Right Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px',
+              color: '#0F172A',
+              fontWeight: 600,
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+              padding: '5px 10px',
+              borderRadius: '6px'
+            }}>
+              <Globe size={13} color="#2563EB" />
+              <span>National Node: DEL-01</span>
+            </div>
+
+            <div 
+              onClick={toggleDarkMode}
+              title="Toggle Display Theme"
+              style={{
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '6px',
+                color: '#64748B',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Sun size={17} />
+            </div>
+
+            <div style={{ position: 'relative', cursor: 'pointer', padding: '6px' }}>
+              <Bell size={17} color="#475569" />
+              <span style={{
+                position: 'absolute',
+                top: 2,
+                right: 2,
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: '#EF4444'
+              }}></span>
+            </div>
+
+            <div style={{
+              borderLeft: '1px solid #E2E8F0',
+              paddingLeft: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: '#1E40AF',
+                color: '#FFFFFF',
+                fontSize: '12px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                SA
+              </div>
+              <div>
+                <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A', lineHeight: 1.2 }}>
+                  Super Administrator
+                </div>
+                <div style={{ fontSize: '10.5px', color: '#10B981', fontWeight: 600 }}>
+                  ● Active Duty
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content Viewport */}
+        <main style={{ padding: '24px 28px', flex: 1 }}>
+          <Outlet />
+        </main>
+
+        {/* Portal Footer */}
+        <footer style={{
+          padding: '14px 28px',
+          borderTop: '1px solid #E2E8F0',
+          background: '#FFFFFF',
+          fontSize: '11.5px',
+          color: '#64748B',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div>
+            Cybersave Unified E-Governance Platform • <strong>Ministry of Electronics & Information Technology (MeitY)</strong>
+          </div>
+          <div style={{ display: 'flex', gap: '14px' }}>
+            <span>ISO 27001 Certified Security</span>
+            <span>•</span>
+            <span>Version 2.6.4 (Production Release)</span>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
