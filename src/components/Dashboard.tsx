@@ -244,7 +244,7 @@ export default function Dashboard() {
             Citizen Applications & Service Dispatch
           </h1>
           <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
-            Review pending identity proofs, verify eligibility credentials, and issue certificates
+            Review pending identity proofs, verfy eligibility credentials, and issue certificates
           </p>
         </div>
 
