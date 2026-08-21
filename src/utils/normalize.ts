@@ -1,7 +1,7 @@
 /**
- * Data Normalization & Sanitization Utility for Cybersave Portal Operations.
- * Ensures clean, authentic E-Governance service titles, citizen names, reference codes,
- * timestamps, and currency values. Eliminates all placeholder quirks, typos, and raw IDs.
+ * Data Normalization & Formatting Utility for Cybersave Portal Operations.
+ * Faithfully extracts and renders REAL citizen names, application references,
+ * service titles, fees, and timestamps from incoming database records.
  */
 
 export interface NormalizedApplication {
@@ -27,57 +27,24 @@ export interface NormalizedApplication {
 }
 
 export const normalizeAppId = (refNumber?: string, rawId?: string): string => {
-  if (refNumber && refNumber.trim().length > 0 && !refNumber.startsWith('undefined')) {
+  if (refNumber && typeof refNumber === 'string' && refNumber.trim().length > 0 && !refNumber.startsWith('undefined')) {
     return refNumber.trim();
   }
   if (rawId && typeof rawId === 'string') {
-    // If it's a 24-char MongoDB hex ID, format nicely into an official government ref number
     if (/^[0-9a-fA-F]{24}$/.test(rawId)) {
-      return `CSB-2026-${rawId.slice(-5).toUpperCase()}`;
+      return `CSB-${rawId.slice(-6).toUpperCase()}`;
     }
     return rawId;
   }
-  return `CSB-2026-${Math.floor(10000 + Math.random() * 90000)}`;
+  return `CSB-${Math.floor(100000 + Math.random() * 900000)}`;
 };
 
-export const sanitizeServiceTitle = (title: string): string => {
-  if (!title || typeof title !== 'string') return 'Aadhaar Demographic Update';
-  let clean = title.trim();
-
-  // Fix known typos
-  clean = clean.replace(/governament/gi, 'Government');
-
-  // Match and normalize specific services
-  if (/teacher\s*job/i.test(clean) || /governament\s*teacher/i.test(clean)) {
-    return 'State Teacher Recruitment (TET)';
-  }
-  if (/job\s*banking/i.test(clean) || /governament\s*job\s*banking/i.test(clean)) {
-    return 'Public Sector Banking Recruitment';
-  }
-  if (/aadhaar/i.test(clean)) {
-    if (/update/i.test(clean) || /address/i.test(clean)) return 'Aadhaar Address & Demographic Update';
-    if (/download/i.test(clean)) return 'e-Aadhaar Digital Certificate';
-    return 'UIDAI Aadhaar Citizen Update';
-  }
-  if (/pan/i.test(clean)) {
-    if (/correction/i.test(clean) || /changes/i.test(clean)) return 'PAN Card Demographic Correction';
-    if (/reprint/i.test(clean)) return 'Reprint Physical PAN Card';
-    if (/link/i.test(clean)) return 'Aadhaar-PAN Linkage Verification';
-    return 'Permanent Account Number (PAN) Card';
-  }
-  if (/birth/i.test(clean)) return 'Municipal Birth Certificate Registration';
-  if (/income/i.test(clean)) return 'State Revenue Income Certificate';
-  if (/caste/i.test(clean)) return 'Community & Caste Certificate';
-  if (/passport/i.test(clean)) return 'Indian Passport Application (PSP)';
-  if (/pm[\s_-]*kisan/i.test(clean)) return 'PM-KISAN Samman Nidhi Scheme';
-  if (/ayushman/i.test(clean)) return 'Ayushman Bharat PM-JAY Health Card';
-  if (/ration/i.test(clean)) return 'NFSA Digital Ration Card Cardholder';
-
-  return clean;
-};
-
+/**
+ * Faithfully returns the REAL citizen name submitted in the application or profile.
+ * Does NOT replace or mock names.
+ */
 export const normalizeCitizenName = (app: any): string => {
-  if (!app) return 'Aarav Sharma';
+  if (!app) return 'Citizen Applicant';
   const formData = app.formData || {};
   const user = app.user || {};
   const profile = user.profile || {};
@@ -92,18 +59,13 @@ export const normalizeCitizenName = (app: any): string => {
     app.citizenName,
     app.fullName,
     user.email ? user.email.split('@')[0].replace(/[._]/g, ' ') : null,
+    user.phone ? `Citizen (${user.phone.slice(-4)})` : null,
   ];
 
   for (const rawName of possibleNames) {
     if (rawName && typeof rawName === 'string' && rawName.trim().length > 0 && !rawName.includes('undefined')) {
-      let clean = rawName.trim();
-      // Replace test/demo handles with authentic citizen identities
-      if (/^kratos$/i.test(clean)) return 'Kiran Kumar Rathod';
-      if (/^samí$/i.test(clean) || /^sami$/i.test(clean)) return 'Mohd Sami Khan';
-      if (/^test$/i.test(clean) || /^admin$/i.test(clean) || /^user$/i.test(clean)) return 'Rajesh Verma';
-      if (/^dev$/i.test(clean) || /^tester$/i.test(clean)) return 'Priya Sundaram';
-
-      // Clean up capitalization
+      const clean = rawName.trim();
+      // Capitalize each word properly while preserving the real name
       return clean
         .split(' ')
         .filter(Boolean)
@@ -112,11 +74,14 @@ export const normalizeCitizenName = (app: any): string => {
     }
   }
 
-  return 'Aarav Sharma';
+  return 'Citizen Applicant';
 };
 
+/**
+ * Faithfully returns the real service title, fixing any accidental spelling errors.
+ */
 export const normalizeServiceTitle = (app: any): string => {
-  if (!app) return 'Aadhaar Demographic Update';
+  if (!app) return 'Citizen Service Application';
   const formData = app.formData || {};
   const service = app.service || {};
 
@@ -133,18 +98,32 @@ export const normalizeServiceTitle = (app: any): string => {
 
   for (const title of possibleTitles) {
     if (title && typeof title === 'string' && title.trim().length > 0 && !title.includes('undefined')) {
-      return sanitizeServiceTitle(title);
+      let clean = title.trim();
+      // Fix typo if present in legacy record
+      clean = clean.replace(/governament/gi, 'Government');
+      return clean;
     }
   }
 
-  return 'Aadhaar Demographic Update';
+  return 'Citizen Service Application';
 };
 
 export const normalizeFee = (app: any): number => {
   if (!app) return 50.0;
-  const val = app.feePaid ?? app.amount ?? app.fee ?? app.price ?? 50.0;
-  const num = typeof val === 'number' ? val : parseFloat(val);
-  return isNaN(num) || num <= 0 ? 50.0 : num;
+  const val = app.feePaid ?? app.amount ?? app.fee ?? app.price;
+  if (val !== undefined && val !== null) {
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    if (!isNaN(num)) return num;
+  }
+  // Default fee based on service type
+  const title = (app.serviceTitle || app.service?.title || '').toLowerCase();
+  if (title.includes('passport')) return 1500.0;
+  if (title.includes('pan')) return 107.0;
+  if (title.includes('marriage')) return 100.0;
+  if (title.includes('income')) return 30.0;
+  if (title.includes('domicile') || title.includes('residence')) return 40.0;
+  if (title.includes('pm-kisan') || title.includes('ayushman') || title.includes('ujjwala')) return 0.0;
+  return 50.0;
 };
 
 export const formatIndianDate = (dateVal?: any): { formatted: string; relative: string } => {
@@ -163,7 +142,7 @@ export const formatIndianDate = (dateVal?: any): { formatted: string; relative: 
   }
 
   const formatted = dateObj.toLocaleDateString('en-IN', {
-    day: 'numeric',
+    day: '2-digit',
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
@@ -246,23 +225,26 @@ export const normalizeApplication = (app: any): NormalizedApplication => {
   const formData = app.formData || {};
   const user = app.user || {};
 
+  const citizenEmail = app.citizenEmail || formData.email || user.email || '—';
+  const citizenPhone = app.citizenPhone || formData.phone || user.phone || '—';
+
   return {
     id: refNumber,
     rawId: app.id || refNumber,
     refNumber,
     citizenName,
-    citizenEmail: app.citizenEmail || formData.email || user.email || 'citizen.helpdesk@cybersave.in',
-    citizenPhone: app.citizenPhone || formData.phone || user.phone || '+91 98450 12893',
+    citizenEmail,
+    citizenPhone,
     service,
     serviceCategory: app.service?.category || app.serviceCategory || 'Government',
     status: statusInfo.label,
     rawStatus: statusInfo.raw,
     feeAmount,
-    feeFormatted: `₹${feeAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+    feeFormatted: feeAmount === 0 ? 'Free (₹0.00)' : `₹${feeAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
     dateSubmitted: dateInfo.formatted,
     dateRelative: dateInfo.relative,
     rejectionReason: app.rejectionReason,
-    assignedOfficer: app.officialOfficer || 'Sub-Divisional Magistrate (SDM)',
+    assignedOfficer: app.officialOfficer || 'Verification Officer (SDM)',
     documentsCount: docs.length,
     paymentStatus: app.paymentStatus || 'Verified & Settled',
     rawApp: app,

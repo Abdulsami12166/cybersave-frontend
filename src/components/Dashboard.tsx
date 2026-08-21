@@ -659,17 +659,17 @@ export default function Dashboard() {
         </div>
 
         {/* Data Table */}
-        <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #F1F5F9' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+        <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+          <table style={{ width: '100%', minWidth: '940px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Reference ID</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Citizen Applicant</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Service Requested</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Verification Status</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Fee Paid</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Submission Timestamp</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', textAlign: 'center' }}>Action</th>
+                <th style={{ width: '140px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Reference No</th>
+                <th style={{ width: '220px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Citizen Applicant</th>
+                <th style={{ width: '220px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Service Requested</th>
+                <th style={{ width: '130px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Stage / Status</th>
+                <th style={{ width: '110px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fee Paid</th>
+                <th style={{ width: '170px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Submitted On</th>
+                <th style={{ width: '90px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
