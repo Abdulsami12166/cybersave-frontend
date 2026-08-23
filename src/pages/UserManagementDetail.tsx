@@ -547,474 +547,637 @@ export default function UserManagementDetail() {
         </div>
       </div>
 
-      {/* ─── Main Content Grid (2 Columns: 65% / 35%) ─────────────────────── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.85fr) minmax(0, 1.15fr)',
-        gap: '20px',
-        alignItems: 'start'
-      }}>
-        
-        {/* ─── Left Column ─────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
-          {/* Card 1: Personal Information */}
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '22px 26px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
+      {/* ─── Tab Content Views ───────────────────────────────────────────── */}
+      {activeTab === 'Overview' && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1.85fr) minmax(0, 1.15fr)',
+          gap: '20px',
+          alignItems: 'start'
+        }}>
+          {/* ─── Left Column ─────────────────────────────────────────────────── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            {/* Card 1: Personal Information */}
             <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '20px'
+              background: '#FFFFFF',
+              borderRadius: '12px',
+              border: '1px solid #E2E8F0',
+              padding: '22px 26px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}>
-              <h2 style={{
-                fontSize: '16px',
-                fontWeight: 800,
-                color: '#0F172A',
-                letterSpacing: '-0.01em',
-                margin: 0
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px'
               }}>
-                Personal Information
-              </h2>
+                <h2 style={{
+                  fontSize: '16px',
+                  fontWeight: 800,
+                  color: '#0F172A',
+                  letterSpacing: '-0.01em',
+                  margin: 0
+                }}>
+                  Personal Information
+                </h2>
 
-              <button
-                onClick={() => {
-                  populateEditForm(user || safeData);
-                  setEditModalOpen(true);
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#64748B',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '4px',
-                  borderRadius: '4px'
-                }}
-                title="Edit Personal Information"
-              >
-                <Edit3 size={16} color="#64748B" />
-              </button>
+                <button
+                  onClick={() => {
+                    populateEditForm(user || safeData);
+                    setEditModalOpen(true);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#64748B',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px',
+                    borderRadius: '4px'
+                  }}
+                  title="Edit Personal Information"
+                >
+                  <Edit3 size={16} color="#64748B" />
+                </button>
+              </div>
+
+              {/* 2-Column Info Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                columnGap: '24px',
+                rowGap: '18px'
+              }}>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Full Name</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.fullName}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Father's Name</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.fatherName}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Date of Birth</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.dob}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Gender</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.gender}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Aadhaar Number</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontFamily: 'monospace' }}>{safeData.aadhaar}</span>
+                    {safeData.aadhaar !== '-' && (
+                      <button
+                        onClick={() => setShowAadhaar(!showAadhaar)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex' }}
+                        title={showAadhaar ? 'Mask Aadhaar' : 'View Aadhaar'}
+                      >
+                        {showAadhaar ? <EyeOff size={14} color="#64748B" /> : <Eye size={14} color="#64748B" />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>PAN</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', fontFamily: 'monospace' }}>{safeData.pan}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Mobile</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>{safeData.mobile}</span>
+                    {safeData.mobile !== '-' && <CheckCircle size={14} color="#10B981" />}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Email</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ wordBreak: 'break-all' }}>{safeData.email}</span>
+                    {safeData.email !== '-' && <CheckCircle size={14} color="#10B981" />}
+                  </div>
+                </div>
+
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Address</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', lineHeight: 1.4 }}>{safeData.address}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>District</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.district}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>State</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.state}</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Pin Code</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.pinCode}</div>
+                </div>
+              </div>
             </div>
 
-            {/* 2-Column Info Grid */}
+            {/* Card 2: Recent Services */}
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              columnGap: '24px',
-              rowGap: '18px'
+              background: '#FFFFFF',
+              borderRadius: '12px',
+              border: '1px solid #E2E8F0',
+              padding: '22px 26px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}>
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Full Name</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.fullName}</div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px'
+              }}>
+                <h2 style={{
+                  fontSize: '16px',
+                  fontWeight: 800,
+                  color: '#0F172A',
+                  letterSpacing: '-0.01em',
+                  margin: 0
+                }}>
+                  Recent Services
+                </h2>
+
+                <button
+                  onClick={() => setActiveTab('Services Used')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#2563EB',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: 0
+                  }}
+                >
+                  View All
+                </button>
               </div>
 
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Father's Name</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.fatherName}</div>
-              </div>
+              {/* List of Services */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {safeData.recentServices.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '24px 0', color: '#94A3B8', fontSize: '13px' }}>
+                    No services applied yet
+                  </div>
+                ) : (
+                  safeData.recentServices.map((s: any, idx: number) => {
+                    const isCompleted = s.status === 'Completed' || s.status === 'APPROVED';
+                    const isInProgress = s.status === 'In Progress' || s.status === 'IN_PROGRESS';
+                    const isPending = s.status === 'Pending' || s.status === 'SUBMITTED' || s.status === 'VERIFYING';
+                    const isRejected = s.status === 'Rejected' || s.status === 'REJECTED';
 
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Date of Birth</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.dob}</div>
-              </div>
+                    const badgeBg = isCompleted ? '#ECFDF5' : isInProgress ? '#EFF6FF' : isRejected ? '#FEF2F2' : '#FFFBEB';
+                    const badgeColor = isCompleted ? '#065F46' : isInProgress ? '#1E40AF' : isRejected ? '#991B1B' : '#92400E';
+                    const badgeBorder = isCompleted ? '#A7F3D0' : isInProgress ? '#BFDBFE' : isRejected ? '#FECACA' : '#FDE68A';
 
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Gender</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.gender}</div>
-              </div>
+                    return (
+                      <div
+                        key={s.id || idx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          paddingBottom: idx < safeData.recentServices.length - 1 ? '14px' : '0',
+                          borderBottom: idx < safeData.recentServices.length - 1 ? '1px solid #F1F5F9' : 'none'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                          <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '8px',
+                            background: '#F8FAFC',
+                            border: '1px solid #E2E8F0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#64748B'
+                          }}>
+                            <FileText size={18} />
+                          </div>
 
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Aadhaar Number</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontFamily: 'monospace' }}>{safeData.aadhaar}</span>
-                  {safeData.aadhaar !== '-' && (
-                    <button
-                      onClick={() => setShowAadhaar(!showAadhaar)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex' }}
-                      title={showAadhaar ? 'Mask Aadhaar' : 'View Aadhaar'}
-                    >
-                      {showAadhaar ? <EyeOff size={14} color="#64748B" /> : <Eye size={14} color="#64748B" />}
-                    </button>
-                  )}
-                </div>
-              </div>
+                          <div>
+                            <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                              {s.name || s.serviceTitle}
+                            </div>
+                            <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px' }}>
+                              {s.date}
+                            </div>
+                          </div>
+                        </div>
 
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>PAN</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', fontFamily: 'monospace' }}>{safeData.pan}</div>
-              </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
+                            {s.amount}
+                          </div>
 
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Mobile</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>{safeData.mobile}</span>
-                  {safeData.mobile !== '-' && <CheckCircle size={14} color="#10B981" />}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Email</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ wordBreak: 'break-all' }}>{safeData.email}</span>
-                  {safeData.email !== '-' && <CheckCircle size={14} color="#10B981" />}
-                </div>
-              </div>
-
-              <div style={{ gridColumn: '1 / -1' }}>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Address</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', lineHeight: 1.4 }}>{safeData.address}</div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>District</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.district}</div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>State</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.state}</div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Pin Code</div>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.pinCode}</div>
+                          <span style={{
+                            display: 'inline-flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            width: '84px',
+                            padding: '3px 8px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            backgroundColor: badgeBg,
+                            color: badgeColor,
+                            border: `1px solid ${badgeBorder}`,
+                            textAlign: 'center'
+                          }}>
+                            {s.status}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
 
-          {/* Card 2: Recent Services */}
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '22px 26px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
+          {/* ─── Right Column ────────────────────────────────────────────────── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            {/* Card 1: Quick Stats */}
             <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '20px'
+              background: '#FFFFFF',
+              borderRadius: '12px',
+              border: '1px solid #E2E8F0',
+              padding: '22px 24px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}>
               <h2 style={{
                 fontSize: '16px',
                 fontWeight: 800,
                 color: '#0F172A',
                 letterSpacing: '-0.01em',
-                margin: 0
+                margin: 0,
+                marginBottom: '18px'
               }}>
-                Recent Services
+                Quick Stats
               </h2>
 
-              <button
-                onClick={() => setActiveTab('Services Used')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#2563EB',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  padding: 0
-                }}
-              >
-                View All
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontSize: '13px' }}>Total Services Used</span>
+                  <span style={{ fontWeight: 800, color: '#2563EB', fontSize: '14px' }}>
+                    {safeData.quickStats.totalServicesUsed}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontSize: '13px' }}>Total Amount Spent</span>
+                  <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '14px' }}>
+                    {safeData.quickStats.totalAmountSpent}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontSize: '13px' }}>Last Active</span>
+                  <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '13.5px' }}>
+                    {safeData.quickStats.lastActive}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontSize: '13px' }}>Registered Centre</span>
+                  <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '13px', textAlign: 'right' }}>
+                    {safeData.quickStats.registeredCentre}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontSize: '13px' }}>Assigned Operator</span>
+                  <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '13px', textAlign: 'right' }}>
+                    {safeData.quickStats.assignedOperator}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* List of Services */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {safeData.recentServices.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px 0', color: '#94A3B8', fontSize: '13px' }}>
-                  No services applied yet
-                </div>
-              ) : (
-                safeData.recentServices.map((s: any, idx: number) => {
-                  const isCompleted = s.status === 'Completed' || s.status === 'APPROVED';
-                  const isInProgress = s.status === 'In Progress' || s.status === 'IN_PROGRESS';
-                  const isPending = s.status === 'Pending' || s.status === 'SUBMITTED' || s.status === 'VERIFYING';
-                  const isRejected = s.status === 'Rejected' || s.status === 'REJECTED';
+            {/* Card 2: Uploaded Documents */}
+            <div style={{
+              background: '#FFFFFF',
+              borderRadius: '12px',
+              border: '1px solid #E2E8F0',
+              padding: '22px 24px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '18px'
+              }}>
+                <h2 style={{
+                  fontSize: '16px',
+                  fontWeight: 800,
+                  color: '#0F172A',
+                  letterSpacing: '-0.01em',
+                  margin: 0
+                }}>
+                  Uploaded Documents
+                </h2>
 
-                  const badgeBg = isCompleted ? '#ECFDF5' : isInProgress ? '#EFF6FF' : isRejected ? '#FEF2F2' : '#FFFBEB';
-                  const badgeColor = isCompleted ? '#065F46' : isInProgress ? '#1E40AF' : isRejected ? '#991B1B' : '#92400E';
-                  const badgeBorder = isCompleted ? '#A7F3D0' : isInProgress ? '#BFDBFE' : isRejected ? '#FECACA' : '#FDE68A';
+                <button
+                  onClick={() => setActiveTab('Documents')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#2563EB',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: 0
+                  }}
+                >
+                  View All
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {safeData.uploadedDocuments.map((doc: any, i: number) => {
+                  const isDocVerified = doc.status === 'Verified';
+                  const isPendingReview = doc.status === 'Pending Review';
 
                   return (
                     <div
-                      key={s.id || idx}
+                      key={doc.id || i}
                       style={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        paddingBottom: idx < safeData.recentServices.length - 1 ? '14px' : '0',
-                        borderBottom: idx < safeData.recentServices.length - 1 ? '1px solid #F1F5F9' : 'none'
+                        cursor: doc.fileUrl ? 'pointer' : 'default'
+                      }}
+                      onClick={() => {
+                        if (doc.fileUrl) window.open(doc.fileUrl, '_blank');
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '8px',
-                          background: '#F8FAFC',
-                          border: '1px solid #E2E8F0',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#64748B'
-                        }}>
-                          <FileText size={18} />
-                        </div>
-
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <FileText color="#94A3B8" size={16} />
                         <div>
-                          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
-                            {s.name || s.serviceTitle}
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                            {doc.name}
                           </div>
-                          <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px' }}>
-                            {s.date}
+                          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '1px' }}>
+                            {doc.date}
                           </div>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
-                          {s.amount}
-                        </div>
-
-                        <span style={{
-                          display: 'inline-flex',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          width: '84px',
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          backgroundColor: badgeBg,
-                          color: badgeColor,
-                          border: `1px solid ${badgeBorder}`,
-                          textAlign: 'center'
-                        }}>
-                          {s.status}
-                        </span>
+                      <div style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: isDocVerified ? '#10B981' : isPendingReview ? '#F59E0B' : '#0D9488'
+                      }}>
+                        {doc.status}
                       </div>
                     </div>
                   );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ─── Right Column ────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
-          {/* Card 1: Quick Stats */}
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '22px 24px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
-            <h2 style={{
-              fontSize: '16px',
-              fontWeight: 800,
-              color: '#0F172A',
-              letterSpacing: '-0.01em',
-              margin: 0,
-              marginBottom: '18px'
-            }}>
-              Quick Stats
-            </h2>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#64748B', fontSize: '13px' }}>Total Services Used</span>
-                <span style={{ fontWeight: 800, color: '#2563EB', fontSize: '14px' }}>
-                  {safeData.quickStats.totalServicesUsed}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#64748B', fontSize: '13px' }}>Total Amount Spent</span>
-                <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '14px' }}>
-                  {safeData.quickStats.totalAmountSpent}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#64748B', fontSize: '13px' }}>Last Active</span>
-                <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '13.5px' }}>
-                  {safeData.quickStats.lastActive}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#64748B', fontSize: '13px' }}>Registered Centre</span>
-                <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '13px', textAlign: 'right' }}>
-                  {safeData.quickStats.registeredCentre}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#64748B', fontSize: '13px' }}>Assigned Operator</span>
-                <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '13px', textAlign: 'right' }}>
-                  {safeData.quickStats.assignedOperator}
-                </span>
+                })}
               </div>
             </div>
-          </div>
 
-          {/* Card 2: Uploaded Documents */}
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '22px 24px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
+            {/* Card 3: Recent Activity */}
             <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '18px'
+              background: '#FFFFFF',
+              borderRadius: '12px',
+              border: '1px solid #E2E8F0',
+              padding: '22px 24px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}>
               <h2 style={{
                 fontSize: '16px',
                 fontWeight: 800,
                 color: '#0F172A',
                 letterSpacing: '-0.01em',
-                margin: 0
+                margin: 0,
+                marginBottom: '18px'
               }}>
-                Uploaded Documents
+                Recent Activity
               </h2>
 
-              <button
-                onClick={() => setActiveTab('Documents')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#2563EB',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  padding: 0
-                }}
-              >
-                View All
-              </button>
-            </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', position: 'relative' }}>
+                {/* Connecting line */}
+                <div style={{
+                  position: 'absolute',
+                  left: '4px',
+                  top: '6px',
+                  bottom: '12px',
+                  width: '2px',
+                  background: '#E2E8F0',
+                  zIndex: 0
+                }} />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {safeData.uploadedDocuments.map((doc: any, i: number) => {
-                const isDocVerified = doc.status === 'Verified';
-                const isPendingReview = doc.status === 'Pending Review';
+                {safeData.recentActivity.map((act: any, i: number) => (
+                  <div key={act.id || i} style={{ display: 'flex', gap: '14px', position: 'relative', zIndex: 1 }}>
+                    <div style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      background: act.color || '#2563EB',
+                      position: 'relative',
+                      top: '4px',
+                      flexShrink: 0,
+                      boxShadow: '0 0 0 3px #FFFFFF'
+                    }} />
 
-                return (
-                  <div
-                    key={doc.id || i}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      cursor: doc.fileUrl ? 'pointer' : 'default'
-                    }}
-                    onClick={() => {
-                      if (doc.fileUrl) window.open(doc.fileUrl, '_blank');
-                    }}
-                  >
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                      <FileText color="#94A3B8" size={16} />
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                          {doc.name}
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#64748B', marginTop: '1px' }}>
-                          {doc.date}
-                        </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                        {act.title}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                        {act.date}
                       </div>
                     </div>
-
-                    <div style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: isDocVerified ? '#10B981' : isPendingReview ? '#F59E0B' : '#0D9488'
-                    }}>
-                      {doc.status}
-                    </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
+
           </div>
-
-          {/* Card 3: Recent Activity */}
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '22px 24px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
-            <h2 style={{
-              fontSize: '16px',
-              fontWeight: 800,
-              color: '#0F172A',
-              letterSpacing: '-0.01em',
-              margin: 0,
-              marginBottom: '18px'
-            }}>
-              Recent Activity
-            </h2>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', position: 'relative' }}>
-              {/* Connecting line */}
-              <div style={{
-                position: 'absolute',
-                left: '4px',
-                top: '6px',
-                bottom: '12px',
-                width: '2px',
-                background: '#E2E8F0',
-                zIndex: 0
-              }} />
-
-              {safeData.recentActivity.map((act: any, i: number) => (
-                <div key={act.id || i} style={{ display: 'flex', gap: '14px', position: 'relative', zIndex: 1 }}>
-                  <div style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '50%',
-                    background: act.color || '#2563EB',
-                    position: 'relative',
-                    top: '4px',
-                    flexShrink: 0,
-                    boxShadow: '0 0 0 3px #FFFFFF'
-                  }} />
-
-                  <div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                      {act.title}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
-                      {act.date}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
         </div>
-      </div>
+      )}
+
+      {/* ─── Tab: Services Used ───────────────────────────────────────────── */}
+      {activeTab === 'Services Used' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px 28px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>All Services Applied by {safeData.fullName}</h2>
+            <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>&larr; Back to Overview</button>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                  <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Service Title</th>
+                  <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Submission Date</th>
+                  <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Fee Amount</th>
+                  <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Application Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {safeData.recentServices.map((s: any, idx: number) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0F172A' }}>{s.name || s.serviceTitle}</td>
+                    <td style={{ padding: '12px 14px', color: '#64748B' }}>{s.date}</td>
+                    <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0F172A' }}>{s.amount}</td>
+                    <td style={{ padding: '12px 14px' }}>
+                      <span style={{ background: s.status === 'Completed' ? '#ECFDF5' : '#EFF6FF', color: s.status === 'Completed' ? '#065F46' : '#1E40AF', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 700 }}>{s.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Tab: Documents ───────────────────────────────────────────────── */}
+      {activeTab === 'Documents' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px 28px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Citizen Uploaded Identification & Proofs</h2>
+            <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>&larr; Back to Overview</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
+            {safeData.uploadedDocuments.map((doc: any, idx: number) => (
+              <div key={idx} style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <FileText size={22} color="#2563EB" />
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#10B981', background: '#ECFDF5', padding: '2px 8px', borderRadius: '10px' }}>{doc.status}</span>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0F172A' }}>{doc.name}</div>
+                  <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px' }}>{doc.date}</div>
+                </div>
+                {doc.fileUrl && (
+                  <a href={doc.fileUrl} target="_blank" rel="noreferrer" style={{ fontSize: '12px', fontWeight: 700, color: '#2563EB', textDecoration: 'none', marginTop: '4px' }}>Open Document &rarr;</a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Tab: Transactions ────────────────────────────────────────────── */}
+      {activeTab === 'Transactions' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px 28px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Fee Settlements & Payment Receipts</h2>
+            <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>&larr; Back to Overview</button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '13px', color: '#0F172A' }}>Government Portal Payment Gateway (UPI / QR)</div>
+                <div style={{ fontSize: '11.5px', color: '#64748B' }}>Settlement ID: TXN-2026-98124 • 28 Jul 2026</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontWeight: 800, fontSize: '14px', color: '#10B981' }}>+ ₹107.00 Paid</div>
+                <div style={{ fontSize: '11px', color: '#10B981', fontWeight: 700 }}>SUCCESS</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '13px', color: '#0F172A' }}>Electricity Board Direct Debit</div>
+                <div style={{ fontSize: '11.5px', color: '#64748B' }}>Settlement ID: TXN-2026-89104 • 15 Jul 2026</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontWeight: 800, fontSize: '14px', color: '#10B981' }}>+ ₹2,123.00 Paid</div>
+                <div style={{ fontSize: '11px', color: '#10B981', fontWeight: 700 }}>SUCCESS</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Tab: Activity Log ────────────────────────────────────────────── */}
+      {activeTab === 'Activity Log' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px 28px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Full Audit Trail & Identity Logs</h2>
+            <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>&larr; Back to Overview</button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {safeData.recentActivity.map((act: any, idx: number) => (
+              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: act.color || '#2563EB' }} />
+                <div style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>{act.title}</div>
+                <div style={{ fontSize: '11.5px', color: '#64748B' }}>{act.date}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Tab: Notes ───────────────────────────────────────────────────── */}
+      {activeTab === 'Notes' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px 28px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Internal Administrative Notes</h2>
+            <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>&larr; Back to Overview</button>
+          </div>
+
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>Aadhaar Biometric e-KYC Verification</div>
+            <div style={{ fontSize: '12.5px', color: '#475569', lineHeight: 1.4 }}>Citizen visited Lucknow CSC centre on 2 Aug 2026. Address update documents verified with UIDAI central repository. Approved by VLE Vikram Tiwari.</div>
+            <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '6px' }}>Logged on 2 Aug 2026, 14:32 IST</div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Edit Profile Modal ───────────────────────────────────────────── */}
       {editModalOpen && (
