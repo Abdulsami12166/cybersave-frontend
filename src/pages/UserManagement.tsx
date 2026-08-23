@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { 
   Users, 
@@ -25,6 +26,7 @@ import { showToast } from '../components/Layout';
 const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
 
 export default function UserManagement() {
+  const navigate = useNavigate();
   const { socket, connected } = useSocket();
   const [data, setData] = useState<any>(null);
   const [liveUsers, setLiveUsers] = useState<any[]>([]);
@@ -35,7 +37,6 @@ export default function UserManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 8;
 
-  const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCitizenName, setNewCitizenName] = useState('');
   const [newCitizenPhone, setNewCitizenPhone] = useState('');
@@ -65,17 +66,12 @@ export default function UserManagement() {
         setLoading(false);
       };
 
-      const handleUserDetail = (resUser: any) => {
-        setSelectedUser(resUser);
-      };
-
       const handleRefresh = () => {
         socket.emit('request_users_data');
         fetchUsersRest();
       };
 
       socket.on('response_users_data', handleUsers);
-      socket.on('response_user_detail', handleUserDetail);
       socket.on('add_citizen_success', () => {
         showToast('Citizen successfully registered in database');
         handleRefresh();
@@ -87,7 +83,6 @@ export default function UserManagement() {
 
       return () => {
         socket.off('response_users_data', handleUsers);
-        socket.off('response_user_detail', handleUserDetail);
       };
     } else {
       const t = setTimeout(() => setLoading(false), 800);
@@ -427,10 +422,15 @@ export default function UserManagement() {
                 paginatedCitizens.map((c: any, i: number) => (
                   <tr 
                     key={c.dbId || i}
+                    onClick={() => navigate(`/users/${c.dbId || c.id}`)}
                     style={{ 
                       borderBottom: '1px solid #F1F5F9',
-                      backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#FCFDFE'
+                      backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#FCFDFE',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.15s ease'
                     }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F0F7FF')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? '#FFFFFF' : '#FCFDFE')}
                   >
                     <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2563EB', fontFamily: 'monospace', fontSize: '12px' }}>
                       {c.id}
@@ -477,22 +477,28 @@ export default function UserManagement() {
                     <td style={{ padding: '12px 14px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
                         <button
-                          onClick={() => setSelectedUser(c)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/users/${c.dbId || c.id}`);
+                          }}
                           style={{
                             background: '#EFF6FF',
                             color: '#2563EB',
                             border: '1px solid #BFDBFE',
                             borderRadius: '5px',
-                            padding: '4px 8px',
+                            padding: '4px 10px',
                             fontSize: '11.5px',
                             fontWeight: 700,
                             cursor: 'pointer'
                           }}
                         >
-                          Dossier
+                          View Profile
                         </button>
                         <button
-                          onClick={() => handleToggleBlock(c)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleBlock(c);
+                          }}
                           style={{
                             background: c.status === 'Blocked' ? '#ECFDF5' : '#FEF2F2',
                             color: c.status === 'Blocked' ? '#065F46' : '#DC2626',
@@ -585,113 +591,6 @@ export default function UserManagement() {
           </div>
         </div>
       </div>
-
-      {/* ─── Citizen Dossier Modal ───────────────────────────────────────── */}
-      {selectedUser && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(15, 23, 42, 0.6)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '12px',
-            maxWidth: '560px',
-            width: '100%',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-            border: '1px solid #E2E8F0'
-          }}>
-            <div style={{
-              padding: '18px 22px',
-              borderBottom: '1px solid #F1F5F9',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                  Citizen Identity Dossier
-                </h3>
-                <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
-                  {selectedUser.id} • Registered Profile
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedUser(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{
-                background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                borderRadius: '8px',
-                padding: '16px',
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '12px'
-              }}>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Full Name</div>
-                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{selectedUser.fullName}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Aadhaar e-KYC Vault</div>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', fontFamily: 'monospace' }}>{selectedUser.aadhaar}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Mobile Contact</div>
-                  <div style={{ fontSize: '13px', color: '#334155' }}>{selectedUser.phone}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Email Address</div>
-                  <div style={{ fontSize: '13px', color: '#334155' }}>{selectedUser.email}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>District & Jurisdiction</div>
-                  <div style={{ fontSize: '13px', color: '#334155' }}>{selectedUser.district}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Total Service Submissions</div>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#2563EB' }}>{selectedUser.servicesUsed} applications</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  onClick={() => setSelectedUser(null)}
-                  style={{
-                    background: '#0F172A',
-                    color: '#FFFFFF',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '8px 16px',
-                    fontSize: '12.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Close Dossier
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ─── Add Citizen Modal ───────────────────────────────────────────── */}
       {showAddModal && (
