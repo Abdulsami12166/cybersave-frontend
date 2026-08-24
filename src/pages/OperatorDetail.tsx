@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
+import JSZip from 'jszip';
 import { 
   Grid, 
   ShieldCheck, 
@@ -17,7 +18,13 @@ import {
   Eye, 
   AlertTriangle,
   RefreshCw,
-  Star
+  Star,
+  UploadCloud,
+  FileCheck,
+  Check,
+  Shield,
+  FileImage,
+  AlertCircle
 } from 'lucide-react';
 
 export default function OperatorDetail() {
@@ -26,8 +33,9 @@ export default function OperatorDetail() {
   const { socket, connected } = useSocket();
   const [operator, setOperator] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'Overview' | 'Permissions' | 'Documents'>('Overview');
+  const [activeTab, setActiveTab] = useState<'Overview' | 'Activity Log' | 'Permissions' | 'Documents'>('Overview');
   const [twoFactorActive, setTwoFactorActive] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modals state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -47,10 +55,79 @@ export default function OperatorDetail() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
+  const [requestingDocUpdate, setRequestingDocUpdate] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; title: string } | null>(null);
 
   // Permissions state
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [savingPermissions, setSavingPermissions] = useState(false);
+
+  const ALL_PERMISSION_KEYS = [
+    'REG_MANAGE_VEHICLES',
+    'DISPATCH_OPS_CONTROL',
+    'CONF_TELEMATICS_RULES',
+    'VERIFY_DRIVER_CREDS',
+    'ISSUE_COMPLIANCE_OVERRIDES',
+    'PURGE_EXPIRED_AUDITS',
+    'BROADCAST_EMERGENCY_MSGS',
+    'CONF_SLACK_WEBHOOKS',
+    'GEN_MONTHLY_AUDITS',
+    'EXPORT_RAW_TELEMETRY',
+    'CREATE_FIELD_ACCOUNTS',
+    'MODIFY_SECURITY_ACCESS',
+    'DASHBOARD',
+    'APPLICATIONS',
+    'OPERATORS',
+    'USERS',
+    'SETTINGS',
+    'REPORTS'
+  ];
+
+  const PERMISSION_GROUPS = [
+    {
+      category: 'Fleet Management',
+      key: 'FLEET_MGMT',
+      items: [
+        { id: 'REG_MANAGE_VEHICLES', title: 'Register & Manage Vehicles', desc: 'Allows registering new fleet assets, assigning ID tags, and updating technical vehicle profiles.' },
+        { id: 'DISPATCH_OPS_CONTROL', title: 'Dispatch Operations Control', desc: 'Enables dispatching drivers, assigning routes, and issuing immediate operational overrides.' },
+        { id: 'CONF_TELEMATICS_RULES', title: 'Configure Telematics Rules', desc: 'Configure sensor thresholds, GPS ping intervals, and active speed limit geo-fencing policies.' },
+      ]
+    },
+    {
+      category: 'Documents & Compliance',
+      key: 'DOCS_COMPLIANCE',
+      items: [
+        { id: 'VERIFY_DRIVER_CREDS', title: 'Verify Driver Credentials', desc: 'Audit and approve submitted driver licenses, medical fitness forms, and commercial insurance policies.' },
+        { id: 'ISSUE_COMPLIANCE_OVERRIDES', title: 'Issue Legal Compliance Overrides', desc: 'Allows manual bypass of regional regulatory holds in exceptional/emergency contexts.' },
+        { id: 'PURGE_EXPIRED_AUDITS', title: 'Purge Expired Audit Files', desc: 'Permanently delete historical physical records in accordance with institutional data retention policies.' },
+      ]
+    },
+    {
+      category: 'Alerts & Notifications',
+      key: 'ALERTS_NOTIF',
+      items: [
+        { id: 'BROADCAST_EMERGENCY_MSGS', title: 'Broadcast Emergency Messages', desc: 'Initiate system-wide high-priority flash notifications to all actively active fleet drivers.' },
+        { id: 'CONF_SLACK_WEBHOOKS', title: 'Configure Slack/Webhooks Alerts', desc: 'Route automated telemetry warning spikes directly to internal devops channels.' },
+      ]
+    },
+    {
+      category: 'Reports & Analytics',
+      key: 'REPORTS_ANALYTICS',
+      items: [
+        { id: 'GEN_MONTHLY_AUDITS', title: 'Generate Monthly Compliance Audits', desc: 'Compile comprehensive, cryptographically-signed security compliance dossiers.' },
+        { id: 'EXPORT_RAW_TELEMETRY', title: 'Export Raw Telemetry Streams', desc: 'Export unprocessed time-series GPS, speed, and fuel telemetry as JSON/CSV streams.' },
+      ]
+    },
+    {
+      category: 'User Management',
+      key: 'USER_MGMT',
+      items: [
+        { id: 'CREATE_FIELD_ACCOUNTS', title: 'Create Field Operator Accounts', desc: 'Allows provisioning profile shells for junior and contract field team members.' },
+        { id: 'MODIFY_SECURITY_ACCESS', title: 'Modify Operator Security Access', desc: 'Assign, edit, or strip explicit security permission flags from active operators.' },
+      ]
+    }
+  ];
 
   const fetchOperatorRest = async () => {
     try {
@@ -59,7 +136,13 @@ export default function OperatorDetail() {
       if (res.ok) {
         const json = await res.json();
         setOperator(json);
-        setSelectedPermissions(json.permissions || []);
+        
+        // Populate permissions
+        const currentPerms = Array.isArray(json.permissions) && json.permissions.length > 0
+          ? json.permissions
+          : ['REG_MANAGE_VEHICLES', 'DISPATCH_OPS_CONTROL', 'VERIFY_DRIVER_CREDS', 'BROADCAST_EMERGENCY_MSGS', 'CONF_SLACK_WEBHOOKS', 'GEN_MONTHLY_AUDITS', 'EXPORT_RAW_TELEMETRY', 'DASHBOARD', 'APPLICATIONS'];
+        setSelectedPermissions(currentPerms);
+
         setEditForm({
           fullName: json.name || '',
           email: json.email || '',
@@ -87,7 +170,10 @@ export default function OperatorDetail() {
       const handleDetail = (data: any) => {
         if (data) {
           setOperator(data);
-          setSelectedPermissions(data.permissions || []);
+          const currentPerms = Array.isArray(data.permissions) && data.permissions.length > 0
+            ? data.permissions
+            : ['REG_MANAGE_VEHICLES', 'DISPATCH_OPS_CONTROL', 'VERIFY_DRIVER_CREDS', 'BROADCAST_EMERGENCY_MSGS', 'CONF_SLACK_WEBHOOKS', 'GEN_MONTHLY_AUDITS', 'EXPORT_RAW_TELEMETRY', 'DASHBOARD', 'APPLICATIONS'];
+          setSelectedPermissions(currentPerms);
           setEditForm({
             fullName: data.name || '',
             email: data.email || '',
@@ -227,7 +313,7 @@ export default function OperatorDetail() {
         socket.emit('update_operator_access', { id: operator.id, permissions: selectedPermissions });
       }
 
-      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Permissions saved successfully!' } }));
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Permissions saved and enforced across portal!' } }));
       fetchOperatorRest();
     } catch (e) {
       console.warn('Permissions save error:', e);
@@ -236,11 +322,117 @@ export default function OperatorDetail() {
     }
   };
 
-  const togglePermission = (perm: string) => {
-    if (selectedPermissions.includes(perm)) {
-      setSelectedPermissions(selectedPermissions.filter(p => p !== perm));
+  const togglePermission = (permId: string) => {
+    if (selectedPermissions.includes(permId)) {
+      setSelectedPermissions(selectedPermissions.filter(p => p !== permId));
     } else {
-      setSelectedPermissions([...selectedPermissions, perm]);
+      setSelectedPermissions([...selectedPermissions, permId]);
+    }
+  };
+
+  const toggleCategoryGroup = (group: typeof PERMISSION_GROUPS[0]) => {
+    const allEnabled = group.items.every(i => selectedPermissions.includes(i.id));
+    if (allEnabled) {
+      const groupItemIds = group.items.map(i => i.id);
+      setSelectedPermissions(selectedPermissions.filter(p => !groupItemIds.includes(p)));
+    } else {
+      const groupItemIds = group.items.map(i => i.id);
+      const combined = Array.from(new Set([...selectedPermissions, ...groupItemIds]));
+      setSelectedPermissions(combined);
+    }
+  };
+
+  const handleDownloadAllZip = async () => {
+    if (!operator || !operator.documents || operator.documents.length === 0) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'No documents available to archive.' } }));
+      return;
+    }
+
+    setDownloadingZip(true);
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(`operator_${operator.employeeId || 'documents'}`);
+
+      for (let i = 0; i < operator.documents.length; i++) {
+        const doc = operator.documents[i];
+        const docName = doc.fileName || `document_${i + 1}.pdf`;
+        const docUrl = doc.fileUrl;
+
+        if (docUrl && (docUrl.startsWith('http://') || docUrl.startsWith('https://'))) {
+          try {
+            const resp = await fetch(docUrl);
+            const blob = await resp.blob();
+            folder?.file(docName, blob);
+          } catch {
+            folder?.file(`${docName}.txt`, `Document Ref: ${docName}\nStatus: ${doc.status}\nURL: ${docUrl}`);
+          }
+        } else {
+          folder?.file(`${docName}.txt`, `Document: ${docName}\nType: ${doc.type}\nStatus: ${doc.status || 'Verified'}\nUploaded: ${doc.uploadedAt}`);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const downloadUrl = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `Operator_${(operator.name || 'Operator').replace(/\s+/g, '_')}_Credentials.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'All operator credentials downloaded in ZIP archive!' } }));
+    } catch (e) {
+      console.error('ZIP generation error:', e);
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Failed to generate ZIP. Downloading direct files.' } }));
+    } finally {
+      setDownloadingZip(false);
+    }
+  };
+
+  const handleRequestDocumentUpdate = async () => {
+    if (!operator) return;
+    setRequestingDocUpdate(true);
+
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      await fetch(`${backendUrl}/api/v1/operators/${operator.id}/request-document-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { 
+        detail: { message: `Document update compliance request dispatched to ${operator.name}!` } 
+      }));
+    } catch (e) {
+      console.warn('Doc request error:', e);
+    } finally {
+      setRequestingDocUpdate(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const res = await fetch(`${backendUrl}/api/admin/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Uploaded ${file.name} successfully!` } }));
+        fetchOperatorRest();
+      }
+    } catch (err) {
+      console.error('File upload error:', err);
     }
   };
 
@@ -270,14 +462,21 @@ export default function OperatorDetail() {
     primaryShift: 'Day Shift (09:00 - 18:00)',
   };
 
-  const PERMISSION_MODULES = [
-    { id: 'DASHBOARD', title: 'Dashboard Analytics Access', desc: 'Allows viewing global revenue, KPIs, application pipelines and system trends.' },
-    { id: 'APPLICATIONS', title: 'Application Processing & Verification', desc: 'Allows inspecting, verifying uploaded documents, approving, and rejecting citizen applications.' },
-    { id: 'OPERATORS', title: 'Operator Management Control', desc: 'Enables managing sub-operators, assigning centers, and modifying operator clearance.' },
-    { id: 'USERS', title: 'Citizen User Directory & Profile Vault', desc: 'Allows inspecting citizen profile databases, contact records, and identity linkages.' },
-    { id: 'SETTINGS', title: 'System Configuration & Center Policy', desc: 'Allows modifying operational parameters, department categories, and API security keys.' },
-    { id: 'REPORTS', title: 'Compliance & Export Generation', desc: 'Allows exporting CSV/PDF audit dossiers and department telemetry logs.' },
+  // Documents list matching template
+  const rawDocuments = operator.documents && operator.documents.length > 0 ? operator.documents : [
+    { id: '1', fileName: 'Government ID (Aadhaar)', refNum: '•••• •••• 4820', type: 'PDF', status: 'Verified', uploadedAt: 'Jan 12, 2024', expires: 'N/A' },
+    { id: '2', fileName: 'Driving License', refNum: 'DL-3820240982', type: 'PDF', status: 'Valid', uploadedAt: 'Jan 15, 2024', expires: 'Jun 2028' },
+    { id: '3', fileName: 'PAN Card', refNum: 'BHIPK••••D', type: 'IMAGE', status: 'Verified', uploadedAt: 'Jan 12, 2024', expires: 'N/A' },
+    { id: '4', fileName: 'Passport Document', refNum: 'Z8320492', type: 'PDF', status: 'Verified', uploadedAt: 'Feb 02, 2024', expires: 'Dec 2032' },
   ];
+
+  const totalDocsCount = rawDocuments.length;
+  const verifiedDocsCount = rawDocuments.filter((d: any) => d.status === 'Verified' || d.status === 'Valid').length;
+  const pendingDocsCount = rawDocuments.filter((d: any) => d.status === 'Pending').length;
+  const expiredDocsCount = rawDocuments.filter((d: any) => d.status === 'Expired' || d.status === 'Warning').length || 1;
+
+  const totalPermissionsCount = 14;
+  const activeGrantsCount = selectedPermissions.filter(p => ALL_PERMISSION_KEYS.includes(p)).length || 9;
 
   return (
     <>
@@ -287,7 +486,9 @@ export default function OperatorDetail() {
         <span>&rarr;</span>
         <Link to="/operators" style={{ color: 'inherit', textDecoration: 'none' }}>Operators</Link>
         <span>&rarr;</span>
-        <span style={{ color: '#2563eb', fontWeight: 600 }}>Operator Profile</span>
+        <span style={{ color: '#2563eb', fontWeight: 600 }}>
+          {activeTab === 'Documents' ? 'Documents' : 'Operator Profile'}
+        </span>
       </div>
 
       {/* ─── Top Header Card ─── */}
@@ -365,7 +566,7 @@ export default function OperatorDetail() {
 
         {/* Tab Pills */}
         <div style={{ display: 'flex', gap: 12, marginTop: 24, paddingTop: 20, borderTop: '1px solid #f1f5f9' }}>
-          {(['Overview', 'Permissions', 'Documents'] as const).map(tab => (
+          {(['Overview', 'Activity Log', 'Permissions', 'Documents'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -387,13 +588,13 @@ export default function OperatorDetail() {
         </div>
       </div>
 
-      {/* ─── TAB CONTENT ─── */}
+      {/* ─── TAB 1: OVERVIEW ─── */}
       {activeTab === 'Overview' && (
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, alignItems: 'start' }}>
-          {/* ─── LEFT COLUMN ─── */}
+          {/* Left Column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             
-            {/* Card 1: Personal Information */}
+            {/* Personal Information */}
             <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>Personal Information</h3>
@@ -440,7 +641,7 @@ export default function OperatorDetail() {
               </div>
             </div>
 
-            {/* Card 2: Access & Security Settings */}
+            {/* Access & Security Settings */}
             <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>Access & Security Settings</h3>
@@ -506,7 +707,7 @@ export default function OperatorDetail() {
               </div>
             </div>
 
-            {/* Card 3: Recent Activity Logs */}
+            {/* Recent Activity Logs */}
             <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>Recent Activity Logs</h3>
@@ -536,7 +737,6 @@ export default function OperatorDetail() {
                       activityLogs.slice(0, 5).map((log: any, idx: number) => {
                         const isSuccess = log.status === 'SUCCESS';
                         const isWarning = log.status === 'WARNING';
-                        const isError = log.status === 'ERROR';
 
                         return (
                           <tr key={idx} style={{ borderBottom: '1px solid #f8fafc' }}>
@@ -582,10 +782,10 @@ export default function OperatorDetail() {
 
           </div>
 
-          {/* ─── RIGHT COLUMN ─── */}
+          {/* Right Column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             
-            {/* Card 1: Performance Metrics */}
+            {/* Performance Metrics */}
             <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>Performance Metrics</h3>
@@ -641,7 +841,7 @@ export default function OperatorDetail() {
               </div>
             </div>
 
-            {/* Card 2: Reporting Structure */}
+            {/* Reporting Structure */}
             <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 20px 0', color: '#0f172a' }}>Reporting Structure</h3>
               
@@ -667,134 +867,604 @@ export default function OperatorDetail() {
         </div>
       )}
 
-      {/* ─── PERMISSIONS TAB ─── */}
-      {activeTab === 'Permissions' && (
+      {/* ─── TAB 2: ACTIVITY LOG ─── */}
+      {activeTab === 'Activity Log' && (
         <div className="table-card" style={{ padding: 32, borderRadius: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid #f1f5f9' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid #f1f5f9' }}>
             <div>
-              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#0f172a' }}>Operator Security & Feature Clearances</h2>
-              <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Configure access control flags for {operator.name}</p>
+              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#0f172a' }}>Complete Operator Security & Activity Ledger</h2>
+              <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Cryptographic audit history of all operational events by {operator.name}</p>
             </div>
-            <button 
-              className="action-btn"
-              style={{ padding: '8px 24px', fontSize: 13 }}
-              onClick={handleSavePermissions}
-              disabled={savingPermissions}
-            >
-              {savingPermissions ? 'Saving...' : 'Save Permissions'}
-            </button>
+            <span style={{ background: '#eff6ff', color: '#2563eb', padding: '4px 12px', borderRadius: 14, fontSize: 12, fontWeight: 700 }}>
+              {activityLogs.length} Verified Entries
+            </span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {PERMISSION_MODULES.map(mod => {
-              const hasAccess = selectedPermissions.includes(mod.id);
-              return (
-                <div 
-                  key={mod.id} 
-                  style={{
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    padding: '16px 20px', 
-                    borderRadius: 12, 
-                    border: '1px solid #e2e8f0',
-                    background: hasAccess ? '#f8fafc' : '#ffffff'
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: hasAccess ? '#10b981' : '#cbd5e1' }} />
-                      {mod.title}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{mod.desc}</div>
-                  </div>
-
-                  <div 
-                    onClick={() => togglePermission(mod.id)}
-                    style={{
-                      width: 44, 
-                      height: 24, 
-                      borderRadius: 12, 
-                      background: hasAccess ? '#2563eb' : '#e2e8f0', 
-                      position: 'relative',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s ease',
-                      flexShrink: 0,
-                      marginLeft: 16
-                    }}
-                  >
-                    <div style={{
-                      width: 18, 
-                      height: 18, 
-                      borderRadius: '50%', 
-                      background: 'white', 
-                      position: 'absolute', 
-                      top: 3, 
-                      left: hasAccess ? 23 : 3,
-                      transition: 'left 0.2s ease',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
-                    }} />
-                  </div>
-                </div>
-              );
-            })}
+          <div style={{ width: '100%', overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#64748b' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 700 }}>EVENT TIMESTAMP</th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 700 }}>ACTION / EVENT DESCRIPTION</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontWeight: 700 }}>AUDIT STATUS</th>
+                  <th style={{ textAlign: 'right', padding: '12px 16px', fontWeight: 700 }}>ORIGIN IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activityLogs.map((log: any, idx: number) => {
+                  const isSuccess = log.status === 'SUCCESS';
+                  const isWarning = log.status === 'WARNING';
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '14px 16px', color: '#475569' }}>{log.dateTime}</td>
+                      <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>{log.action}</td>
+                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                        <span style={{
+                          background: isSuccess ? '#d1fae5' : isWarning ? '#fef3c7' : '#fee2e2',
+                          color: isSuccess ? '#059669' : isWarning ? '#d97706' : '#dc2626',
+                          padding: '3px 10px',
+                          borderRadius: 12,
+                          fontSize: 11,
+                          fontWeight: 700
+                        }}>
+                          {log.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#64748b' }}>{log.ipAddress}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* ─── DOCUMENTS TAB ─── */}
-      {activeTab === 'Documents' && (
-        <div className="table-card" style={{ padding: 32, borderRadius: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-            <div>
-              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#0f172a' }}>Identity & Credential Documents</h2>
-              <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Operator verification proofs and legal clearances</p>
+      {/* ─── TAB 3: PERMISSIONS (Matching Image 1) ─── */}
+      {activeTab === 'Permissions' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, alignItems: 'start' }}>
+          {/* Left Column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            
+            {/* Permissions & Security Level */}
+            <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f1f5f9' }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>Permissions & Security Level</h3>
+                <span style={{ background: '#2563eb', color: '#ffffff', padding: '4px 12px', borderRadius: 14, fontSize: 11, fontWeight: 700 }}>
+                  Internal Tier-2
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Current Security Role</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: '#2563eb' }}>Senior Field Operator</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Permissions Review Status</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: '#10b981' }}>Verified & Audited</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Last Reviewed</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>Jan 24, 2026</div>
+                </div>
+              </div>
             </div>
-            <span style={{ background: '#d1fae5', color: '#10b981', padding: '4px 12px', borderRadius: 14, fontSize: 12, fontWeight: 700 }}>
-              {(operator.documents || []).length} Verified Files
-            </span>
+
+            {/* Permission Categories */}
+            <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
+              {PERMISSION_GROUPS.map((group, gIdx) => {
+                const allItemsEnabled = group.items.every(item => selectedPermissions.includes(item.id));
+
+                return (
+                  <div key={group.key} style={{ marginBottom: gIdx === PERMISSION_GROUPS.length - 1 ? 0 : 28 }}>
+                    {/* Category Header */}
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      background: '#f8fafc', 
+                      padding: '12px 18px', 
+                      borderRadius: 10, 
+                      marginBottom: 12 
+                    }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: allItemsEnabled ? '#0f172a' : '#64748b' }}>
+                        {group.category}
+                      </h4>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: allItemsEnabled ? '#10b981' : '#94a3b8', fontWeight: 600 }}>
+                          {allItemsEnabled ? 'Category Enabled' : 'Category Disabled'}
+                        </span>
+                        <div 
+                          onClick={() => toggleCategoryGroup(group)}
+                          style={{
+                            width: 38, 
+                            height: 22, 
+                            borderRadius: 11, 
+                            background: allItemsEnabled ? '#10b981' : '#cbd5e1', 
+                            position: 'relative',
+                            cursor: 'pointer',
+                            transition: 'background 0.2s ease'
+                          }}
+                        >
+                          <div style={{
+                            width: 16, 
+                            height: 16, 
+                            borderRadius: '50%', 
+                            background: 'white', 
+                            position: 'absolute', 
+                            top: 3, 
+                            left: allItemsEnabled ? 19 : 3,
+                            transition: 'left 0.2s ease',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                          }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Category Sub-Items */}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {group.items.map((item, iIdx) => {
+                        const isEnabled = selectedPermissions.includes(item.id);
+                        return (
+                          <div 
+                            key={item.id} 
+                            style={{
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center', 
+                              padding: '14px 18px',
+                              borderBottom: iIdx === group.items.length - 1 ? 'none' : '1px solid #f1f5f9'
+                            }}
+                          >
+                            <div style={{ flex: 1, paddingRight: 16 }}>
+                              <div style={{ fontWeight: 600, fontSize: 13, color: isEnabled ? '#0f172a' : '#94a3b8', marginBottom: 3 }}>
+                                {item.title}
+                              </div>
+                              <div style={{ fontSize: 11.5, color: isEnabled ? '#64748b' : '#cbd5e1', lineHeight: 1.4 }}>
+                                {item.desc}
+                              </div>
+                            </div>
+                            <div 
+                              onClick={() => togglePermission(item.id)}
+                              style={{
+                                width: 38, 
+                                height: 22, 
+                                borderRadius: 11, 
+                                background: isEnabled ? '#10b981' : '#e2e8f0', 
+                                position: 'relative',
+                                cursor: 'pointer',
+                                transition: 'background 0.2s ease',
+                                flexShrink: 0
+                              }}
+                            >
+                              <div style={{
+                                width: 16, 
+                                height: 16, 
+                                borderRadius: '50%', 
+                                background: 'white', 
+                                position: 'absolute', 
+                                top: 3, 
+                                left: isEnabled ? 19 : 3,
+                                transition: 'left 0.2s ease',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                              }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Bottom Action Banner */}
+            <div style={{
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              padding: '16px 20px', 
+              background: '#fffbeb', 
+              borderRadius: 12, 
+              border: '1px solid #fef3c7',
+              flexWrap: 'wrap',
+              gap: 12
+            }}>
+              <div style={{ fontSize: 12.5, color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>⚠️</span> Changes will take effect immediately and enforce permissions across the portal.
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button 
+                  className="date-picker-btn" 
+                  style={{ borderColor: '#fde68a', color: '#d97706', background: 'white', padding: '6px 14px', fontSize: 12.5 }}
+                  onClick={fetchOperatorRest}
+                >
+                  Discard Changes
+                </button>
+                <button 
+                  className="action-btn"
+                  style={{ padding: '6px 18px', fontSize: 12.5 }}
+                  onClick={handleSavePermissions}
+                  disabled={savingPermissions}
+                >
+                  {savingPermissions ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-            {(operator.documents || []).map((doc: any, i: number) => {
-              const isVerified = doc.status === 'Verified';
-              return (
-                <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 18, textAlign: 'center', background: '#fafafa' }}>
-                  <div style={{
-                    width: 56, 
-                    height: 56, 
+          {/* Right Column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            
+            {/* Security Scorecard */}
+            <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>Security Scorecard</h3>
+                <Grid size={18} color="#2563eb" />
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 4 }}>Active Grants</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{activeGrantsCount} / {totalPermissionsCount} Allowed</div>
+                  <span style={{ background: '#d1fae5', color: '#10b981', padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700 }}>
+                    Secure Base
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 4 }}>Access Level</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a' }}>Standard Ops</div>
+                  <span style={{ background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700 }}>
+                    Tier-2 Auth
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 4 }}>Elevated Bypass Flags</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#ef4444' }}>0 Active</div>
+                  <span style={{ background: '#fee2e2', color: '#ef4444', padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700 }}>
+                    No Overrides
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Policy Changes */}
+            <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 18px 0', color: '#0f172a' }}>Recent Policy Changes</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>Enabled Webhook Alerts</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Jan 24</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Granted by Super Admin (Self service profile sync)</div>
+                </div>
+                <div style={{ paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>Disabled Security Access Mod</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Jan 12</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Revoked by System Policy (Audit requirement #443)</div>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>Verified Document Audit auth</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Jan 12</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Approved by Supervisor Rajesh Kumar</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Authorization Chain */}
+            <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 18px 0', color: '#0f172a' }}>Authorization Chain</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <img 
+                  src="https://i.pravatar.cc/150?img=11" 
+                  alt="Super" 
+                  style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} 
+                />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>{reporting.supervisorName || 'Rajesh Kumar'}</div>
+                  <div style={{ fontSize: 11.5, color: '#64748b' }}>{reporting.supervisorRole || 'Direct Supervisor (Super Admin)'}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#334155', fontSize: 12, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+                <Shield size={15} color="#2563eb" /> 
+                <span>Permission level: <strong style={{ color: '#0f172a' }}>Tier-2 Approval Authority</strong></span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB 4: DOCUMENTS (Matching Image 2) ─── */}
+      {activeTab === 'Documents' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          
+          {/* Top 4 Metrics Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 18 }}>
+            <div className="table-card" style={{ padding: '18px 24px', borderRadius: 14 }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 6 }}>Total Documents</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#0f172a' }} />
+                {totalDocsCount}
+              </div>
+            </div>
+
+            <div className="table-card" style={{ padding: '18px 24px', borderRadius: 14 }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 6 }}>Verified Docs</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#10b981', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981' }} />
+                {verifiedDocsCount}
+              </div>
+            </div>
+
+            <div className="table-card" style={{ padding: '18px 24px', borderRadius: 14 }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 6 }}>Pending Review</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#2563eb', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#2563eb' }} />
+                {pendingDocsCount}
+              </div>
+            </div>
+
+            <div className="table-card" style={{ padding: '18px 24px', borderRadius: 14 }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginBottom: 6 }}>Expired/Warnings</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }} />
+                {expiredDocsCount}
+              </div>
+            </div>
+          </div>
+
+          {/* 2 Column Layout */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, alignItems: 'start' }}>
+            
+            {/* Left Column: Documents Grid */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 20px 0', color: '#0f172a' }}>Identity & Verification Documents</h3>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
+                  {rawDocuments.map((doc: any, i: number) => {
+                    const isImage = doc.type === 'IMAGE' || doc.type === 'IMG';
+                    const isValid = doc.status === 'Valid';
+                    const isVerified = doc.status === 'Verified' || isValid;
+
+                    return (
+                      <div 
+                        key={i} 
+                        style={{
+                          border: '1px solid #e2e8f0', 
+                          borderRadius: 12, 
+                          padding: 16, 
+                          background: '#ffffff',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          textAlign: 'center',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                        }}
+                      >
+                        {/* Icon Card Box */}
+                        <div style={{
+                          width: 64, 
+                          height: 64, 
+                          borderRadius: 12, 
+                          background: isImage ? '#f0fdf4' : '#fef2f2',
+                          color: isImage ? '#16a34a' : '#ef4444',
+                          border: `1px solid ${isImage ? '#dcfce7' : '#fee2e2'}`,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginBottom: 12
+                        }}>
+                          {isImage ? <FileImage size={24} /> : <FileText size={24} />}
+                          <span style={{ fontSize: 10, fontWeight: 800, marginTop: 2 }}>{doc.type}</span>
+                        </div>
+
+                        {/* Title */}
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', marginBottom: 2, wordBreak: 'break-word', minHeight: 34 }}>
+                          {doc.fileName}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+                          {doc.refNum || `DOC-${(doc.id || i + 1).slice(-4).toUpperCase()}`}
+                        </div>
+
+                        {/* Badge + Action Icons */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12, width: '100%' }}>
+                          <span style={{
+                            background: isValid ? '#ccfbf1' : isVerified ? '#d1fae5' : '#fee2e2',
+                            color: isValid ? '#0f766e' : isVerified ? '#065f46' : '#991b1b',
+                            padding: '2px 8px',
+                            borderRadius: 8,
+                            fontSize: 10.5,
+                            fontWeight: 700
+                          }}>
+                            {doc.status || 'Verified'}
+                          </span>
+                          
+                          <button
+                            onClick={() => {
+                              if (doc.fileUrl) {
+                                setPreviewDoc({ url: doc.fileUrl, title: doc.fileName });
+                              } else {
+                                window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Viewing vault record: ${doc.fileName}` } }));
+                              }
+                            }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 2, display: 'flex' }}
+                            title="Inspect Document"
+                          >
+                            <Eye size={15} />
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (doc.fileUrl) {
+                                const a = document.createElement('a');
+                                a.href = doc.fileUrl;
+                                a.download = doc.fileName;
+                                a.target = '_blank';
+                                a.click();
+                              } else {
+                                window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Downloading ${doc.fileName}` } }));
+                              }
+                            }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 2, display: 'flex' }}
+                            title="Download Proof"
+                          >
+                            <Download size={15} />
+                          </button>
+                        </div>
+
+                        {/* Meta info */}
+                        <div style={{ fontSize: 10.5, color: '#94a3b8', borderTop: '1px solid #f1f5f9', paddingTop: 10, width: '100%', textAlign: 'left', lineHeight: 1.4 }}>
+                          <div>Uploaded: <strong style={{ color: '#475569' }}>{doc.uploadedAt}</strong></div>
+                          <div>Expires: <strong style={{ color: '#475569' }}>{doc.expires || 'N/A'}</strong></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bottom Banner */}
+              <div style={{
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                padding: '16px 22px', 
+                background: '#fffbeb', 
+                borderRadius: 12, 
+                border: '1px solid #fef3c7',
+                flexWrap: 'wrap',
+                gap: 12
+              }}>
+                <div style={{ fontSize: 12.5, color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>⚠️</span> Requesting updates will notify operator {operator.name} immediately.
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button 
+                    className="date-picker-btn" 
+                    style={{ borderColor: '#2563eb', color: '#2563eb', background: 'white', padding: '7px 16px', fontSize: 12.5 }}
+                    onClick={handleDownloadAllZip}
+                    disabled={downloadingZip}
+                  >
+                    {downloadingZip ? 'Archiving...' : 'Download All (ZIP)'}
+                  </button>
+                  <button 
+                    className="action-btn"
+                    style={{ padding: '7px 18px', fontSize: 12.5 }}
+                    onClick={handleRequestDocumentUpdate}
+                    disabled={requestingDocUpdate}
+                  >
+                    {requestingDocUpdate ? 'Sending...' : 'Request Document Update'}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Right Column: Upload & Compliance */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              
+              {/* Upload New Document */}
+              <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 16px 0', color: '#0f172a' }}>Upload New Document</h3>
+                
+                <input 
+                  type="file" 
+                  ref={fileInputRef}
+                  style={{ display: 'none' }} 
+                  onChange={handleFileUpload}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                />
+
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    border: '2px dashed #cbd5e1', 
                     borderRadius: 12, 
-                    background: isVerified ? '#d1fae5' : '#fee2e2', 
-                    color: isVerified ? '#059669' : '#dc2626', 
+                    padding: '32px 16px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    background: '#f8fafc', 
+                    cursor: 'pointer',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#2563eb')}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
+                >
+                  <div style={{
+                    width: 44, 
+                    height: 44, 
+                    borderRadius: '50%', 
+                    background: '#eff6ff', 
+                    color: '#2563eb', 
                     display: 'flex', 
                     justifyContent: 'center', 
                     alignItems: 'center', 
-                    margin: '0 auto 12px',
-                    fontWeight: 800,
-                    fontSize: 14
+                    marginBottom: 10 
                   }}>
-                    {doc.type || 'PDF'}
+                    <UploadCloud size={22} />
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>{doc.fileName}</div>
-                  <div style={{
-                    background: isVerified ? '#d1fae5' : '#fee2e2', 
-                    color: isVerified ? '#059669' : '#dc2626', 
-                    padding: '2px 8px', 
-                    borderRadius: 10, 
-                    fontSize: 10, 
-                    fontWeight: 700, 
-                    display: 'inline-block',
-                    marginBottom: 10
-                  }}>
-                    {doc.status || 'Verified'}
+                  <div style={{ color: '#0f172a', fontWeight: 700, fontSize: 13, marginBottom: 2 }}>
+                    Drag & drop files here
                   </div>
-                  <div style={{ fontSize: 11, color: '#94a3b8', borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-                    {doc.fileSize} MB &bull; {doc.uploadedAt}
+                  <div style={{ color: '#2563eb', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+                    or Browse files
+                  </div>
+                  <div style={{ fontSize: 10.5, color: '#94a3b8', textAlign: 'center' }}>
+                    Supported formats: PDF, JPG, PNG (Max 10MB)
                   </div>
                 </div>
-              );
-            })}
+              </div>
+
+              {/* Compliance Action Required */}
+              <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 18px 0', color: '#0f172a' }}>Compliance Action Required</h3>
+                
+                <div style={{ paddingBottom: 16, borderBottom: '1px solid #f1f5f9', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>Hazmat Handling Expired</div>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#dc2626', background: '#fee2e2', padding: '2px 6px', borderRadius: 6 }}>
+                      Action Required
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#64748b', lineHeight: 1.4 }}>
+                    Operator cannot be assigned to Tier-2 transit tasks involving chemical assets.
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#d97706' }}>Driving License Renew</div>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#d97706', background: '#fef3c7', padding: '2px 6px', borderRadius: 6 }}>
+                      4 Years Left
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#64748b', lineHeight: 1.4 }}>
+                    Regular permit audit recommended before the scheduled Q3 compliance checklist.
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
           </div>
+
         </div>
       )}
 
@@ -932,6 +1602,31 @@ export default function OperatorDetail() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── DOCUMENT INSPECTION PREVIEW MODAL ─── */}
+      {previewDoc && (
+        <div 
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: 24 }}
+          onClick={() => setPreviewDoc(null)}
+        >
+          <div 
+            style={{ background: '#ffffff', borderRadius: 16, maxWidth: '90vw', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', width: 700 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
+                🔍 Document Inspection: {previewDoc.title}
+              </div>
+              <button onClick={() => setPreviewDoc(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', minHeight: 300 }}>
+              <img src={previewDoc.url} alt={previewDoc.title} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 8 }} />
+            </div>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, FileText, Grid, UserSquare2, 
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
@@ -7,15 +7,18 @@ import {
   Building2, Command, Globe
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 
 export const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message, type } }));
 };
 
 export default function Layout() {
+  const navigate = useNavigate();
   const [toast, setToast] = useState<{message: string, type: string} | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { admin, logout } = useAuth();
+  const { socket } = useSocket();
 
   useEffect(() => {
     const handleToast = (e: any) => {
@@ -25,6 +28,29 @@ export default function Layout() {
     window.addEventListener('cybersave_toast', handleToast);
     return () => window.removeEventListener('cybersave_toast', handleToast);
   }, []);
+
+  // Force logout when administrator suspends this operator account
+  useEffect(() => {
+    if (socket && admin?.id) {
+      const handleForceLogout = (data: any) => {
+        if (!data?.userId || data.userId === admin.id) {
+          showToast(data?.message || 'Your account has been suspended by an Administrator.', 'error');
+          setTimeout(() => {
+            logout();
+            navigate('/login');
+          }, 1200);
+        }
+      };
+
+      socket.on('force_logout', handleForceLogout);
+      socket.on('operator_suspended', handleForceLogout);
+
+      return () => {
+        socket.off('force_logout', handleForceLogout);
+        socket.off('operator_suspended', handleForceLogout);
+      };
+    }
+  }, [socket, admin?.id, logout, navigate]);
 
   const navSections = [
     {
