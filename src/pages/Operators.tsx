@@ -1,14 +1,19 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
-import { UserCheck, ShieldCheck, Clock, UserX } from 'lucide-react';
+import { UserCheck, ShieldCheck, Clock, UserX, Search } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
 export default function Operators() {
+  const navigate = useNavigate();
   const { socket, connected } = useSocket();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [managingOp, setManagingOp] = useState<any>(null);
   const [opPermissions, setOpPermissions] = useState<string[]>([]);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
   
   const [showAddOpModal, setShowAddOpModal] = useState(false);
   const [newOpName, setNewOpName] = useState('');
@@ -18,16 +23,37 @@ export default function Operators() {
 
   const FEATURES = ['DASHBOARD', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'USERS', 'REPORTS'];
 
+  const fetchOperatorsRest = async () => {
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const res = await fetch(`${backendUrl}/api/v1/operators`);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+        setLoading(false);
+      }
+    } catch (e) {
+      console.warn('[Operators] REST fetch note:', e);
+    }
+  };
+
   useEffect(() => {
+    fetchOperatorsRest();
+
     if (socket && connected) {
       socket.emit('request_operators_data');
       socket.on('response_operators_data', (resData) => {
         setData(resData);
         setLoading(false);
       });
+      socket.on('operators_updated', () => {
+        fetchOperatorsRest();
+        socket.emit('request_operators_data');
+      });
       socket.on('update_operator_access_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Operator access updated successfully!' } }));
         setManagingOp(null);
+        fetchOperatorsRest();
       });
       socket.on('add_new_operator_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Operator created successfully!' } }));
@@ -36,11 +62,13 @@ export default function Operators() {
         setNewOpEmail('');
         setNewOpPass('');
         setNewOpFeats(['DASHBOARD']);
+        fetchOperatorsRest();
       });
     }
     return () => {
       if (socket) {
         socket.off('response_operators_data');
+        socket.off('operators_updated');
         socket.off('update_operator_access_success');
         socket.off('add_new_operator_success');
       }
@@ -112,25 +140,75 @@ export default function Operators() {
 
       <div className="table-card" style={{marginTop: 24, background: 'transparent', boxShadow: 'none', padding: 0}}>
         <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 24}}>
-          <div className="search-bar" style={{width: 300, padding: '8px 12px'}}>
-            <input type="text" placeholder="Filter operators..." />
+          <div className="search-bar" style={{width: 300, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8}}>
+            <Search size={16} color="#9ca3af" />
+            <input 
+              type="text" 
+              placeholder="Filter operators by name, email..." 
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              style={{border: 'none', outline: 'none', width: '100%', fontSize: 13}}
+            />
           </div>
           <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
-            <div style={{fontSize: 13, fontWeight: 500}}>Department: <select style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent'}}><option>All Departments</option></select></div>
-            <div style={{fontSize: 13, fontWeight: 500}}>Status: <select style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent'}}><option>All Statuses</option></select></div>
-            <div style={{fontSize: 13, color: '#6b7280', marginLeft: 16}}>Showing 1-9 of {stats?.totalOps}</div>
+            <div style={{fontSize: 13, fontWeight: 500}}>
+              Department: 
+              <select 
+                value={departmentFilter} 
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent', marginLeft: 4, cursor: 'pointer'}}
+              >
+                <option value="All">All Departments</option>
+                <option value="Operations">Operations</option>
+                <option value="IT & Infrastructure">IT & Infrastructure</option>
+              </select>
+            </div>
+            <div style={{fontSize: 13, fontWeight: 500}}>
+              Status: 
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent', marginLeft: 4, cursor: 'pointer'}}
+              >
+                <option value="All">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Suspended">Suspended</option>
+              </select>
+            </div>
+            <div style={{fontSize: 13, color: '#6b7280', marginLeft: 16}}>
+              Showing {(operators || []).length} of {stats?.totalOps || 0}
+            </div>
           </div>
         </div>
 
         <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24}}>
-          {(operators || []).map((op: any, i: number) => (
-            <div key={i} style={{background: 'white', borderRadius: 12, padding: 24, border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column'}}>
+          {(operators || [])
+            .filter((op: any) => {
+              if (departmentFilter !== 'All' && op.department !== departmentFilter) return false;
+              if (statusFilter !== 'All' && op.status !== statusFilter) return false;
+              if (searchFilter.trim()) {
+                const q = searchFilter.toLowerCase();
+                const matchName = op.name?.toLowerCase().includes(q);
+                const matchEmail = op.email?.toLowerCase().includes(q);
+                const matchEmpId = op.employeeId?.toLowerCase().includes(q);
+                if (!matchName && !matchEmail && !matchEmpId) return false;
+              }
+              return true;
+            })
+            .map((op: any, i: number) => (
+            <div 
+              key={i} 
+              style={{background: 'white', borderRadius: 12, padding: 24, border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s'}}
+              onClick={() => navigate(`/operators/${op.id}`)}
+              className="table-row-hover"
+            >
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24}}>
                 <div style={{display: 'flex', gap: 12}}>
-                  <img src={`https://i.pravatar.cc/150?img=${i+10}`} alt={op.name} style={{width: 48, height: 48, borderRadius: '50%', objectFit: 'cover'}} />
+                  <img src={op.avatarUrl || `https://i.pravatar.cc/150?img=${i+10}`} alt={op.name} style={{width: 48, height: 48, borderRadius: '50%', objectFit: 'cover'}} />
                   <div>
-                    <h3 style={{fontSize: 16, fontWeight: 700, color: '#111827'}}>{op.name}</h3>
-                    <p style={{fontSize: 13, color: '#6b7280'}}>{op.role}</p>
+                    <h3 style={{fontSize: 16, fontWeight: 700, color: '#111827', margin: 0}}>{op.name}</h3>
+                    <p style={{fontSize: 13, color: '#6b7280', margin: '2px 0 0'}}>{op.role}</p>
+                    <span style={{fontSize: 11, color: '#9ca3af', fontWeight: 600}}>{op.employeeId}</span>
                   </div>
                 </div>
                 <span className={`badge ${op.status === 'Active' ? 'completed' : op.status === 'Pending' ? 'pending' : 'rejected'}`}>{op.status}</span>
@@ -149,8 +227,14 @@ export default function Operators() {
                 <span style={{fontWeight: 600}}>{op.lastActive}</span>
               </div>
 
-              <div style={{display: 'flex', gap: 12, marginTop: 'auto'}}>
-                <button className="date-picker-btn" style={{flex: 1, justifyContent: 'center'}}>View Profile</button>
+              <div style={{display: 'flex', gap: 12, marginTop: 'auto'}} onClick={(e) => e.stopPropagation()}>
+                <button 
+                  className="date-picker-btn" 
+                  style={{flex: 1, justifyContent: 'center'}}
+                  onClick={() => navigate(`/operators/${op.id}`)}
+                >
+                  View Profile
+                </button>
                 <button 
                   className="action-btn" 
                   style={{flex: 1, justifyContent: 'center'}}
