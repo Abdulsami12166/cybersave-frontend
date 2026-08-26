@@ -44,6 +44,8 @@ interface FormElementItem {
   placeholder?: string;
   required: boolean;
   validationRule?: string;
+  options?: string;
+  section?: string;
 }
 
 interface DocumentItem {
@@ -489,6 +491,128 @@ export default function ServiceWizard() {
     }));
   };
 
+  // Standard Government Form Templates
+  const FORM_TEMPLATES: Record<string, { name: string; icon: string; description: string; fields: FormElementItem[] }> = {
+    general: {
+      name: 'General Citizen Application',
+      icon: '📋',
+      description: 'Standard demographic and contact details for all citizen requests',
+      fields: [
+        { label: 'Applicant Full Name', type: 'Text Input', placeholder: 'Enter official name as per Aadhaar', required: true, validationRule: 'None' },
+        { label: 'Date of Birth', type: 'Date Picker', placeholder: 'DD/MM/YYYY', required: true, validationRule: 'Date in Past' },
+        { label: 'Gender', type: 'Dropdown Select', placeholder: 'Select gender', required: true, validationRule: 'None', options: 'Male, Female, Other' },
+        { label: 'Aadhaar / Citizen Vault ID', type: 'Number Input', placeholder: '12-digit UIDAI number', required: true, validationRule: 'Exact 6 Digit Number' },
+        { label: 'Registered Mobile Number', type: 'Phone Field', placeholder: '10-digit mobile number', required: true, validationRule: '10 Digit Mobile' },
+        { label: 'Email Address', type: 'Email Address', placeholder: 'name@domain.com', required: false, validationRule: 'Valid Email' },
+        { label: 'Permanent Address', type: 'Text Area / Multi-line', placeholder: 'House/Street/Area/City', required: true, validationRule: 'None' },
+        { label: 'State', type: 'Text Input', placeholder: 'State name', required: true, validationRule: 'None' },
+        { label: 'District', type: 'Text Input', placeholder: 'District / Region', required: true, validationRule: 'None' },
+        { label: 'PIN Code', type: 'Number Input', placeholder: '6-digit postal code', required: true, validationRule: 'Exact 6 Digit Number' }
+      ]
+    },
+    farmer: {
+      name: 'Farmer & DBT Welfare Scheme (PM-KISAN)',
+      icon: '🌾',
+      description: 'Direct benefit transfer, land verification, and bank details',
+      fields: [
+        { label: 'Beneficiary Farmer Name', type: 'Text Input', placeholder: 'Farmer full name', required: true, validationRule: 'None' },
+        { label: 'Farmer Aadhaar Number', type: 'Number Input', placeholder: '12-digit Aadhaar number', required: true, validationRule: 'Exact 6 Digit Number' },
+        { label: 'Bank Name & Branch', type: 'Text Input', placeholder: 'e.g. State Bank of India, Main Branch', required: true, validationRule: 'None' },
+        { label: 'Bank Account Number', type: 'Number Input', placeholder: 'Enter active bank account number', required: true, validationRule: 'None' },
+        { label: 'Bank IFSC Code', type: 'Text Input', placeholder: 'e.g. SBIN0001234', required: true, validationRule: 'Alphanumeric Only' },
+        { label: 'Land Ownership Khasra / Khatauni Number', type: 'Text Input', placeholder: 'Revenue record survey number', required: true, validationRule: 'None' },
+        { label: 'Total Cultivable Land Area (Acres)', type: 'Number Input', placeholder: 'e.g. 2.5', required: true, validationRule: 'None' },
+        { label: 'Annual Household Farm Income (₹)', type: 'Number Input', placeholder: 'e.g. 120000', required: true, validationRule: 'None' }
+      ]
+    },
+    certificate: {
+      name: 'Certificates (Income / Caste / Domicile)',
+      icon: '📜',
+      description: 'Government certified proof request and family details',
+      fields: [
+        { label: 'Applicant Full Name', type: 'Text Input', placeholder: 'Full legal name', required: true, validationRule: 'None' },
+        { label: "Father's / Guardian's Name", type: 'Text Input', placeholder: "Father's full name", required: true, validationRule: 'None' },
+        { label: "Mother's Name", type: 'Text Input', placeholder: "Mother's full name", required: true, validationRule: 'None' },
+        { label: 'Category / Community', type: 'Dropdown Select', placeholder: 'Select social category', required: true, validationRule: 'None', options: 'General, OBC, SC, ST, EWS' },
+        { label: 'Annual Gross Family Income (₹)', type: 'Number Input', placeholder: 'Total family income per year', required: true, validationRule: 'None' },
+        { label: 'Purpose of Certificate', type: 'Dropdown Select', placeholder: 'Select primary purpose', required: true, validationRule: 'None', options: 'Higher Education, Government Employment, Subsidy Scheme, Legal / Banking' },
+        { label: 'Permanent Residential Address', type: 'Text Area / Multi-line', placeholder: 'Complete village/town address', required: true, validationRule: 'None' },
+        { label: 'Tehsil / Revenue Block', type: 'Text Input', placeholder: 'Administrative revenue block', required: true, validationRule: 'None' }
+      ]
+    },
+    passport: {
+      name: 'Passport & Overseas Travel Clearance',
+      icon: '🛂',
+      description: 'PSP Portal Ministry of External Affairs parameters',
+      fields: [
+        { label: 'Given Name (First & Middle Name)', type: 'Text Input', placeholder: 'As on Birth/School cert', required: true, validationRule: 'None' },
+        { label: 'Surname', type: 'Text Input', placeholder: 'Family name', required: true, validationRule: 'None' },
+        { label: 'Date of Birth', type: 'Date Picker', placeholder: 'DD/MM/YYYY', required: true, validationRule: 'Date in Past' },
+        { label: 'Place of Birth (Village / Town & State)', type: 'Text Input', placeholder: 'City, State, Country', required: true, validationRule: 'None' },
+        { label: 'Marital Status', type: 'Dropdown Select', placeholder: 'Select status', required: true, validationRule: 'None', options: 'Single, Married, Divorced, Widowed' },
+        { label: 'Employment Type', type: 'Dropdown Select', placeholder: 'Select employment', required: true, validationRule: 'None', options: 'Private Sector, Government / PSU, Self Employed, Student, Homemaker, Retired' },
+        { label: 'Emergency Contact Person Name', type: 'Text Input', placeholder: 'Next of kin name', required: true, validationRule: 'None' },
+        { label: 'Emergency Contact Mobile Number', type: 'Phone Field', placeholder: '10-digit emergency number', required: true, validationRule: '10 Digit Mobile' }
+      ]
+    },
+    utility: {
+      name: 'Electricity & Utility Bill Payment',
+      icon: '⚡',
+      description: 'BBPS utility power, water, and gas consumer billing parameters',
+      fields: [
+        { label: 'Electricity Board / DISCOM Name', type: 'Dropdown Select', placeholder: 'Select provider', required: true, validationRule: 'None', options: 'State Power Distribution Co., BSES Rajdhani, Tata Power-DDL, Adani Electricity, Torrent Power, UPPCL' },
+        { label: 'Consumer / CA / Connection Number', type: 'Text Input', placeholder: 'Consumer account number from bill', required: true, validationRule: 'Alphanumeric Only' },
+        { label: 'Registered Consumer Name', type: 'Text Input', placeholder: 'Name printed on bill', required: true, validationRule: 'None' },
+        { label: 'Billing Unit / Sub-Division Code', type: 'Text Input', placeholder: 'Sub-division code (optional)', required: false, validationRule: 'None' },
+        { label: 'Meter Number / Serial', type: 'Text Input', placeholder: 'Meter serial number', required: false, validationRule: 'None' }
+      ]
+    },
+    pan: {
+      name: 'PAN Card & Income Tax Identification',
+      icon: '💳',
+      description: 'NSDL / UTIITSL PAN issuance and demographic update',
+      fields: [
+        { label: 'Applicant Legal Full Name', type: 'Text Input', placeholder: 'Name in full (no abbreviations)', required: true, validationRule: 'None' },
+        { label: "Father's Full Name (for Card Print)", type: 'Text Input', placeholder: "Father's first, middle and last name", required: true, validationRule: 'None' },
+        { label: 'Date of Birth', type: 'Date Picker', placeholder: 'DD/MM/YYYY', required: true, validationRule: 'Date in Past' },
+        { label: 'Aadhaar Number', type: 'Number Input', placeholder: '12-digit Aadhaar UID', required: true, validationRule: 'Exact 6 Digit Number' },
+        { label: 'Application Category', type: 'Dropdown Select', placeholder: 'Select category', required: true, validationRule: 'None', options: 'Individual Indian Citizen, Individual Foreign Citizen, Firm / Partnership, Company / Trust' },
+        { label: 'Source of Income', type: 'Dropdown Select', placeholder: 'Select primary source', required: true, validationRule: 'None', options: 'Salary, Income from Business/Profession, House Property, Capital Gains, No Income' },
+        { label: 'Existing PAN (For Correction/Reprint)', type: 'Text Input', placeholder: '10-character PAN (if applicable)', required: false, validationRule: 'Alphanumeric Only' }
+      ]
+    }
+  };
+
+  // Apply a form template
+  const handleApplyFormTemplate = (templateKey: string) => {
+    const tpl = FORM_TEMPLATES[templateKey];
+    if (!tpl) return;
+    setServiceData(prev => ({
+      ...prev,
+      formElements: [...tpl.fields]
+    }));
+    setSelectedElementIndex(0);
+    showToast(`Applied "${tpl.name}" template with ${tpl.fields.length} fields!`);
+  };
+
+  // Move element up or down in workspace
+  const handleMoveFormElement = (index: number, direction: 'up' | 'down') => {
+    const list = [...serviceData.formElements];
+    if (direction === 'up' && index > 0) {
+      const temp = list[index - 1];
+      list[index - 1] = list[index];
+      list[index] = temp;
+      setServiceData(prev => ({ ...prev, formElements: list }));
+      setSelectedElementIndex(index - 1);
+    } else if (direction === 'down' && index < list.length - 1) {
+      const temp = list[index + 1];
+      list[index + 1] = list[index];
+      list[index] = temp;
+      setServiceData(prev => ({ ...prev, formElements: list }));
+      setSelectedElementIndex(index + 1);
+    }
+  };
+
   // Add form element from Available Elements
   const handleAddFormElement = (type: string) => {
     const defaultLabels: Record<string, string> = {
@@ -498,6 +622,7 @@ export default function ServiceWizard() {
       'Phone Field': 'Mobile Phone Number',
       'Date Picker': 'Select Date',
       'Dropdown Select': 'Select Category Option',
+      'Text Area / Multi-line': 'Detailed Description / Notes',
       'File Upload': 'Upload Document Proof',
       'Checkbox Option': 'Acknowledgement Consent',
       'Radio Control': 'Choose Option Selection'
@@ -507,7 +632,8 @@ export default function ServiceWizard() {
       type,
       placeholder: `Enter ${type.toLowerCase()}`,
       required: true,
-      validationRule: type === 'Number Input' ? 'Exact 6 Digit Number' : (type === 'Email Address' ? 'Valid Email' : 'None')
+      validationRule: type === 'Number Input' ? 'Exact 6 Digit Number' : (type === 'Email Address' ? 'Valid Email' : (type === 'Phone Field' ? '10 Digit Mobile' : 'None')),
+      options: type === 'Dropdown Select' || type === 'Radio Control' ? 'Option 1, Option 2, Option 3' : undefined
     };
     setServiceData(prev => ({
       ...prev,
@@ -1342,34 +1468,91 @@ export default function ServiceWizard() {
       {/* ───────────────────────────────────────────────────────────────────────── */}
       {activeStep === 4 && (
         <div>
-          <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 310px', gap: 20, marginBottom: 24 }}>
+          {/* Form Templates Quick Selector Banner */}
+          <div style={{ background: '#ffffff', borderRadius: 12, border: '1.5px solid #bfdbfe', padding: '18px 22px', marginBottom: 20, boxShadow: '0 2px 6px rgba(37,99,235,0.06)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div>
+                <h4 style={{ fontSize: 13.5, fontWeight: 800, color: '#1e40af', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>⚡</span> Quick Government Form Templates
+                </h4>
+                <p style={{ fontSize: 11.5, color: '#475569', margin: '2px 0 0 0' }}>
+                  Select a pre-designed standard scheme form or customize fields individually below.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setServiceData(prev => ({ ...prev, formElements: [] }));
+                  setSelectedElementIndex(0);
+                  showToast('Form cleared! Add your custom fields below.');
+                }}
+                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Clear Form
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+              {Object.entries(FORM_TEMPLATES).map(([key, tpl]) => (
+                <div
+                  key={key}
+                  onClick={() => handleApplyFormTemplate(key)}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #e2e8f0',
+                    background: '#f8fafc',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = '#3b82f6';
+                    e.currentTarget.style.background = '#eff6ff';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = '#e2e8f0';
+                    e.currentTarget.style.background = '#f8fafc';
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>
+                    <span>{tpl.icon}</span>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tpl.name}</span>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 4 }}>
+                    {tpl.fields.length} predefined fields
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 320px', gap: 20, marginBottom: 24 }}>
             {/* Left Palette: Available Elements */}
             <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 16px 0' }}>
-                Available Elements
+                Add New Field
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
-                  'Text Input',
-                  'Number Input',
-                  'Email Address',
-                  'Phone Field',
-                  'Date Picker',
-                  'Dropdown Select',
-                  'File Upload',
-                  'Checkbox Option',
-                  'Radio Control'
+                  { name: 'Text Input', icon: '📝' },
+                  { name: 'Number Input', icon: '🔢' },
+                  { name: 'Phone Field', icon: '📱' },
+                  { name: 'Email Address', icon: '✉️' },
+                  { name: 'Date Picker', icon: '📅' },
+                  { name: 'Dropdown Select', icon: '🔽' },
+                  { name: 'Text Area / Multi-line', icon: '📄' },
+                  { name: 'Radio Control', icon: '🔘' },
+                  { name: 'Checkbox Option', icon: '☑️' }
                 ].map((elem, idx) => (
                   <div
                     key={idx}
-                    onClick={() => handleAddFormElement(elem)}
+                    onClick={() => handleAddFormElement(elem.name)}
                     style={{
-                      padding: '10px 14px',
+                      padding: '9px 12px',
                       borderRadius: 8,
                       border: '1px solid #e2e8f0',
                       background: '#f8fafc',
                       color: '#334155',
-                      fontSize: 13,
+                      fontSize: 12.5,
                       fontWeight: 600,
                       cursor: 'pointer',
                       display: 'flex',
@@ -1387,7 +1570,7 @@ export default function ServiceWizard() {
                     }}
                   >
                     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ color: '#94a3b8' }}>↕</span> {elem}
+                      <span>{elem.icon}</span> {elem.name}
                     </span>
                     <Plus size={14} color="#2563eb" />
                   </div>
@@ -1398,73 +1581,116 @@ export default function ServiceWizard() {
             {/* Middle: Form Workspace Sandbox */}
             <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  Form Workspace Sandbox
-                </h3>
-                <span style={{ fontSize: 12, color: '#64748b' }}>
-                  {serviceData.formElements.length} fields configured
+                <div>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    Configured Scheme Form Fields
+                  </h3>
+                  <p style={{ fontSize: 11.5, color: '#64748b', margin: '2px 0 0 0' }}>
+                    Citizens will see these exact fields when applying for this service.
+                  </p>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#2563eb', background: '#eff6ff', padding: '4px 10px', borderRadius: 12 }}>
+                  {serviceData.formElements.length} fields
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 380 }}>
-                {serviceData.formElements.map((elem, idx) => {
-                  const isSelected = selectedElementIndex === idx;
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => setSelectedElementIndex(idx)}
-                      style={{
-                        padding: '14px 18px',
-                        borderRadius: 8,
-                        border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                        background: isSelected ? '#eff6ff' : '#ffffff',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ color: '#94a3b8', fontSize: 14, cursor: 'grab' }}>✥</span>
-                        <div>
-                          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>
-                            {elem.label} {elem.required && <span style={{ color: '#ef4444' }}>*</span>}
-                          </div>
-                          <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                            {elem.type} {elem.validationRule && elem.validationRule !== 'None' && `• ${elem.validationRule}`}
+              {serviceData.formElements.length === 0 ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center', border: '2px dashed #cbd5e1', borderRadius: 10, background: '#f8fafc' }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#334155' }}>No Form Fields Configured</div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                    Choose a template above or click fields from the left palette to build this service form.
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 380 }}>
+                  {serviceData.formElements.map((elem, idx) => {
+                    const isSelected = selectedElementIndex === idx;
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => setSelectedElementIndex(idx)}
+                        style={{
+                          padding: '12px 16px',
+                          borderRadius: 8,
+                          border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                          background: isSelected ? '#eff6ff' : '#ffffff',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: isSelected ? '#2563eb' : '#94a3b8', width: 20 }}>
+                            {idx + 1}.
+                          </span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                              {elem.label} {elem.required && <span style={{ color: '#ef4444' }}>*</span>}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                              <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, marginRight: 6, fontWeight: 600 }}>{elem.type}</span>
+                              {elem.placeholder && `• "${elem.placeholder}"`}
+                            </div>
                           </div>
                         </div>
+
+                        {/* Reorder and Action Buttons */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleMoveFormElement(idx, 'up');
+                            }}
+                            style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #e2e8f0', background: idx === 0 ? '#f8fafc' : '#ffffff', cursor: idx === 0 ? 'not-allowed' : 'pointer', fontSize: 11 }}
+                            title="Move Up"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === serviceData.formElements.length - 1}
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleMoveFormElement(idx, 'down');
+                            }}
+                            style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #e2e8f0', background: idx === serviceData.formElements.length - 1 ? '#f8fafc' : '#ffffff', cursor: idx === serviceData.formElements.length - 1 ? 'not-allowed' : 'pointer', fontSize: 11 }}
+                            title="Move Down"
+                          >
+                            ▼
+                          </button>
+                          <Trash2
+                            size={15}
+                            color="#ef4444"
+                            style={{ cursor: 'pointer', marginLeft: 6 }}
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleRemoveFormElement(idx);
+                            }}
+                          />
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <Edit2 size={15} color="#2563eb" style={{ cursor: 'pointer' }} />
-                        <Trash2
-                          size={15}
-                          color="#ef4444"
-                          style={{ cursor: 'pointer' }}
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleRemoveFormElement(idx);
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Right: Properties Panel */}
             <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 20px 0' }}>
-                Properties Panel
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 16px 0' }}>
+                Field Properties
               </h3>
 
               {serviceData.formElements[selectedElementIndex] ? (
                 <>
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Field Display Label
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                      Field Display Label *
                     </label>
                     <input
                       type="text"
@@ -1478,9 +1704,54 @@ export default function ServiceWizard() {
                     />
                   </div>
 
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Helper / Placeholder
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                      Field Type
+                    </label>
+                    <select
+                      value={serviceData.formElements[selectedElementIndex]?.type || 'Text Input'}
+                      onChange={e => {
+                        const list = [...serviceData.formElements];
+                        list[selectedElementIndex].type = e.target.value;
+                        setServiceData({ ...serviceData, formElements: list });
+                      }}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
+                    >
+                      <option value="Text Input">Text Input</option>
+                      <option value="Number Input">Number Input</option>
+                      <option value="Phone Field">Phone Field</option>
+                      <option value="Email Address">Email Address</option>
+                      <option value="Date Picker">Date Picker</option>
+                      <option value="Dropdown Select">Dropdown Select</option>
+                      <option value="Text Area / Multi-line">Text Area / Multi-line</option>
+                      <option value="Radio Control">Radio Control</option>
+                      <option value="Checkbox Option">Checkbox Option</option>
+                    </select>
+                  </div>
+
+                  {(serviceData.formElements[selectedElementIndex]?.type === 'Dropdown Select' ||
+                    serviceData.formElements[selectedElementIndex]?.type === 'Radio Control') && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                        Options (Comma-separated)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Option 1, Option 2, Option 3"
+                        value={serviceData.formElements[selectedElementIndex]?.options || ''}
+                        onChange={e => {
+                          const list = [...serviceData.formElements];
+                          list[selectedElementIndex].options = e.target.value;
+                          setServiceData({ ...serviceData, formElements: list });
+                        }}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
+                      />
+                    </div>
+                  )}
+
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                      Placeholder / Hint
                     </label>
                     <input
                       type="text"
@@ -1494,11 +1765,11 @@ export default function ServiceWizard() {
                     />
                   </div>
 
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
-                      Validation Controls
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
+                      Validation & Requirement
                     </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#334155', marginBottom: 12, cursor: 'pointer' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#334155', marginBottom: 10, cursor: 'pointer' }}>
                       <input
                         type="checkbox"
                         checked={serviceData.formElements[selectedElementIndex]?.required || false}
@@ -1519,7 +1790,7 @@ export default function ServiceWizard() {
                       }}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
                     >
-                      <option value="None">None (Standard Text)</option>
+                      <option value="None">None (Standard)</option>
                       <option value="Exact 6 Digit Number">Exact 6 Digit Number (PIN)</option>
                       <option value="10 Digit Mobile">10 Digit Mobile Number</option>
                       <option value="Valid Email">Valid Email Address</option>
@@ -1530,7 +1801,7 @@ export default function ServiceWizard() {
                 </>
               ) : (
                 <div style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
-                  Select an element to edit properties
+                  Select a field in the workspace to customize its properties.
                 </div>
               )}
             </div>
