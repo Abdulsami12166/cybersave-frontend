@@ -25,7 +25,7 @@ export default function Operators() {
 
   const fetchOperatorsRest = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       const res = await fetch(`${backendUrl}/api/v1/operators`);
       if (res.ok) {
         const json = await res.json();
@@ -204,7 +204,34 @@ export default function Operators() {
             >
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24}}>
                 <div style={{display: 'flex', gap: 12}}>
-                  <img src={op.avatarUrl || `https://i.pravatar.cc/150?img=${i+10}`} alt={op.name} style={{width: 48, height: 48, borderRadius: '50%', objectFit: 'cover'}} />
+                  {op.avatarUrl && op.avatarUrl.trim() !== '' ? (
+                    <img 
+                      src={op.avatarUrl} 
+                      alt={op.name} 
+                      style={{width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '2px solid #eff6ff'}} 
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: '50%',
+                      background: '#1E40AF',
+                      color: '#FFFFFF',
+                      fontSize: '16px',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '2px solid #eff6ff',
+                    }}>
+                      {op.name
+                        ? op.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+                        : 'OP'}
+                    </div>
+                  )}
                   <div>
                     <h3 style={{fontSize: 16, fontWeight: 700, color: '#111827', margin: 0}}>{op.name}</h3>
                     <p style={{fontSize: 13, color: '#6b7280', margin: '2px 0 0'}}>{op.role}</p>

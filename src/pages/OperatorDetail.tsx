@@ -131,7 +131,7 @@ export default function OperatorDetail() {
 
   const fetchOperatorRest = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       const res = await fetch(`${backendUrl}/api/v1/operators/${id}`);
       if (res.ok) {
         const json = await res.json();
@@ -242,7 +242,7 @@ export default function OperatorDetail() {
     setActionLoading(true);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       const res = await fetch(`${backendUrl}/api/v1/operators/${operator.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -270,7 +270,7 @@ export default function OperatorDetail() {
     setActionLoading(true);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       await fetch(`${backendUrl}/api/v1/operators/${operator.id}/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -296,7 +296,7 @@ export default function OperatorDetail() {
     if (!operator) return;
     setSavingPermissions(true);
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       await fetch(`${backendUrl}/api/v1/operators/${operator.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -415,7 +415,7 @@ export default function OperatorDetail() {
     formData.append('file', file);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       const res = await fetch(`${backendUrl}/api/admin/upload`, {
         method: 'POST',
         body: formData,
@@ -483,11 +483,35 @@ export default function OperatorDetail() {
       <div className="table-card" style={{ padding: '24px 32px', marginBottom: 24, borderRadius: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-            <img 
-              src={operator.avatarUrl || 'https://i.pravatar.cc/150?img=11'} 
-              alt={operator.name} 
-              style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '3px solid #eff6ff', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} 
-            />
+            {operator.avatarUrl && operator.avatarUrl.trim() !== '' ? (
+              <img 
+                src={operator.avatarUrl} 
+                alt={operator.name} 
+                style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '3px solid #eff6ff', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} 
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div style={{
+                width: 72,
+                height: 72,
+                borderRadius: '50%',
+                background: '#1E40AF',
+                color: '#FFFFFF',
+                fontSize: '24px',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                border: '3px solid #eff6ff',
+              }}>
+                {operator.name
+                  ? operator.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+                  : 'OP'}
+              </div>
+            )}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
                 <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
