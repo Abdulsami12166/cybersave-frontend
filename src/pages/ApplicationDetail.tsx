@@ -85,6 +85,9 @@ export default function ApplicationDetail() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [operators, setOperators] = useState<any[]>([]);
+  const [showAssignDropdown, setShowAssignDropdown] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const [checklist, setChecklist] = useState([
     { label: 'Identity verified against Aadhaar database', checked: true },
     { label: 'Current address matches official records', checked: true },
@@ -93,10 +96,32 @@ export default function ApplicationDetail() {
     { label: 'Operator physical verification done', checked: false },
   ]);
 
+  const fetchOperators = async () => {
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+      const res = await fetch(`${backendUrl}/api/admin/operators`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.operators) && data.operators.length > 0) {
+          setOperators(data.operators);
+          return;
+        }
+      }
+    } catch {}
+
+    // Fallback operators if backend offline
+    setOperators([
+      { id: 'op-1', name: 'Rajesh Kumar', role: 'Senior Field Officer (SDM Delhi)', status: 'Active', avatarUrl: 'https://ui-avatars.com/api/?name=Rajesh+Kumar&background=2563eb&color=fff' },
+      { id: 'op-2', name: 'Pooja Sharma', role: 'Verification Officer (HSR Layout)', status: 'Active', avatarUrl: 'https://ui-avatars.com/api/?name=Pooja+Sharma&background=10b981&color=fff' },
+      { id: 'op-3', name: 'Vikram Tiwari', role: 'VLE Field Specialist (Noida)', status: 'Active', avatarUrl: 'https://ui-avatars.com/api/?name=Vikram+Tiwari&background=f59e0b&color=fff' },
+      { id: 'op-4', name: 'Amit Singh', role: 'Identity Compliance Desk', status: 'Active', avatarUrl: 'https://ui-avatars.com/api/?name=Amit+Singh&background=7c3aed&color=fff' },
+    ]);
+  };
+
   // ponytail: REST-first fetch, socket for real-time updates
   const fetchApp = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       const res = await fetch(`${backendUrl}/api/v1/applications/${id}`);
       if (res.ok) {
         const raw = await res.json();
@@ -156,6 +181,7 @@ export default function ApplicationDetail() {
 
   useEffect(() => {
     fetchApp();
+    fetchOperators();
 
     if (socket && connected) {
       socket.emit('request_application_detail', { id });
@@ -177,15 +203,57 @@ export default function ApplicationDetail() {
       socket.on('applications_updated', handleUpdate);
       socket.on('application_status_changed', handleUpdate);
       socket.on('update_application_status_success', handleUpdate);
+      socket.on('application_assigned', handleUpdate);
 
       return () => {
         socket.off('response_application_detail', handleDetail);
         socket.off('applications_updated', handleUpdate);
         socket.off('application_status_changed', handleUpdate);
         socket.off('update_application_status_success', handleUpdate);
+        socket.off('application_assigned', handleUpdate);
       };
     }
   }, [socket, connected, id]);
+
+  const handleAssignOperator = async (operator: any) => {
+    if (!app) return;
+    setAssigning(true);
+    const opDisplayName = `${operator.name} (${operator.role || 'Operator'})`;
+
+    // 1. Socket broadcast
+    if (socket) {
+      socket.emit('assign_application', {
+        id: app.rawId || app.id,
+        applicationId: app.rawId || app.id,
+        operatorName: opDisplayName,
+        operatorId: operator.id,
+      });
+    }
+
+    // 2. REST API call
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+      const targetId = app.rawId || app.id;
+      const res = await fetch(`${backendUrl}/api/v1/applications/${targetId}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operatorName: opDisplayName, operatorId: operator.id }),
+      });
+
+      if (res.ok) {
+        setApp((prev: any) => ({ ...prev, assignedTo: opDisplayName }));
+        window.dispatchEvent(new CustomEvent('cybersave_toast', {
+          detail: { message: `Application #${app.refNumber || app.id} assigned to ${operator.name}!` },
+        }));
+      }
+    } catch (e) {
+      console.warn('Assignment error:', e);
+    } finally {
+      setAssigning(false);
+      setShowAssignDropdown(false);
+      fetchApp();
+    }
+  };
 
   const handleStatusChange = async (newStatus: 'APPROVED' | 'REJECTED' | 'IN_PROGRESS') => {
     if (!app) return;
@@ -205,7 +273,7 @@ export default function ApplicationDetail() {
 
     // REST for guaranteed persistence
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       const targetId = app.rawId || app.id;
       await fetch(`${backendUrl}/api/v1/applications/${targetId}/status`, {
         method: 'POST',
@@ -307,12 +375,99 @@ export default function ApplicationDetail() {
           </div>
 
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              className="date-picker-btn"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 13 }}
-            >
-              Assign To <ChevronDown size={14} />
-            </button>
+            {/* Assign To Dropdown */}
+            <div style={{ position: 'relative' }}>
+              <button
+                className="date-picker-btn"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 14px',
+                  fontSize: 13,
+                  background: showAssignDropdown ? '#EFF6FF' : '#FFFFFF',
+                  borderColor: showAssignDropdown ? '#2563EB' : '#E2E8F0',
+                  color: showAssignDropdown ? '#2563EB' : '#0F172A',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+                onClick={() => setShowAssignDropdown(prev => !prev)}
+                disabled={assigning}
+              >
+                {assigning ? 'Assigning...' : 'Assign To'} <ChevronDown size={14} />
+              </button>
+
+              {showAssignDropdown && (
+                <div style={{
+                  position: 'absolute',
+                  top: '110%',
+                  left: 0,
+                  zIndex: 50,
+                  minWidth: 260,
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: 10,
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05)',
+                  padding: '8px 0',
+                }}>
+                  <div style={{ padding: '6px 14px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Available Sub-Admins & Operators
+                  </div>
+
+                  {operators.map((op: any) => (
+                    <button
+                      key={op.id}
+                      onClick={() => handleAssignOperator(op)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: 'none',
+                        background: 'transparent',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <div style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: '50%',
+                        background: '#2563EB',
+                        color: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}>
+                        {op.name ? op.name.charAt(0).toUpperCase() : 'O'}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {op.name}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {op.role || 'Officer'}
+                        </div>
+                      </div>
+                      <span style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: '#10B981',
+                        flexShrink: 0,
+                      }} title="Online / Available" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               className="date-picker-btn"
               style={{ color: '#f59e0b', borderColor: '#fef3c7', display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', fontSize: 13 }}
