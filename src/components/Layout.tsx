@@ -81,6 +81,18 @@ export default function Layout() {
     }
   ];
 
+  const isSuperAdmin = 
+    !admin?.role || 
+    admin?.role === 'SUPER_ADMIN' || 
+    admin?.role === 'Super Admin' || 
+    admin?.role === 'ADMIN' || 
+    admin?.email === 'admin@cybersave.com' || 
+    admin?.email === 'officer.admin@cybersave.gov.in' ||
+    admin?.permissions?.includes('ALL') ||
+    admin?.permissions?.includes('SUPER_ADMIN') ||
+    !admin?.permissions ||
+    admin?.permissions?.length === 0;
+
   const defaultPermissions = ['DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'];
   const adminPermissions = (admin?.permissions && admin.permissions.length > 0)
     ? admin.permissions
@@ -171,7 +183,7 @@ export default function Layout() {
         <div style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '18px', flex: 1 }}>
           {navSections.map((section, sIdx) => {
             const visibleItems = section.items.filter(
-              item => !item.requiredPermission || adminPermissions.includes(item.requiredPermission)
+              item => isSuperAdmin || !item.requiredPermission || adminPermissions.includes(item.requiredPermission)
             );
 
             if (visibleItems.length === 0) return null;

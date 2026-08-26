@@ -49,11 +49,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (prof) {
             setAdmin((prev) => {
               const updated = {
-                ...(prev || { id: 'admin-root-01', email: 'admin@cybersave.com', permissions: ['ALL'] }),
+                ...(prev || { id: 'admin-root-01', email: 'admin@cybersave.com', role: 'Super Admin', permissions: ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'] }),
                 name: prof.name || prev?.name || 'Suresh Kumar Sharma',
                 email: prof.email || prev?.email || 'admin@cybersave.com',
                 phone: prof.phone || prev?.phone,
                 avatarUrl: prof.avatarUrl !== undefined ? prof.avatarUrl : prev?.avatarUrl,
+                role: prev?.role || 'Super Admin',
+                permissions: (prev?.permissions && prev.permissions.length > 0)
+                  ? prev.permissions
+                  : ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'],
               };
               localStorage.setItem('adminUser', JSON.stringify(updated));
               return updated;
@@ -113,7 +117,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateAdmin = (updatedData: Partial<Admin>) => {
     setAdmin((prev) => {
-      const merged = { ...(prev || { id: 'admin-1', email: 'officer.admin@cybersave.gov.in', permissions: ['all'] }), ...updatedData } as Admin;
+      const merged = { 
+        ...(prev || { id: 'admin-root-01', email: 'officer.admin@cybersave.gov.in', role: 'Super Admin', permissions: ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'] }), 
+        ...updatedData 
+      } as Admin;
+      if (!merged.permissions || merged.permissions.length === 0) {
+        merged.permissions = ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'];
+      }
       localStorage.setItem('adminUser', JSON.stringify(merged));
       return merged;
     });

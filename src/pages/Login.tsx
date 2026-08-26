@@ -27,10 +27,17 @@ const Login: React.FC = () => {
       });
 
       const { token, admin } = response.data;
-      login(token, admin);
+      const enrichedAdmin = {
+        ...admin,
+        role: admin?.role || 'Super Admin',
+        permissions: (admin?.permissions && admin.permissions.length > 0)
+          ? admin.permissions
+          : ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'],
+      };
+      login(token, enrichedAdmin);
       
       // Smart navigation based on assigned permissions
-      if (admin?.permissions && !admin.permissions.includes('DASHBOARD') && admin.email !== 'admin@cybersave.com') {
+      if (enrichedAdmin.permissions && !enrichedAdmin.permissions.includes('DASHBOARD') && enrichedAdmin.email !== 'admin@cybersave.com') {
         if (admin.permissions.includes('APPLICATIONS')) {
           navigate('/applications');
         } else if (admin.permissions.includes('USERS')) {
