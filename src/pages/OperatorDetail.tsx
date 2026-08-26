@@ -34,7 +34,7 @@ export default function OperatorDetail() {
   const [operator, setOperator] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'Overview' | 'Activity Log' | 'Permissions' | 'Documents'>('Overview');
-  const [twoFactorActive, setTwoFactorActive] = useState(true);
+  const [twoFactorActive, setTwoFactorActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modals state
@@ -136,12 +136,8 @@ export default function OperatorDetail() {
       if (res.ok) {
         const json = await res.json();
         setOperator(json);
-        
-        // Populate permissions
-        const currentPerms = Array.isArray(json.permissions) && json.permissions.length > 0
-          ? json.permissions
-          : ['REG_MANAGE_VEHICLES', 'DISPATCH_OPS_CONTROL', 'VERIFY_DRIVER_CREDS', 'BROADCAST_EMERGENCY_MSGS', 'CONF_SLACK_WEBHOOKS', 'GEN_MONTHLY_AUDITS', 'EXPORT_RAW_TELEMETRY', 'DASHBOARD', 'APPLICATIONS'];
-        setSelectedPermissions(currentPerms);
+        setSelectedPermissions(Array.isArray(json.permissions) ? json.permissions : ['DASHBOARD']);
+        setTwoFactorActive(Boolean(json.twoFactorEnabled));
 
         setEditForm({
           fullName: json.name || '',
@@ -170,10 +166,8 @@ export default function OperatorDetail() {
       const handleDetail = (data: any) => {
         if (data) {
           setOperator(data);
-          const currentPerms = Array.isArray(data.permissions) && data.permissions.length > 0
-            ? data.permissions
-            : ['REG_MANAGE_VEHICLES', 'DISPATCH_OPS_CONTROL', 'VERIFY_DRIVER_CREDS', 'BROADCAST_EMERGENCY_MSGS', 'CONF_SLACK_WEBHOOKS', 'GEN_MONTHLY_AUDITS', 'EXPORT_RAW_TELEMETRY', 'DASHBOARD', 'APPLICATIONS'];
-          setSelectedPermissions(currentPerms);
+          setSelectedPermissions(Array.isArray(data.permissions) ? data.permissions : ['DASHBOARD']);
+          setTwoFactorActive(Boolean(data.twoFactorEnabled));
           setEditForm({
             fullName: data.name || '',
             email: data.email || '',
@@ -384,7 +378,7 @@ export default function OperatorDetail() {
       window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'All operator credentials downloaded in ZIP archive!' } }));
     } catch (e) {
       console.error('ZIP generation error:', e);
-      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Failed to generate ZIP. Downloading direct files.' } }));
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Failed to generate ZIP.' } }));
     } finally {
       setDownloadingZip(false);
     }
@@ -447,36 +441,30 @@ export default function OperatorDetail() {
 
   const isSuspended = operator.status === 'Suspended';
   const metrics = operator.metrics || {
-    tasksCompleted: 342,
-    tasksMom: '+ 12% MoM',
-    avgResponseTime: '2.4 hrs',
-    responseTier: 'Top 5%',
-    satisfactionRating: 4.8,
-    documentsProcessed: 1247,
-    accuracyRate: '99.2% Accuracy',
+    tasksCompleted: 0,
+    tasksMom: '0% MoM',
+    avgResponseTime: '—',
+    responseTier: 'Standard',
+    satisfactionRating: 0,
+    documentsProcessed: 0,
+    accuracyRate: '0% Accuracy',
   };
   const activityLogs = operator.activityLogs || [];
   const reporting = operator.reportingStructure || {
-    supervisorName: 'Rajesh Kumar',
+    supervisorName: 'Super Administrator',
     supervisorRole: 'Direct Supervisor (Super Admin)',
     primaryShift: 'Day Shift (09:00 - 18:00)',
   };
 
-  // Documents list matching template
-  const rawDocuments = operator.documents && operator.documents.length > 0 ? operator.documents : [
-    { id: '1', fileName: 'Government ID (Aadhaar)', refNum: '•••• •••• 4820', type: 'PDF', status: 'Verified', uploadedAt: 'Jan 12, 2024', expires: 'N/A' },
-    { id: '2', fileName: 'Driving License', refNum: 'DL-3820240982', type: 'PDF', status: 'Valid', uploadedAt: 'Jan 15, 2024', expires: 'Jun 2028' },
-    { id: '3', fileName: 'PAN Card', refNum: 'BHIPK••••D', type: 'IMAGE', status: 'Verified', uploadedAt: 'Jan 12, 2024', expires: 'N/A' },
-    { id: '4', fileName: 'Passport Document', refNum: 'Z8320492', type: 'PDF', status: 'Verified', uploadedAt: 'Feb 02, 2024', expires: 'Dec 2032' },
-  ];
-
+  // 100% Real Documents from MongoDB
+  const rawDocuments = operator.documents || [];
   const totalDocsCount = rawDocuments.length;
   const verifiedDocsCount = rawDocuments.filter((d: any) => d.status === 'Verified' || d.status === 'Valid').length;
   const pendingDocsCount = rawDocuments.filter((d: any) => d.status === 'Pending').length;
-  const expiredDocsCount = rawDocuments.filter((d: any) => d.status === 'Expired' || d.status === 'Warning').length || 1;
+  const expiredDocsCount = rawDocuments.filter((d: any) => d.status === 'Expired' || d.status === 'Warning').length;
 
   const totalPermissionsCount = 14;
-  const activeGrantsCount = selectedPermissions.filter(p => ALL_PERMISSION_KEYS.includes(p)).length || 9;
+  const activeGrantsCount = selectedPermissions.filter(p => ALL_PERMISSION_KEYS.includes(p)).length;
 
   return (
     <>
@@ -520,7 +508,7 @@ export default function OperatorDetail() {
                 </span>
               </div>
               <div style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>
-                {operator.role || 'Senior Field Operator'} &bull; <span style={{ color: '#2563eb', fontWeight: 600 }}>{operator.department || 'Operations'}</span>
+                {operator.role || 'Field Operator'} &bull; <span style={{ color: '#2563eb', fontWeight: 600 }}>{operator.department || 'Operations'}</span>
               </div>
               <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
                 Employee ID: <strong style={{ color: '#334155' }}>{operator.employeeId}</strong> &bull; Joined: <strong style={{ color: '#334155' }}>{operator.joinedDate}</strong>
@@ -610,33 +598,33 @@ export default function OperatorDetail() {
                   <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4, letterSpacing: '0.04em' }}>
                     FULL NAME
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{operator.name}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{operator.name || '—'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4, letterSpacing: '0.04em' }}>
                     DATE OF BIRTH
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{operator.dob || '15/08/1988'}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{operator.dob || '—'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4, letterSpacing: '0.04em' }}>
                     EMAIL ADDRESS
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a', wordBreak: 'break-all' }}>{operator.email}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a', wordBreak: 'break-all' }}>{operator.email || '—'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4, letterSpacing: '0.04em' }}>
                     RESIDENTIAL ADDRESS
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a', lineHeight: 1.4 }}>
-                    {operator.address || '45, Sector 4, HSR Layout, Bengaluru, Karnataka - 560102'}
+                    {operator.address || '—'}
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4, letterSpacing: '0.04em' }}>
                     PHONE NUMBER
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{operator.phone}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{operator.phone || '—'}</div>
                 </div>
               </div>
             </div>
@@ -685,7 +673,7 @@ export default function OperatorDetail() {
                     LAST LOGIN DATE/TIME
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
-                    {operator.lastLogin || '28/01/2026, 09:12 AM'}
+                    {operator.lastLogin || 'Never logged in'}
                   </div>
                 </div>
                 <div>
@@ -693,15 +681,15 @@ export default function OperatorDetail() {
                     ACTIVE SESSIONS
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
-                    {operator.activeSessions || '2 open sessions (Bengaluru / Chrome)'}
+                    {operator.activeSessions || '0 active sessions'}
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4, letterSpacing: '0.04em' }}>
                     IP WHITELISTING
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: '#10b981' }}>
-                    {operator.ipWhitelisting || 'Enabled (Corporate Subnet)'}
+                  <div style={{ fontWeight: 600, fontSize: 13, color: operator.ipWhitelisting?.includes('Enabled') ? '#10b981' : '#94a3b8' }}>
+                    {operator.ipWhitelisting || 'Disabled'}
                   </div>
                 </div>
               </div>
@@ -729,7 +717,7 @@ export default function OperatorDetail() {
                   <tbody>
                     {activityLogs.length === 0 ? (
                       <tr>
-                        <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
+                        <td colSpan={4} style={{ textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
                           No recent activity recorded for this operator.
                         </td>
                       </tr>
@@ -772,7 +760,7 @@ export default function OperatorDetail() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
                 <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                  Showing last {Math.min(5, activityLogs.length)} security records
+                  Showing {Math.min(5, activityLogs.length)} of {activityLogs.length} records
                 </span>
                 <Link to="/audit" style={{ color: '#2563eb', fontSize: 12, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                   View All Logs <ArrowRight size={13} />
@@ -795,9 +783,9 @@ export default function OperatorDetail() {
               <div style={{ marginBottom: 22 }}>
                 <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Tasks Completed</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>{metrics.tasksCompleted}</div>
-                  <span style={{ background: '#d1fae5', color: '#10b981', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
-                    {metrics.tasksMom || '↑ 12% MoM'}
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>{metrics.tasksCompleted ?? 0}</div>
+                  <span style={{ background: metrics.tasksCompleted > 0 ? '#d1fae5' : '#f1f5f9', color: metrics.tasksCompleted > 0 ? '#10b981' : '#64748b', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
+                    {metrics.tasksMom || '0% MoM'}
                   </span>
                 </div>
               </div>
@@ -805,9 +793,9 @@ export default function OperatorDetail() {
               <div style={{ marginBottom: 22 }}>
                 <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Avg. Response Time</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>{metrics.avgResponseTime || '2.4 hrs'}</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>{metrics.avgResponseTime || '—'}</div>
                   <span style={{ background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
-                    {metrics.responseTier || 'Top 5%'}
+                    {metrics.responseTier || 'Standard'}
                   </span>
                 </div>
               </div>
@@ -815,15 +803,15 @@ export default function OperatorDetail() {
               <div style={{ marginBottom: 22 }}>
                 <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Client Satisfaction Rating</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', gap: 3, color: '#f59e0b' }}>
-                    <Star size={16} fill="#f59e0b" />
-                    <Star size={16} fill="#f59e0b" />
-                    <Star size={16} fill="#f59e0b" />
-                    <Star size={16} fill="#f59e0b" />
-                    <Star size={16} color="#d1d5db" />
+                  <div style={{ display: 'flex', gap: 3, color: metrics.satisfactionRating > 0 ? '#f59e0b' : '#cbd5e1' }}>
+                    <Star size={16} fill={metrics.satisfactionRating >= 1 ? '#f59e0b' : '#e2e8f0'} color={metrics.satisfactionRating >= 1 ? '#f59e0b' : '#cbd5e1'} />
+                    <Star size={16} fill={metrics.satisfactionRating >= 2 ? '#f59e0b' : '#e2e8f0'} color={metrics.satisfactionRating >= 2 ? '#f59e0b' : '#cbd5e1'} />
+                    <Star size={16} fill={metrics.satisfactionRating >= 3 ? '#f59e0b' : '#e2e8f0'} color={metrics.satisfactionRating >= 3 ? '#f59e0b' : '#cbd5e1'} />
+                    <Star size={16} fill={metrics.satisfactionRating >= 4 ? '#f59e0b' : '#e2e8f0'} color={metrics.satisfactionRating >= 4 ? '#f59e0b' : '#cbd5e1'} />
+                    <Star size={16} fill={metrics.satisfactionRating >= 5 ? '#f59e0b' : '#e2e8f0'} color={metrics.satisfactionRating >= 5 ? '#f59e0b' : '#cbd5e1'} />
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
-                    {metrics.satisfactionRating || 4.8} / 5
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                    {metrics.satisfactionRating > 0 ? `${metrics.satisfactionRating} / 5` : 'No reviews'}
                   </div>
                 </div>
               </div>
@@ -832,10 +820,10 @@ export default function OperatorDetail() {
                 <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Documents Processed</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a' }}>
-                    {Number(metrics.documentsProcessed).toLocaleString()}
+                    {metrics.documentsProcessed ?? 0}
                   </div>
-                  <span style={{ background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
-                    {metrics.accuracyRate || '99.2% Accuracy'}
+                  <span style={{ background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
+                    {metrics.accuracyRate || '0% Accuracy'}
                   </span>
                 </div>
               </div>
@@ -852,7 +840,7 @@ export default function OperatorDetail() {
                   style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} 
                 />
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{reporting.supervisorName || 'Rajesh Kumar'}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{reporting.supervisorName || 'Super Administrator'}</div>
                   <div style={{ fontSize: 12, color: '#64748b' }}>{reporting.supervisorRole || 'Direct Supervisor (Super Admin)'}</div>
                 </div>
               </div>
@@ -891,36 +879,44 @@ export default function OperatorDetail() {
                 </tr>
               </thead>
               <tbody>
-                {activityLogs.map((log: any, idx: number) => {
-                  const isSuccess = log.status === 'SUCCESS';
-                  const isWarning = log.status === 'WARNING';
-                  return (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '14px 16px', color: '#475569' }}>{log.dateTime}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>{log.action}</td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        <span style={{
-                          background: isSuccess ? '#d1fae5' : isWarning ? '#fef3c7' : '#fee2e2',
-                          color: isSuccess ? '#059669' : isWarning ? '#d97706' : '#dc2626',
-                          padding: '3px 10px',
-                          borderRadius: 12,
-                          fontSize: 11,
-                          fontWeight: 700
-                        }}>
-                          {log.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#64748b' }}>{log.ipAddress}</td>
-                    </tr>
-                  );
-                })}
+                {activityLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>
+                      No activity logs recorded yet for this operator account.
+                    </td>
+                  </tr>
+                ) : (
+                  activityLogs.map((log: any, idx: number) => {
+                    const isSuccess = log.status === 'SUCCESS';
+                    const isWarning = log.status === 'WARNING';
+                    return (
+                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '14px 16px', color: '#475569' }}>{log.dateTime}</td>
+                        <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>{log.action}</td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                          <span style={{
+                            background: isSuccess ? '#d1fae5' : isWarning ? '#fef3c7' : '#fee2e2',
+                            color: isSuccess ? '#059669' : isWarning ? '#d97706' : '#dc2626',
+                            padding: '3px 10px',
+                            borderRadius: 12,
+                            fontSize: 11,
+                            fontWeight: 700
+                          }}>
+                            {log.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#64748b' }}>{log.ipAddress}</td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* ─── TAB 3: PERMISSIONS (Matching Image 1) ─── */}
+      {/* ─── TAB 3: PERMISSIONS ─── */}
       {activeTab === 'Permissions' && (
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, alignItems: 'start' }}>
           {/* Left Column */}
@@ -937,7 +933,7 @@ export default function OperatorDetail() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
                 <div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Current Security Role</div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: '#2563eb' }}>Senior Field Operator</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: '#2563eb' }}>{operator.role || 'Field Operator'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Permissions Review Status</div>
@@ -945,7 +941,7 @@ export default function OperatorDetail() {
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Last Reviewed</div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>Jan 24, 2026</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>{operator.joinedDate}</div>
                 </div>
               </div>
             </div>
@@ -1141,24 +1137,10 @@ export default function OperatorDetail() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>Enabled Webhook Alerts</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Jan 24</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>Permissions Synchronized</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Live</div>
                   </div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Granted by Super Admin (Self service profile sync)</div>
-                </div>
-                <div style={{ paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>Disabled Security Access Mod</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Jan 12</div>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Revoked by System Policy (Audit requirement #443)</div>
-                </div>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a' }}>Verified Document Audit auth</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Jan 12</div>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>Approved by Supervisor Rajesh Kumar</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Managed via Centralized Admin Access Control</div>
                 </div>
               </div>
             </div>
@@ -1173,7 +1155,7 @@ export default function OperatorDetail() {
                   style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} 
                 />
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>{reporting.supervisorName || 'Rajesh Kumar'}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>{reporting.supervisorName || 'Super Administrator'}</div>
                   <div style={{ fontSize: 11.5, color: '#64748b' }}>{reporting.supervisorRole || 'Direct Supervisor (Super Admin)'}</div>
                 </div>
               </div>
@@ -1187,7 +1169,7 @@ export default function OperatorDetail() {
         </div>
       )}
 
-      {/* ─── TAB 4: DOCUMENTS (Matching Image 2) ─── */}
+      {/* ─── TAB 4: DOCUMENTS ─── */}
       {activeTab === 'Documents' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           
@@ -1234,108 +1216,110 @@ export default function OperatorDetail() {
               <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 20px 0', color: '#0f172a' }}>Identity & Verification Documents</h3>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
-                  {rawDocuments.map((doc: any, i: number) => {
-                    const isImage = doc.type === 'IMAGE' || doc.type === 'IMG';
-                    const isValid = doc.status === 'Valid';
-                    const isVerified = doc.status === 'Verified' || isValid;
+                {rawDocuments.length === 0 ? (
+                  <div style={{ padding: '40px 20px', textAlign: 'center', color: '#94a3b8', border: '1px dashed #e2e8f0', borderRadius: 12 }}>
+                    <FileText size={32} style={{ margin: '0 auto 12px', color: '#cbd5e1' }} />
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#475569', marginBottom: 4 }}>No documents uploaded yet</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>Upload identity proofs and compliance documentation using the upload panel.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
+                    {rawDocuments.map((doc: any, i: number) => {
+                      const isImage = doc.type === 'IMAGE' || doc.type === 'IMG';
+                      const isValid = doc.status === 'Valid';
+                      const isVerified = doc.status === 'Verified' || isValid;
 
-                    return (
-                      <div 
-                        key={i} 
-                        style={{
-                          border: '1px solid #e2e8f0', 
-                          borderRadius: 12, 
-                          padding: 16, 
-                          background: '#ffffff',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          textAlign: 'center',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                        }}
-                      >
-                        {/* Icon Card Box */}
-                        <div style={{
-                          width: 64, 
-                          height: 64, 
-                          borderRadius: 12, 
-                          background: isImage ? '#f0fdf4' : '#fef2f2',
-                          color: isImage ? '#16a34a' : '#ef4444',
-                          border: `1px solid ${isImage ? '#dcfce7' : '#fee2e2'}`,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          marginBottom: 12
-                        }}>
-                          {isImage ? <FileImage size={24} /> : <FileText size={24} />}
-                          <span style={{ fontSize: 10, fontWeight: 800, marginTop: 2 }}>{doc.type}</span>
-                        </div>
-
-                        {/* Title */}
-                        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', marginBottom: 2, wordBreak: 'break-word', minHeight: 34 }}>
-                          {doc.fileName}
-                        </div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
-                          {doc.refNum || `DOC-${(doc.id || i + 1).slice(-4).toUpperCase()}`}
-                        </div>
-
-                        {/* Badge + Action Icons */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12, width: '100%' }}>
-                          <span style={{
-                            background: isValid ? '#ccfbf1' : isVerified ? '#d1fae5' : '#fee2e2',
-                            color: isValid ? '#0f766e' : isVerified ? '#065f46' : '#991b1b',
-                            padding: '2px 8px',
-                            borderRadius: 8,
-                            fontSize: 10.5,
-                            fontWeight: 700
+                      return (
+                        <div 
+                          key={i} 
+                          style={{
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: 12, 
+                            padding: 16, 
+                            background: '#ffffff',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            textAlign: 'center',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                          }}
+                        >
+                          {/* Icon Card Box */}
+                          <div style={{
+                            width: 64, 
+                            height: 64, 
+                            borderRadius: 12, 
+                            background: isImage ? '#f0fdf4' : '#fef2f2',
+                            color: isImage ? '#16a34a' : '#ef4444',
+                            border: `1px solid ${isImage ? '#dcfce7' : '#fee2e2'}`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginBottom: 12
                           }}>
-                            {doc.status || 'Verified'}
-                          </span>
-                          
-                          <button
-                            onClick={() => {
-                              if (doc.fileUrl) {
-                                setPreviewDoc({ url: doc.fileUrl, title: doc.fileName });
-                              } else {
-                                window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Viewing vault record: ${doc.fileName}` } }));
-                              }
-                            }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 2, display: 'flex' }}
-                            title="Inspect Document"
-                          >
-                            <Eye size={15} />
-                          </button>
+                            {isImage ? <FileImage size={24} /> : <FileText size={24} />}
+                            <span style={{ fontSize: 10, fontWeight: 800, marginTop: 2 }}>{doc.type}</span>
+                          </div>
 
-                          <button
-                            onClick={() => {
-                              if (doc.fileUrl) {
-                                const a = document.createElement('a');
-                                a.href = doc.fileUrl;
-                                a.download = doc.fileName;
-                                a.target = '_blank';
-                                a.click();
-                              } else {
-                                window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Downloading ${doc.fileName}` } }));
-                              }
-                            }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 2, display: 'flex' }}
-                            title="Download Proof"
-                          >
-                            <Download size={15} />
-                          </button>
-                        </div>
+                          {/* Title */}
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', marginBottom: 2, wordBreak: 'break-word', minHeight: 34 }}>
+                            {doc.fileName}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+                            {doc.refNum || `DOC-${(doc.id || i + 1).slice(-4).toUpperCase()}`}
+                          </div>
 
-                        {/* Meta info */}
-                        <div style={{ fontSize: 10.5, color: '#94a3b8', borderTop: '1px solid #f1f5f9', paddingTop: 10, width: '100%', textAlign: 'left', lineHeight: 1.4 }}>
-                          <div>Uploaded: <strong style={{ color: '#475569' }}>{doc.uploadedAt}</strong></div>
-                          <div>Expires: <strong style={{ color: '#475569' }}>{doc.expires || 'N/A'}</strong></div>
+                          {/* Badge + Action Icons */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12, width: '100%' }}>
+                            <span style={{
+                              background: isValid ? '#ccfbf1' : isVerified ? '#d1fae5' : '#fee2e2',
+                              color: isValid ? '#0f766e' : isVerified ? '#065f46' : '#991b1b',
+                              padding: '2px 8px',
+                              borderRadius: 8,
+                              fontSize: 10.5,
+                              fontWeight: 700
+                            }}>
+                              {doc.status || 'Verified'}
+                            </span>
+                            
+                            {doc.fileUrl && (
+                              <button
+                                onClick={() => setPreviewDoc({ url: doc.fileUrl, title: doc.fileName })}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 2, display: 'flex' }}
+                                title="Inspect Document"
+                              >
+                                <Eye size={15} />
+                              </button>
+                            )}
+
+                            {doc.fileUrl && (
+                              <button
+                                onClick={() => {
+                                  const a = document.createElement('a');
+                                  a.href = doc.fileUrl;
+                                  a.download = doc.fileName;
+                                  a.target = '_blank';
+                                  a.click();
+                                }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 2, display: 'flex' }}
+                                title="Download Proof"
+                              >
+                                <Download size={15} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Meta info */}
+                          <div style={{ fontSize: 10.5, color: '#94a3b8', borderTop: '1px solid #f1f5f9', paddingTop: 10, width: '100%', textAlign: 'left', lineHeight: 1.4 }}>
+                            <div>Uploaded: <strong style={{ color: '#475569' }}>{doc.uploadedAt}</strong></div>
+                            <div>Expires: <strong style={{ color: '#475569' }}>{doc.expires || 'N/A'}</strong></div>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Bottom Banner */}
@@ -1358,7 +1342,7 @@ export default function OperatorDetail() {
                     className="date-picker-btn" 
                     style={{ borderColor: '#2563eb', color: '#2563eb', background: 'white', padding: '7px 16px', fontSize: 12.5 }}
                     onClick={handleDownloadAllZip}
-                    disabled={downloadingZip}
+                    disabled={downloadingZip || rawDocuments.length === 0}
                   >
                     {downloadingZip ? 'Archiving...' : 'Download All (ZIP)'}
                   </button>
@@ -1375,7 +1359,7 @@ export default function OperatorDetail() {
 
             </div>
 
-            {/* Right Column: Upload & Compliance */}
+            {/* Right Column: Upload */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               
               {/* Upload New Document */}
@@ -1413,7 +1397,7 @@ export default function OperatorDetail() {
                     borderRadius: '50%', 
                     background: '#eff6ff', 
                     color: '#2563eb', 
-                    display: 'flex', 
+                    display: 'center', 
                     justifyContent: 'center', 
                     alignItems: 'center', 
                     marginBottom: 10 
@@ -1428,35 +1412,6 @@ export default function OperatorDetail() {
                   </div>
                   <div style={{ fontSize: 10.5, color: '#94a3b8', textAlign: 'center' }}>
                     Supported formats: PDF, JPG, PNG (Max 10MB)
-                  </div>
-                </div>
-              </div>
-
-              {/* Compliance Action Required */}
-              <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 18px 0', color: '#0f172a' }}>Compliance Action Required</h3>
-                
-                <div style={{ paddingBottom: 16, borderBottom: '1px solid #f1f5f9', marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>Hazmat Handling Expired</div>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#dc2626', background: '#fee2e2', padding: '2px 6px', borderRadius: 6 }}>
-                      Action Required
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: '#64748b', lineHeight: 1.4 }}>
-                    Operator cannot be assigned to Tier-2 transit tasks involving chemical assets.
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#d97706' }}>Driving License Renew</div>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: '#d97706', background: '#fef3c7', padding: '2px 6px', borderRadius: 6 }}>
-                      4 Years Left
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: '#64748b', lineHeight: 1.4 }}>
-                    Regular permit audit recommended before the scheduled Q3 compliance checklist.
                   </div>
                 </div>
               </div>
@@ -1508,6 +1463,7 @@ export default function OperatorDetail() {
                     type="text" 
                     value={editForm.phone} 
                     onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    placeholder="Enter phone number"
                     style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                   />
                 </div>
@@ -1520,7 +1476,7 @@ export default function OperatorDetail() {
                     type="text" 
                     value={editForm.dob} 
                     onChange={(e) => setEditForm({ ...editForm, dob: e.target.value })}
-                    placeholder="15/08/1988"
+                    placeholder="DD/MM/YYYY"
                     style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                   />
                 </div>
@@ -1530,7 +1486,7 @@ export default function OperatorDetail() {
                     type="text" 
                     value={editForm.district} 
                     onChange={(e) => setEditForm({ ...editForm, district: e.target.value })}
-                    placeholder="Bengaluru"
+                    placeholder="District name"
                     style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
                   />
                 </div>
@@ -1541,6 +1497,7 @@ export default function OperatorDetail() {
                 <textarea 
                   value={editForm.address} 
                   onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  placeholder="Enter full address"
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, height: 60 }}
                 />
               </div>

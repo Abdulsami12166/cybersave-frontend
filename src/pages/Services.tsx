@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
-import { Grid, CheckCircle, Clock, FileText, Users, ChevronDown, ChevronUp, Eye, Edit3 } from 'lucide-react';
+import { Grid, CheckCircle, Clock, FileText, Users, ChevronDown, ChevronUp, Eye, Edit3, Plus } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
 export default function Services() {
+  const navigate = useNavigate();
   const { socket, connected } = useSocket();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -47,11 +49,9 @@ export default function Services() {
     };
   }, [socket, connected]);
 
-  const handleEdit = (id: string, currentName: string) => {
-    const newName = window.prompt("Edit Service Name:", currentName);
-    if (newName && socket) {
-      socket.emit('edit_service', { id, name: newName });
-    }
+  const handleOpenService = (sub: any, mode: 'view' | 'edit') => {
+    const targetId = sub.id || sub.slug || sub.name;
+    navigate(`/services/create?id=${encodeURIComponent(targetId)}&mode=${mode}&step=1`);
   };
 
   // Default rich categories matching both mobile & admin scheme pipelines
@@ -143,7 +143,7 @@ export default function Services() {
           <p>Configure workflows, track real citizen application volume, and inspect department SLAs.</p>
         </div>
         <div style={{display: 'flex', gap: 12}}>
-          <button className="action-btn">+ Add New Service</button>
+          <button className="action-btn" onClick={() => navigate('/services/create')}>+ Add New Service</button>
         </div>
       </div>
 
@@ -293,15 +293,15 @@ export default function Services() {
                         <td style={{padding: '12px 24px', textAlign: 'right'}}>
                           <button 
                             className="action-btn" 
-                            style={{padding: '5px 10px', fontSize: 12, marginRight: 8, background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1'}} 
-                            onClick={() => window.alert(`Service: ${sub.name}\nDepartment: ${category.department}\nSLA: ${sub.sla}\nFee: ₹${sub.fee}\nApplicants: ${sub.appliedText || `${sub.appliedCount || 1} applied`}`)}
+                            style={{padding: '5px 10px', fontSize: 12, marginRight: 8, background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1', cursor: 'pointer'}} 
+                            onClick={() => handleOpenService(sub, 'view')}
                           >
                             <Eye size={12} style={{marginRight: 4}} /> View
                           </button>
                           <button 
                             className="action-btn" 
-                            style={{padding: '5px 10px', fontSize: 12}} 
-                            onClick={() => handleEdit(sub.id, sub.name)}
+                            style={{padding: '5px 10px', fontSize: 12, cursor: 'pointer'}} 
+                            onClick={() => handleOpenService(sub, 'edit')}
                           >
                             <Edit3 size={12} style={{marginRight: 4}} /> Edit
                           </button>
