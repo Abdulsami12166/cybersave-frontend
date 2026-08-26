@@ -124,6 +124,21 @@ const Login: React.FC = () => {
           </div>
 
           <form onSubmit={handleLogin} className="login-form">
+            {sessionStorage.getItem('sessionExpiredMsg') && (
+              <div style={{
+                background: '#FEF3C7',
+                border: '1px solid #F59E0B',
+                color: '#92400E',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                marginBottom: '14px',
+              }}>
+                {sessionStorage.getItem('sessionExpiredMsg')}
+              </div>
+            )}
+
             {error && (
               <div className="login-error">
                 {error}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import { showToast } from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -20,6 +21,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
 export default function Settings() {
   const { admin, updateAdmin } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -27,6 +30,7 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<'profile' | 'sla' | 'settlement' | 'security'>('profile');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
 
   // Profile State
   const [name, setName] = useState(admin?.name || 'Suresh Kumar Sharma');
@@ -57,16 +61,86 @@ export default function Settings() {
   const [twoFactor, setTwoFactor] = useState(true);
   const [sessionTimeout, setSessionTimeout] = useState('30');
 
+  // Load permanent saved settings from DB on mount
   useEffect(() => {
-    if (admin) {
-      if (admin.name) setName(admin.name);
-      if (admin.email) setEmail(admin.email);
-      if (admin.phone) setPhone(admin.phone);
-      if (admin.avatarUrl) setAvatar(admin.avatarUrl);
-    }
-  }, [admin]);
+    // 1. Fetch Profile
+    const fetchProfile = async () => {
+      try {
+        const res = await axios.get(`${BACKEND_BASE}/api/admin/profile`);
+        if (res.data) {
+          const d = res.data;
+          if (d.name) setName(d.name);
+          if (d.email) setEmail(d.email);
+          if (d.phone) setPhone(d.phone);
+          if (d.avatarUrl) setAvatar(d.avatarUrl);
+          if (d.kendraId) setKendraId(d.kendraId);
+          if (d.designation) setDesignation(d.designation);
+          if (d.district) setDistrict(d.district);
+        }
+      } catch {
+        // Local storage fallback
+        const savedSettings = localStorage.getItem('adminSettings');
+        if (savedSettings) {
+          try {
+            const parsed = JSON.parse(savedSettings);
+            if (parsed.kendraId) setKendraId(parsed.kendraId);
+            if (parsed.designation) setDesignation(parsed.designation);
+            if (parsed.district) setDistrict(parsed.district);
+          } catch {}
+        }
+      }
+    };
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 2. Fetch Operational Settings
+    const fetchSettings = async () => {
+      try {
+        const res = await axios.get(`${BACKEND_BASE}/api/admin/settings`);
+        if (res.data?.settings) {
+          const s = res.data.settings;
+          if (s.slaHours) setSlaHours(s.slaHours);
+          if (typeof s.autoAssign === 'boolean') setAutoAssign(s.autoAssign);
+          if (typeof s.smsNotifs === 'boolean') setSmsNotifs(s.smsNotifs);
+          if (typeof s.whatsappNotifs === 'boolean') setWhatsappNotifs(s.whatsappNotifs);
+          if (typeof s.strictOcr === 'boolean') setStrictOcr(s.strictOcr);
+          if (s.bankAccount) setBankAccount(s.bankAccount);
+          if (s.ifscCode) setIfscCode(s.ifscCode);
+          if (s.settlementCycle) setSettlementCycle(s.settlementCycle);
+          if (typeof s.autoRefund === 'boolean') setAutoRefund(s.autoRefund);
+          if (typeof s.twoFactor === 'boolean') setTwoFactor(s.twoFactor);
+          if (s.sessionTimeout) {
+            setSessionTimeout(s.sessionTimeout);
+            localStorage.setItem('adminSessionTimeout', s.sessionTimeout);
+          }
+        }
+      } catch {
+        const savedSettings = localStorage.getItem('adminSettings');
+        if (savedSettings) {
+          try {
+            const parsed = JSON.parse(savedSettings);
+            if (parsed.slaHours) setSlaHours(parsed.slaHours);
+            if (typeof parsed.autoAssign === 'boolean') setAutoAssign(parsed.autoAssign);
+            if (typeof parsed.smsNotifs === 'boolean') setSmsNotifs(parsed.smsNotifs);
+            if (typeof parsed.whatsappNotifs === 'boolean') setWhatsappNotifs(parsed.whatsappNotifs);
+            if (typeof parsed.strictOcr === 'boolean') setStrictOcr(parsed.strictOcr);
+            if (parsed.bankAccount) setBankAccount(parsed.bankAccount);
+            if (parsed.ifscCode) setIfscCode(parsed.ifscCode);
+            if (parsed.settlementCycle) setSettlementCycle(parsed.settlementCycle);
+            if (typeof parsed.autoRefund === 'boolean') setAutoRefund(parsed.autoRefund);
+            if (typeof parsed.twoFactor === 'boolean') setTwoFactor(parsed.twoFactor);
+            if (parsed.sessionTimeout) {
+              setSessionTimeout(parsed.sessionTimeout);
+              localStorage.setItem('adminSessionTimeout', parsed.sessionTimeout);
+            }
+          } catch {}
+        }
+      }
+    };
+
+    fetchProfile();
+    fetchSettings();
+  }, []);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -76,33 +150,92 @@ export default function Settings() {
     }
 
     setUploading(true);
+    // Instant local preview
     const reader = new FileReader();
     reader.onload = (event) => {
       if (event.target?.result) {
-        const dataUrl = event.target.result as string;
-        setAvatar(dataUrl);
-        if (updateAdmin) {
-          updateAdmin({ avatarUrl: dataUrl });
-        }
-        showToast('Officer photograph updated successfully');
+        setAvatar(event.target.result as string);
       }
-      setUploading(false);
     };
     reader.readAsDataURL(file);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'cybersave/avatars');
+      const uploadRes = await axios.post(`${BACKEND_BASE}/api/admin/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const uploadedUrl = uploadRes.data?.url || uploadRes.data?.secure_url;
+      if (uploadedUrl) {
+        setAvatar(uploadedUrl);
+        if (updateAdmin) {
+          updateAdmin({ avatarUrl: uploadedUrl });
+        }
+        await axios.put(`${BACKEND_BASE}/api/admin/profile`, { avatarUrl: uploadedUrl });
+      }
+      showToast('Officer photograph uploaded & secured successfully');
+    } catch {
+      showToast('Photo uploaded locally');
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const handleSaveAll = () => {
+  const handleSaveAll = async () => {
     setSaving(true);
-    setTimeout(() => {
+
+    const profilePayload = {
+      name,
+      email,
+      phone,
+      avatarUrl: avatar,
+      kendraId,
+      designation,
+      district,
+    };
+
+    const settingsPayload = {
+      slaHours,
+      autoAssign,
+      smsNotifs,
+      whatsappNotifs,
+      strictOcr,
+      bankAccount,
+      ifscCode,
+      settlementCycle,
+      autoRefund,
+      twoFactor,
+      sessionTimeout,
+    };
+
+    try {
+      // 1. Save Profile to DB
+      await axios.put(`${BACKEND_BASE}/api/admin/profile`, profilePayload);
+      // 2. Save Operational Settings to DB
+      await axios.put(`${BACKEND_BASE}/api/admin/settings`, settingsPayload);
+
+      // 3. Update Auth state and Local Storage for instant reload retention
       if (updateAdmin) {
         updateAdmin({ name, email, phone, avatarUrl: avatar });
       }
+      localStorage.setItem('adminSettings', JSON.stringify({ ...profilePayload, ...settingsPayload }));
+      localStorage.setItem('adminSessionTimeout', sessionTimeout);
+
+      showToast('Operational configuration & profile saved permanently to database');
+    } catch (e: any) {
+      if (updateAdmin) {
+        updateAdmin({ name, email, phone, avatarUrl: avatar });
+      }
+      localStorage.setItem('adminSettings', JSON.stringify({ ...profilePayload, ...settingsPayload }));
+      localStorage.setItem('adminSessionTimeout', sessionTimeout);
+      showToast('Settings saved locally');
+    } finally {
       setSaving(false);
-      showToast('Operational configuration & profile saved successfully');
-    }, 600);
+    }
   };
 
-  const handlePasswordUpdate = () => {
+  const handlePasswordUpdate = async () => {
     if (!newPass || !confirmPass) {
       showToast('Please provide both new password and confirmation', 'error');
       return;
@@ -111,14 +244,29 @@ export default function Settings() {
       showToast('Passwords do not match', 'error');
       return;
     }
-    if (newPass.length < 8) {
-      showToast('Password must be at least 8 characters long', 'error');
+    if (newPass.length < 6) {
+      showToast('Password must be at least 6 characters long', 'error');
       return;
     }
-    setCurrentPass('');
-    setNewPass('');
-    setConfirmPass('');
-    showToast('Officer security credentials updated');
+
+    setUpdatingPassword(true);
+    try {
+      const res = await axios.post(`${BACKEND_BASE}/api/admin/change-password`, {
+        currentPassword: currentPass,
+        newPassword: newPass,
+        confirmPassword: confirmPass,
+      });
+
+      setCurrentPass('');
+      setNewPass('');
+      setConfirmPass('');
+      showToast(res.data?.message || 'Officer security credentials updated & secured successfully');
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || 'Failed to update password. Please check your current password.';
+      showToast(errorMsg, 'error');
+    } finally {
+      setUpdatingPassword(false);
+    }
   };
 
   return (
@@ -769,18 +917,19 @@ export default function Settings() {
 
             <button
               onClick={handlePasswordUpdate}
+              disabled={updatingPassword}
               style={{
-                background: '#0F172A',
+                background: updatingPassword ? '#64748B' : '#0F172A',
                 color: '#FFFFFF',
                 border: 'none',
                 borderRadius: '6px',
                 padding: '8px 16px',
                 fontSize: '12.5px',
                 fontWeight: 700,
-                cursor: 'pointer'
+                cursor: updatingPassword ? 'not-allowed' : 'pointer'
               }}
             >
-              Update Password
+              {updatingPassword ? 'Verifying & Updating...' : 'Update Password'}
             </button>
           </div>
 

@@ -41,16 +41,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, []);
 
+  // 30-Minute Inactivity Auto-Lock Tracker
+  useEffect(() => {
+    if (!token) return;
+
+    const getTimeoutMs = () => {
+      const minutesStr = localStorage.getItem('adminSessionTimeout') || '30';
+      const minutes = parseInt(minutesStr, 10) || 30;
+      return minutes * 60 * 1000;
+    };
+
+    let timeoutId: NodeJS.Timeout;
+
+    const resetInactivityTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        // 30 minutes of inactivity elapsed
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminUser');
+        sessionStorage.setItem('sessionExpiredMsg', 'Session expired due to 30 minutes of inactivity. Please log in again to continue.');
+        setToken(null);
+        setAdmin(null);
+      }, getTimeoutMs());
+    };
+
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll', 'click'];
+    events.forEach((evt) => window.addEventListener(evt, resetInactivityTimer, { passive: true }));
+    resetInactivityTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach((evt) => window.removeEventListener(evt, resetInactivityTimer));
+    };
+  }, [token]);
+
   const login = (newToken: string, newAdmin: Admin) => {
     localStorage.setItem('adminToken', newToken);
     localStorage.setItem('adminUser', JSON.stringify(newAdmin));
+    sessionStorage.removeItem('sessionExpiredMsg');
     setToken(newToken);
     setAdmin(newAdmin);
   };
 
   const updateAdmin = (updatedData: Partial<Admin>) => {
     setAdmin((prev) => {
-      const merged = { ...(prev || { id: 'admin-1', email: 'admin@cybersave.com', permissions: ['all'] }), ...updatedData } as Admin;
+      const merged = { ...(prev || { id: 'admin-1', email: 'officer.admin@cybersave.gov.in', permissions: ['all'] }), ...updatedData } as Admin;
       localStorage.setItem('adminUser', JSON.stringify(merged));
       return merged;
     });
@@ -59,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminUser');
+    sessionStorage.removeItem('sessionExpiredMsg');
     setToken(null);
     setAdmin(null);
   };
