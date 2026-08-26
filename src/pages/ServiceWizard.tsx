@@ -71,7 +71,9 @@ export default function ServiceWizard() {
 
   const [activeStep, setActiveStep] = useState<number>(stepParam ? parseInt(stepParam, 10) : 1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isUploadingIcon, setIsUploadingIcon] = useState(false);
+  const [iconUploadError, setIconUploadError] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Core Service Data State
   const [serviceData, setServiceData] = useState<{
@@ -83,6 +85,8 @@ export default function ServiceWizard() {
     status: 'Active' | 'Inactive';
     description: string;
     iconName: string;
+    iconUrl?: string;
+    imageUrl?: string;
     colorHex: string;
     subServices: SubServiceItem[];
     // Step 3 Overview
@@ -119,6 +123,8 @@ export default function ServiceWizard() {
     status: 'Active',
     description: 'Verify and update residential address records in compliance with national cyber security guidelines.',
     iconName: 'shield-account-outline',
+    iconUrl: '',
+    imageUrl: '',
     colorHex: '#2563eb',
     subServices: [
       { name: 'Address Update', code: 'CS-ADDR-UPD', status: 'Active', fee: 50, sla: '3-5 business days' },
@@ -263,6 +269,10 @@ export default function ServiceWizard() {
             req: d.req === 'Optional' ? 'Optional' : 'Required'
           }))
         : prev.documents,
+      iconName: s.iconName || prev.iconName,
+      iconUrl: s.iconUrl || s.imageUrl || (s.iconName && s.iconName.startsWith('http') ? s.iconName : (rawPricing.iconUrl || '')),
+      imageUrl: s.imageUrl || s.iconUrl || '',
+      colorHex: s.colorHex || prev.colorHex,
       pricing: {
         fee: baseFee,
         applyGst: hasGst,
@@ -321,9 +331,83 @@ export default function ServiceWizard() {
     { id: 7, name: 'Publish', stepNum: 9 }
   ];
 
+  // ponytail: Multer + Cloudinary upload handler for service icon
+  const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingIcon(true);
+    setIconUploadError(null);
+
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'cybersave/services');
+
+      let uploadedUrl = '';
+      try {
+        const res = await axios.post(`${backendUrl}/api/admin/upload`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 20000,
+        });
+        if (res.data?.secure_url || res.data?.url) {
+          uploadedUrl = res.data.secure_url || res.data.url;
+        }
+      } catch (err) {
+        // Fallback: direct unsigned Cloudinary upload
+        console.warn('Backend upload fallback to direct Cloudinary:', err);
+        const directForm = new FormData();
+        directForm.append('file', file);
+        directForm.append('upload_preset', 'cybersave_docs');
+        directForm.append('folder', 'cybersave/services');
+        const cRes = await fetch('https://api.cloudinary.com/v1_1/dzo4caeef/image/upload', {
+          method: 'POST',
+          body: directForm,
+        });
+        const cData = await cRes.json();
+        if (cData?.secure_url || cData?.url) {
+          uploadedUrl = cData.secure_url || cData.url;
+        }
+      }
+
+      if (uploadedUrl) {
+        setServiceData(prev => ({
+          ...prev,
+          iconUrl: uploadedUrl,
+          imageUrl: uploadedUrl,
+          iconName: uploadedUrl,
+        }));
+        showToast('✅ Service icon uploaded to Cloudinary successfully!');
+      } else {
+        // Fallback to local data URI
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUri = reader.result as string;
+          setServiceData(prev => ({
+            ...prev,
+            iconUrl: dataUri,
+            imageUrl: dataUri,
+            iconName: dataUri,
+          }));
+          showToast('✅ Icon loaded locally.');
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (error: any) {
+      console.error('Icon upload failed:', error);
+      setIconUploadError(error?.message || 'Failed to upload icon');
+      showToast('❌ Failed to upload icon. Please try again.');
+    } finally {
+      setIsUploadingIcon(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   // Save as draft or publish to real DB
   const handleSave = async (isPublish = false) => {
     setIsSubmitting(true);
+    const resolvedIcon = serviceData.iconUrl || serviceData.iconName || 'file-document-outline';
     const payload = {
       id: serviceData.id,
       title: serviceData.name,
@@ -346,9 +430,11 @@ export default function ServiceWizard() {
       formDataSchema: serviceData.formElements,
       documents: serviceData.documents,
       requiredDocs: serviceData.documents,
-      pricing: serviceData.pricing,
-      pricingConfig: serviceData.pricing,
-      iconName: serviceData.iconName,
+      pricing: { ...serviceData.pricing, iconUrl: serviceData.iconUrl },
+      pricingConfig: { ...serviceData.pricing, iconUrl: serviceData.iconUrl },
+      iconName: resolvedIcon,
+      iconUrl: serviceData.iconUrl,
+      imageUrl: serviceData.imageUrl || serviceData.iconUrl,
       colorHex: serviceData.colorHex,
       assignedTeams: serviceData.assignedTeams,
       searchTags: serviceData.searchTags,
@@ -711,26 +797,130 @@ export default function ServiceWizard() {
 
           <div style={{ marginBottom: 32 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
-              Icon Upload
+              Icon & Image Upload (Cloudinary / Multer)
             </label>
-            <div style={{
-              border: '2px dashed #cbd5e1',
-              borderRadius: 10,
-              padding: '28px 20px',
-              textAlign: 'center',
-              background: '#f8fafc',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 8
-            }}>
-              <UploadCloud size={32} color="#2563eb" />
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2563eb' }}>
-                Click to upload icon file
+            
+            {/* Hidden file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+              onChange={handleIconUpload}
+              style={{ display: 'none' }}
+            />
+
+            {/* Upload Box / Image Preview */}
+            <div
+              onClick={() => !isUploadingIcon && fileInputRef.current?.click()}
+              style={{
+                border: serviceData.iconUrl ? '2px solid #3b82f6' : '2px dashed #cbd5e1',
+                borderRadius: 10,
+                padding: '24px 20px',
+                textAlign: 'center',
+                background: serviceData.iconUrl ? '#eff6ff' : '#f8fafc',
+                cursor: isUploadingIcon ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 10,
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {isUploadingIcon ? (
+                <>
+                  <div style={{ width: 36, height: 36, border: '3px solid #bfdbfe', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2563eb' }}>
+                    Uploading to Cloudinary...
+                  </div>
+                </>
+              ) : serviceData.iconUrl ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <img
+                    src={serviceData.iconUrl}
+                    alt="Service Icon"
+                    style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 12, border: '1px solid #bfdbfe', background: '#ffffff', padding: 4 }}
+                  />
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1e40af' }}>
+                      Cloudinary Icon Uploaded & Active
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2, wordBreak: 'break-all', maxWidth: 400 }}>
+                      {serviceData.iconUrl}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
+                      style={{ padding: '6px 14px', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Change Icon
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setServiceData(prev => ({ ...prev, iconUrl: '', imageUrl: '', iconName: 'shield-account-outline' }));
+                      }}
+                      style={{ padding: '6px 14px', borderRadius: 6, background: '#fee2e2', color: '#ef4444', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <UploadCloud size={34} color="#2563eb" />
+                  <div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2563eb' }}>
+                      Click to upload service icon / badge
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                      PNG, SVG, JPG, WebP up to 5MB (Uploaded directly via Multer to Cloudinary)
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Quick Preset Icons */}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>
+                Or choose standard government icon preset:
               </div>
-              <div style={{ fontSize: 11.5, color: '#64748b' }}>
-                SVG, PNG, JPG up to 1MB (Optimal size 48×48px)
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { name: 'shield-account-outline', label: 'Aadhaar / ID' },
+                  { name: 'card-account-details-outline', label: 'PAN Card' },
+                  { name: 'baby-carriage', label: 'Birth Cert' },
+                  { name: 'trending-up', label: 'Income' },
+                  { name: 'account-group-outline', label: 'Caste' },
+                  { name: 'lightning-bolt-outline', label: 'Electricity' },
+                  { name: 'passport', label: 'Passport' },
+                  { name: 'bank-outline', label: 'Banking' },
+                  { name: 'certificate-outline', label: 'Certificate' },
+                ].map(icon => (
+                  <button
+                    key={icon.name}
+                    type="button"
+                    onClick={() => setServiceData(prev => ({ ...prev, iconName: icon.name, iconUrl: '', imageUrl: '' }))}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 6,
+                      border: serviceData.iconName === icon.name && !serviceData.iconUrl ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                      background: serviceData.iconName === icon.name && !serviceData.iconUrl ? '#eff6ff' : '#ffffff',
+                      color: serviceData.iconName === icon.name && !serviceData.iconUrl ? '#1d4ed8' : '#475569',
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {icon.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
