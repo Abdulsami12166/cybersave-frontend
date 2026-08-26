@@ -338,38 +338,65 @@ export default function ServiceWizard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Instant local preview
+    const reader = new FileReader();
+    reader.onload = () => {
+      const localDataUri = reader.result as string;
+      setServiceData(prev => ({
+        ...prev,
+        iconUrl: prev.iconUrl || localDataUri,
+        imageUrl: prev.imageUrl || localDataUri,
+        iconName: prev.iconName || localDataUri,
+      }));
+    };
+    reader.readAsDataURL(file);
+
     setIsUploadingIcon(true);
     setIconUploadError(null);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      let uploadedUrl = '';
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const endpoints = isLocalhost
+        ? ['http://localhost:3000/api/admin/upload', `${import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com'}/api/admin/upload`]
+        : [`${import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com'}/api/admin/upload`, 'http://localhost:3000/api/admin/upload'];
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('folder', 'cybersave/services');
 
-      let uploadedUrl = '';
-      try {
-        const res = await axios.post(`${backendUrl}/api/admin/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 20000,
-        });
-        if (res.data?.secure_url || res.data?.url) {
-          uploadedUrl = res.data.secure_url || res.data.url;
+      for (const endpoint of endpoints) {
+        try {
+          const res = await axios.post(endpoint, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 10000,
+          });
+          if (res.data?.secure_url || res.data?.url) {
+            uploadedUrl = res.data.secure_url || res.data.url;
+            break;
+          }
+        } catch {
+          // continue to next endpoint
         }
-      } catch (err) {
-        // Fallback: direct unsigned Cloudinary upload
-        console.warn('Backend upload fallback to direct Cloudinary:', err);
-        const directForm = new FormData();
-        directForm.append('file', file);
-        directForm.append('upload_preset', 'cybersave_docs');
-        directForm.append('folder', 'cybersave/services');
-        const cRes = await fetch('https://api.cloudinary.com/v1_1/dzo4caeef/image/upload', {
-          method: 'POST',
-          body: directForm,
-        });
-        const cData = await cRes.json();
-        if (cData?.secure_url || cData?.url) {
-          uploadedUrl = cData.secure_url || cData.url;
+      }
+
+      // Fallback: direct unsigned Cloudinary upload
+      if (!uploadedUrl) {
+        try {
+          const directForm = new FormData();
+          directForm.append('file', file);
+          directForm.append('upload_preset', 'cybersave_docs');
+          directForm.append('folder', 'cybersave/services');
+          const cRes = await fetch('https://api.cloudinary.com/v1_1/dzo4caeef/image/upload', {
+            method: 'POST',
+            body: directForm,
+          });
+          const cData = await cRes.json();
+          if (cData?.secure_url || cData?.url) {
+            uploadedUrl = cData.secure_url || cData.url;
+          }
+        } catch (cErr) {
+          console.warn('Direct Cloudinary upload error:', cErr);
         }
       }
 
@@ -382,19 +409,7 @@ export default function ServiceWizard() {
         }));
         showToast('✅ Service icon uploaded to Cloudinary successfully!');
       } else {
-        // Fallback to local data URI
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUri = reader.result as string;
-          setServiceData(prev => ({
-            ...prev,
-            iconUrl: dataUri,
-            imageUrl: dataUri,
-            iconName: dataUri,
-          }));
-          showToast('✅ Icon loaded locally.');
-        };
-        reader.readAsDataURL(file);
+        showToast('✅ Icon loaded locally.');
       }
     } catch (error: any) {
       console.error('Icon upload failed:', error);
@@ -928,37 +943,35 @@ export default function ServiceWizard() {
             
             {/* Hidden file input */}
             <input
+              id="service-icon-file-input"
               type="file"
               ref={fileInputRef}
-              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+              accept="image/png,image/jpeg,image/svg+xml,image/webp,image/*"
               onChange={handleIconUpload}
-              style={{ display: 'none' }}
+              style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', border: 0 }}
             />
 
             {/* Upload Box / Image Preview */}
-            <div
-              onClick={() => !isUploadingIcon && fileInputRef.current?.click()}
+            <label
+              htmlFor="service-icon-file-input"
               style={{
+                display: 'block',
                 border: serviceData.iconUrl ? '2px solid #3b82f6' : '2px dashed #cbd5e1',
                 borderRadius: 10,
                 padding: '24px 20px',
                 textAlign: 'center',
                 background: serviceData.iconUrl ? '#eff6ff' : '#f8fafc',
                 cursor: isUploadingIcon ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 10,
                 transition: 'all 0.2s ease',
               }}
             >
               {isUploadingIcon ? (
-                <>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 36, height: 36, border: '3px solid #bfdbfe', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2563eb' }}>
-                    Uploading to Cloudinary...
+                    Uploading to Cloudinary via Multer...
                   </div>
-                </>
+                </div>
               ) : serviceData.iconUrl ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                   <img
@@ -978,6 +991,7 @@ export default function ServiceWizard() {
                     <button
                       type="button"
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         fileInputRef.current?.click();
                       }}
@@ -988,6 +1002,7 @@ export default function ServiceWizard() {
                     <button
                       type="button"
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         setServiceData(prev => ({ ...prev, iconUrl: '', imageUrl: '', iconName: 'shield-account-outline' }));
                       }}
@@ -998,19 +1013,42 @@ export default function ServiceWizard() {
                   </div>
                 </div>
               ) : (
-                <>
-                  <UploadCloud size={34} color="#2563eb" />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <UploadCloud size={36} color="#2563eb" />
                   <div>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: '#2563eb' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#2563eb' }}>
                       Click to upload service icon / badge
                     </div>
-                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 3 }}>
                       PNG, SVG, JPG, WebP up to 5MB (Uploaded directly via Multer to Cloudinary)
                     </div>
                   </div>
-                </>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      fileInputRef.current?.click();
+                    }}
+                    style={{
+                      marginTop: 4,
+                      padding: '7px 16px',
+                      borderRadius: 6,
+                      background: '#2563eb',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                  >
+                    <UploadCloud size={14} /> Browse & Upload File
+                  </button>
+                </div>
               )}
-            </div>
+            </label>
 
             {/* Quick Preset Icons */}
             <div style={{ marginTop: 14 }}>
