@@ -75,6 +75,7 @@ export default function ServiceWizard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingIcon, setIsUploadingIcon] = useState(false);
   const [iconUploadError, setIconUploadError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Core Service Data State
