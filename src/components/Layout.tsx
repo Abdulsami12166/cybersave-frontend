@@ -383,33 +383,65 @@ export default function Layout() {
               }}></span>
             </div>
 
-            <div style={{
-              borderLeft: '1px solid #E2E8F0',
-              paddingLeft: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: '#1E40AF',
-                color: '#FFFFFF',
-                fontSize: '12px',
-                fontWeight: 700,
+            <div 
+              onClick={() => navigate('/settings')}
+              title="Click to view & edit admin profile settings"
+              style={{
+                borderLeft: '1px solid #E2E8F0',
+                paddingLeft: '14px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                SA
-              </div>
+                gap: '10px',
+                cursor: 'pointer',
+                userSelect: 'none',
+                transition: 'opacity 0.2s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+            >
+              {admin?.avatarUrl && admin.avatarUrl.trim() !== '' ? (
+                <img
+                  src={admin.avatarUrl}
+                  alt={admin.name || 'Administrator'}
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '1.5px solid #2563EB',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                  }}
+                  onError={(e) => {
+                    // Fallback to initials if image link is broken
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  background: '#1E40AF',
+                  color: '#FFFFFF',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                }}>
+                  {admin?.name
+                    ? admin.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+                    : 'SA'}
+                </div>
+              )}
               <div>
                 <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A', lineHeight: 1.2 }}>
-                  Super Administrator
+                  {admin?.name || 'Super Administrator'}
                 </div>
-                <div style={{ fontSize: '10.5px', color: '#10B981', fontWeight: 600 }}>
-                  ● Active Duty
+                <div style={{ fontSize: '10.5px', color: '#10B981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', display: 'inline-block' }}></span>
+                  Super Administrator Active
                 </div>
               </div>
             </div>

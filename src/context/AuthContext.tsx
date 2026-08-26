@@ -38,6 +38,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Failed to parse adminUser from localStorage', e);
       }
     }
+
+    // Refresh profile data from DB
+    const syncProfile = async () => {
+      try {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+        const res = await fetch(`${backendUrl}/api/admin/profile`);
+        if (res.ok) {
+          const prof = await res.json();
+          if (prof) {
+            setAdmin((prev) => {
+              const updated = {
+                ...(prev || { id: 'admin-root-01', email: 'admin@cybersave.com', permissions: ['ALL'] }),
+                name: prof.name || prev?.name || 'Suresh Kumar Sharma',
+                email: prof.email || prev?.email || 'admin@cybersave.com',
+                phone: prof.phone || prev?.phone,
+                avatarUrl: prof.avatarUrl !== undefined ? prof.avatarUrl : prev?.avatarUrl,
+              };
+              localStorage.setItem('adminUser', JSON.stringify(updated));
+              return updated;
+            });
+          }
+        }
+      } catch {}
+    };
+
+    if (storedToken) {
+      syncProfile();
+    }
     setLoading(false);
   }, []);
 
