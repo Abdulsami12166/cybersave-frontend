@@ -274,9 +274,10 @@ export default function UserManagement() {
     }
   };
 
+  const totalCount = normalizedCitizens.length;
+  const activeCount = normalizedCitizens.filter(c => c.isOnline === true).length;
   const verifiedCount = normalizedCitizens.filter(c => c.status === 'Verified').length;
   const pendingCount = normalizedCitizens.filter(c => c.status === 'Pending').length;
-  const totalCount = normalizedCitizens.length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
