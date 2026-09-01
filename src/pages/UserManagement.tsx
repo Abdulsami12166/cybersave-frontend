@@ -19,7 +19,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  UserPlus
+  UserPlus,
+  Bell,
+  Send,
+  MessageSquare
 } from 'lucide-react';
 import { showToast } from '../components/Layout';
 
@@ -41,6 +44,13 @@ export default function UserManagement() {
   const [newCitizenName, setNewCitizenName] = useState('');
   const [newCitizenPhone, setNewCitizenPhone] = useState('');
   const [newCitizenDistrict, setNewCitizenDistrict] = useState('Central Delhi, DL');
+
+  // Targeted Notification Modal for Specific Citizen
+  const [selectedNotifCitizen, setSelectedNotifCitizen] = useState<any | null>(null);
+  const [notifSubject, setNotifSubject] = useState('');
+  const [notifBody, setNotifBody] = useState('');
+  const [notifType, setNotifType] = useState('Push Notification');
+  const [sendingNotif, setSendingNotif] = useState(false);
 
   const fetchUsersRest = async () => {
     try {
@@ -71,7 +81,41 @@ export default function UserManagement() {
         fetchUsersRest();
       };
 
+      const handleStatusChange = (statusData: any) => {
+        if (statusData?.userId) {
+          setLiveUsers((prev) =>
+            prev.map((u) => {
+              if (u.id === statusData.userId || u.dbId === statusData.userId) {
+                return {
+                  ...u,
+                  isOnline: statusData.isOnline,
+                  lastActive: statusData.isOnline ? 'Active Now' : 'Just now',
+                  lastSeenAt: statusData.lastSeenAt,
+                };
+              }
+              return u;
+            })
+          );
+        }
+      };
+
+      const handlePushSent = (res: any) => {
+        setSendingNotif(false);
+        if (res.success) {
+          showToast(res.message || 'Notification dispatched successfully');
+          setSelectedNotifCitizen(null);
+          setNotifSubject('');
+          setNotifBody('');
+        } else {
+          showToast(res.error || 'Failed to dispatch notification', 'error');
+        }
+      };
+
       socket.on('response_users_data', handleUsers);
+      socket.on('user_status_changed', handleStatusChange);
+      socket.on('user_activity_updated', handleRefresh);
+      socket.on('new_user_feedback', handleRefresh);
+      socket.on('response_push_sent', handlePushSent);
       socket.on('add_citizen_success', () => {
         showToast('Citizen successfully registered in database');
         handleRefresh();
@@ -83,12 +127,59 @@ export default function UserManagement() {
 
       return () => {
         socket.off('response_users_data', handleUsers);
+        socket.off('user_status_changed', handleStatusChange);
+        socket.off('user_activity_updated', handleRefresh);
+        socket.off('new_user_feedback', handleRefresh);
+        socket.off('response_push_sent', handlePushSent);
+        socket.off('add_citizen_success');
+        socket.off('block_citizen_success');
       };
     } else {
       const t = setTimeout(() => setLoading(false), 800);
       return () => clearTimeout(t);
     }
   }, [socket, connected]);
+
+  const handleSendCitizenNotification = async () => {
+    if (!notifSubject.trim() || !notifBody.trim()) {
+      showToast('Please provide subject and message body', 'error');
+      return;
+    }
+    if (!selectedNotifCitizen) return;
+
+    setSendingNotif(true);
+    const targetId = selectedNotifCitizen.dbId || selectedNotifCitizen.id;
+
+    if (socket && connected) {
+      socket.emit('send_push_notification', {
+        userId: targetId,
+        title: notifSubject.trim(),
+        body: notifBody.trim(),
+        type: notifType,
+      });
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/users/${targetId}/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: notifSubject.trim(),
+          body: notifBody.trim(),
+          type: notifType,
+        }),
+      });
+      if (res.ok) {
+        showToast(`Push notification dispatched to ${selectedNotifCitizen.fullName}`);
+        setSelectedNotifCitizen(null);
+        setNotifSubject('');
+        setNotifBody('');
+        setSendingNotif(false);
+      }
+    } catch {
+      setSendingNotif(false);
+    }
+  };
 
   // Normalize, deduplicate and extract REAL citizen data
   const normalizedCitizens = useMemo(() => {
@@ -289,13 +380,16 @@ export default function UserManagement() {
           boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
         }}>
           <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
-            e-KYC Verified
+            Active / Online Now
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>
-            {verifiedCount}
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#10B981', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {activeCount}
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#15803D', backgroundColor: '#DCFCE7', padding: '2px 6px', borderRadius: '10px' }}>
+              ● Live
+            </span>
           </div>
-          <div style={{ fontSize: '12px', color: '#10B981', fontWeight: 600, marginTop: '4px' }}>
-            ● Aadhaar Vault active
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
+            Connected to portal
           </div>
         </div>
 
@@ -395,23 +489,24 @@ export default function UserManagement() {
 
         {/* Data Table */}
         <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-          <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          <table style={{ width: '100%', minWidth: '1020px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                <th style={{ width: '130px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Citizen ID</th>
-                <th style={{ width: '220px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Full Name</th>
-                <th style={{ width: '140px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Aadhaar e-KYC</th>
-                <th style={{ width: '150px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Mobile Contact</th>
-                <th style={{ width: '160px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>District</th>
-                <th style={{ width: '100px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Services</th>
-                <th style={{ width: '110px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Status</th>
-                <th style={{ width: '120px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', textAlign: 'center' }}>Actions</th>
+                <th style={{ width: '120px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Citizen ID</th>
+                <th style={{ width: '200px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Full Name</th>
+                <th style={{ width: '130px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Aadhaar e-KYC</th>
+                <th style={{ width: '140px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Mobile Contact</th>
+                <th style={{ width: '150px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>District</th>
+                <th style={{ width: '90px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Services</th>
+                <th style={{ width: '100px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Status</th>
+                <th style={{ width: '110px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase' }}>Activity</th>
+                <th style={{ width: '180px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {paginatedCitizens.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', color: '#94A3B8', padding: '36px 16px' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', color: '#94A3B8', padding: '36px 16px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                       <Users size={28} color="#CBD5E1" />
                       <span style={{ fontSize: '13px', fontWeight: 600 }}>No citizen records found</span>
@@ -422,15 +517,10 @@ export default function UserManagement() {
                 paginatedCitizens.map((c: any, i: number) => (
                   <tr 
                     key={c.dbId || i}
-                    onClick={() => navigate(`/users/${c.dbId || c.id}`)}
                     style={{ 
                       borderBottom: '1px solid #F1F5F9',
                       backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#FCFDFE',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.15s ease'
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F0F7FF')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? '#FFFFFF' : '#FCFDFE')}
                   >
                     <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2563EB', fontFamily: 'monospace', fontSize: '12px' }}>
                       {c.id}
@@ -474,31 +564,84 @@ export default function UserManagement() {
                       </span>
                     </td>
 
+                    {/* Online Activity Status Indicator */}
+                    <td style={{ padding: '12px 14px' }}>
+                      {c.isOnline ? (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          backgroundColor: '#F0FDF4',
+                          color: '#15803D',
+                          border: '1px solid #BBF7D0'
+                        }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22C55E', boxShadow: '0 0 5px #22C55E' }} />
+                          Active
+                        </span>
+                      ) : (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          backgroundColor: '#F8FAFC',
+                          color: '#64748B',
+                          border: '1px solid #E2E8F0'
+                        }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#94A3B8' }} />
+                          {c.lastActive || 'Offline'}
+                        </span>
+                      )}
+                    </td>
+
                     <td style={{ padding: '12px 14px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/users/${c.dbId || c.id}`);
-                          }}
+                          onClick={() => navigate(`/users/${c.dbId || c.id}`)}
                           style={{
                             background: '#EFF6FF',
                             color: '#2563EB',
                             border: '1px solid #BFDBFE',
                             borderRadius: '5px',
-                            padding: '4px 10px',
+                            padding: '4px 8px',
                             fontSize: '11.5px',
                             fontWeight: 700,
                             cursor: 'pointer'
                           }}
                         >
-                          View Profile
+                          View
                         </button>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleBlock(c);
+                          onClick={() => {
+                            setSelectedNotifCitizen(c);
+                            setNotifSubject('Important: Service Application Update');
+                            setNotifBody(`Hello ${c.fullName}, there is an update on your government service request in the Cybersave App.`);
                           }}
+                          style={{
+                            background: '#EEF2FF',
+                            color: '#4F46E5',
+                            border: '1px solid #C7D2FE',
+                            borderRadius: '5px',
+                            padding: '4px 8px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Bell size={11} /> Notify
+                        </button>
+                        <button
+                          onClick={() => handleToggleBlock(c)}
                           style={{
                             background: c.status === 'Blocked' ? '#ECFDF5' : '#FEF2F2',
                             color: c.status === 'Blocked' ? '#065F46' : '#DC2626',
@@ -724,6 +867,249 @@ export default function UserManagement() {
                   }}
                 >
                   Register Citizen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Targeted Notification Modal for Specific Citizen ───────────── */}
+      {selectedNotifCitizen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '14px',
+            maxWidth: '520px',
+            width: '100%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #E2E8F0',
+            overflow: 'hidden'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #F1F5F9',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#FAFAFC'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '8px',
+                  backgroundColor: '#EEF2FF',
+                  color: '#4F46E5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Bell size={18} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                    Dispatch Citizen Push Notification
+                  </h3>
+                  <p style={{ fontSize: '11.5px', color: '#64748B', margin: 0, marginTop: '2px' }}>
+                    Targeted mobile status bar & in-app alert
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedNotifCitizen(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              
+              {/* Recipient info pill */}
+              <div style={{
+                backgroundColor: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div>
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                    {selectedNotifCitizen.fullName}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748B', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                    <span>ID: <strong style={{ color: '#2563EB' }}>{selectedNotifCitizen.id}</strong></span>
+                    <span>•</span>
+                    <span>{selectedNotifCitizen.phone}</span>
+                  </div>
+                </div>
+                <div>
+                  {selectedNotifCitizen.isOnline ? (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      backgroundColor: '#F0FDF4',
+                      color: '#15803D',
+                      border: '1px solid #BBF7D0'
+                    }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22C55E' }} />
+                      Online Now
+                    </span>
+                  ) : (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      backgroundColor: '#F8FAFC',
+                      color: '#64748B',
+                      border: '1px solid #E2E8F0'
+                    }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#94A3B8' }} />
+                      {selectedNotifCitizen.lastActive || 'Offline'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Notification Channel */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Dispatch Channel
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {['Push Notification', 'SMS Alert', 'Email Notice'].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setNotifType(t)}
+                      style={{
+                        padding: '8px',
+                        borderRadius: '6px',
+                        border: notifType === t ? '1.5px solid #4F46E5' : '1px solid #CBD5E1',
+                        backgroundColor: notifType === t ? '#EEF2FF' : '#FFFFFF',
+                        color: notifType === t ? '#4F46E5' : '#475569',
+                        fontSize: '11.5px',
+                        fontWeight: notifType === t ? 700 : 500,
+                        cursor: 'pointer',
+                        textAlign: 'center'
+                      }}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Subject Title */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  Notification Subject / Title *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Aadhaar Verification Document Update"
+                  value={notifSubject}
+                  onChange={(e) => setNotifSubject(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              {/* Message Body */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  Message Content (Mobile Status Bar & In-App Body) *
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="Enter the notification message that will appear in citizen's phone status bar and Cybersave notification center..."
+                  value={notifBody}
+                  onChange={(e) => setNotifBody(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '12.5px',
+                    outline: 'none',
+                    resize: 'none',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedNotifCitizen(null)}
+                  style={{
+                    background: '#F1F5F9',
+                    color: '#475569',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 14px',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={sendingNotif}
+                  onClick={handleSendCitizenNotification}
+                  style={{
+                    background: '#4F46E5',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 18px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: sendingNotif ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    opacity: sendingNotif ? 0.7 : 1,
+                    boxShadow: '0 2px 4px rgba(79,70,229,0.25)'
+                  }}
+                >
+                  <Send size={13} /> {sendingNotif ? 'Dispatching...' : 'Send Push Notification'}
                 </button>
               </div>
             </div>

@@ -150,8 +150,24 @@ export default function UserManagementDetail() {
         handleRefresh();
       };
 
+      const handleStatusChanged = (statusData: any) => {
+        if (statusData?.userId === user?.dbId || statusData?.userId === user?.id || statusData?.userId === id) {
+          setUser((prev: any) => prev ? {
+            ...prev,
+            isOnline: statusData.isOnline,
+            lastActive: statusData.isOnline ? 'Active Now' : 'Just now',
+            lastSeenAt: statusData.lastSeenAt,
+            quickStats: {
+              ...prev.quickStats,
+              lastActive: statusData.isOnline ? 'Active Now' : 'Just now',
+            }
+          } : prev);
+        }
+      };
+
       socket.on('response_user_detail', handleUserDetail);
       socket.on('user_detail_updated', handleUserDetail);
+      socket.on('user_status_changed', handleStatusChanged);
       socket.on('new_user_feedback', handleFeedbackEvent);
       socket.on('feedback_submitted', handleRefresh);
       socket.on('user_activity_updated', handleRefresh);
@@ -166,6 +182,7 @@ export default function UserManagementDetail() {
       return () => {
         socket.off('response_user_detail', handleUserDetail);
         socket.off('user_detail_updated', handleUserDetail);
+        socket.off('user_status_changed', handleStatusChanged);
         socket.off('new_user_feedback', handleFeedbackEvent);
         socket.off('feedback_submitted', handleRefresh);
         socket.off('user_activity_updated', handleRefresh);
@@ -181,7 +198,7 @@ export default function UserManagementDetail() {
       const timer = setTimeout(() => setLoading(false), 800);
       return () => clearTimeout(timer);
     }
-  }, [id, socket, connected]);
+  }, [id, socket, connected, user]);
 
   const handleToggleBlock = () => {
     if (!user) return;
@@ -220,25 +237,41 @@ export default function UserManagementDetail() {
     }
   };
 
-  const handleSendNotification = () => {
+  const handleSendNotification = async () => {
     if (!notifSubject.trim() || !notifBody.trim()) {
       showToast('Please provide subject and message body', 'error');
       return;
     }
     setSendingNotif(true);
+    const targetUserId = user?.dbId || user?.id || id;
     if (socket && connected) {
       socket.emit('send_push_notification', {
-        userId: user?.dbId || user?.id || id,
-        title: notifSubject,
-        body: notifBody,
+        userId: targetUserId,
+        title: notifSubject.trim(),
+        body: notifBody.trim(),
         type: notifType,
       });
-    } else {
-      setTimeout(() => {
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/users/${targetUserId}/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: notifSubject.trim(),
+          body: notifBody.trim(),
+          type: notifType,
+        }),
+      });
+      if (res.ok) {
         setSendingNotif(false);
         setNotifModalOpen(false);
-        showToast('Notification dispatched successfully');
-      }, 500);
+        showToast(`Push notification dispatched to ${user?.fullName || 'Citizen'}`);
+        setNotifSubject('');
+        setNotifBody('');
+      }
+    } catch {
+      setSendingNotif(false);
     }
   };
 
@@ -444,6 +477,41 @@ export default function UserManagementDetail() {
                 }}>
                   {safeData.status}
                 </span>
+
+                {/* Real-time Online / Offline Indicator Badge */}
+                {safeData.isOnline ? (
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    backgroundColor: '#F0FDF4',
+                    color: '#15803D',
+                    border: '1px solid #BBF7D0'
+                  }}>
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#22C55E', boxShadow: '0 0 6px #22C55E' }} />
+                    Active (Online Now)
+                  </span>
+                ) : (
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    backgroundColor: '#F8FAFC',
+                    color: '#64748B',
+                    border: '1px solid #E2E8F0'
+                  }}>
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#94A3B8' }} />
+                    Offline {safeData.lastActive ? `• ${safeData.lastActive}` : ''}
+                  </span>
+                )}
               </div>
 
               <div style={{ fontSize: '13px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -889,10 +957,24 @@ export default function UserManagementDetail() {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748B', fontSize: '13px' }}>Last Active</span>
-                  <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '13.5px' }}>
-                    {safeData.quickStats.lastActive}
-                  </span>
+                  <span style={{ color: '#64748B', fontSize: '13px' }}>Activity Status</span>
+                  {safeData.isOnline ? (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      color: '#15803D',
+                      fontWeight: 800,
+                      fontSize: '13px'
+                    }}>
+                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#22C55E', boxShadow: '0 0 6px #22C55E' }} />
+                      Active Now
+                    </span>
+                  ) : (
+                    <span style={{ fontWeight: 700, color: '#475569', fontSize: '13px' }}>
+                      {safeData.quickStats.lastActive || safeData.lastActive || 'Offline'}
+                    </span>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
