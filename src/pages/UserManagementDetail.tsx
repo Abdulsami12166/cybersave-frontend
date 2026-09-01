@@ -22,7 +22,10 @@ import {
   User,
   Zap,
   Award,
-  ArrowLeft
+  ArrowLeft,
+  Star,
+  MessageSquare,
+  Image as ImageIcon
 } from 'lucide-react';
 import { showToast } from '../components/Layout';
 
@@ -35,8 +38,9 @@ export default function UserManagementDetail() {
 
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'Overview' | 'Services Used' | 'Documents' | 'Transactions' | 'Activity Log' | 'Notes'>('Overview');
+  const [activeTab, setActiveTab] = useState<'Overview' | 'Services Used' | 'Documents' | 'Transactions' | 'Activity Log' | 'Feedback & Reviews' | 'Notes'>('Overview');
   const [showAadhaar, setShowAadhaar] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Notification Modal
   const [notifModalOpen, setNotifModalOpen] = useState(false);
@@ -336,7 +340,10 @@ export default function UserManagementDetail() {
           { title: 'Payment of ₹107 received', date: '28 Jul 2026', color: '#10B981' },
           { title: 'Income certificate requested', date: '20 Jul 2026', color: '#F59E0B' },
           { title: 'Electricity bill ₹1,240 paid', date: '15 Jul 2026', color: '#10B981' }
-        ]
+        ],
+    feedbacks: (user?.feedbacks && user.feedbacks.length > 0)
+      ? user.feedbacks
+      : []
   };
 
   const isBlocked = safeData.status === 'Blocked';
@@ -524,26 +531,44 @@ export default function UserManagementDetail() {
           borderBottom: '1px solid #E2E8F0',
           overflowX: 'auto'
         }}>
-          {(['Overview', 'Services Used', 'Documents', 'Transactions', 'Activity Log', 'Notes'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                background: 'none',
-                border: 'none',
-                borderBottom: activeTab === tab ? '2px solid #2563EB' : '2px solid transparent',
-                color: activeTab === tab ? '#2563EB' : '#64748B',
-                fontWeight: activeTab === tab ? 700 : 500,
-                fontSize: '13.5px',
-                padding: '12px 2px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              {tab}
-            </button>
-          ))}
+          {(['Overview', 'Services Used', 'Documents', 'Transactions', 'Activity Log', 'Feedback & Reviews', 'Notes'] as const).map((tab) => {
+            const feedbackCount = tab === 'Feedback & Reviews' ? (safeData.feedbacks?.length || 0) : 0;
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: activeTab === tab ? '2px solid #2563EB' : '2px solid transparent',
+                  color: activeTab === tab ? '#2563EB' : '#64748B',
+                  fontWeight: activeTab === tab ? 700 : 500,
+                  fontSize: '13.5px',
+                  padding: '12px 2px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {tab}
+                {feedbackCount > 0 && (
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    backgroundColor: activeTab === tab ? '#DBEAFE' : '#F1F5F9',
+                    color: activeTab === tab ? '#1E40AF' : '#475569',
+                    padding: '1px 6px',
+                    borderRadius: '10px'
+                  }}>
+                    {feedbackCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -987,29 +1012,76 @@ export default function UserManagementDetail() {
                   zIndex: 0
                 }} />
 
-                {safeData.recentActivity.map((act: any, i: number) => (
-                  <div key={act.id || i} style={{ display: 'flex', gap: '14px', position: 'relative', zIndex: 1 }}>
-                    <div style={{
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      background: act.color || '#2563EB',
-                      position: 'relative',
-                      top: '4px',
-                      flexShrink: 0,
-                      boxShadow: '0 0 0 3px #FFFFFF'
-                    }} />
+                {safeData.recentActivity.map((act: any, i: number) => {
+                  const isFeedback = act.action === 'FEEDBACK_SUBMITTED' || act.rating || act.imageUrl;
+                  return (
+                    <div key={act.id || i} style={{ display: 'flex', gap: '14px', position: 'relative', zIndex: 1 }}>
+                      <div style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: act.color || (isFeedback ? '#FFB800' : '#2563EB'),
+                        position: 'relative',
+                        top: '4px',
+                        flexShrink: 0,
+                        boxShadow: '0 0 0 3px #FFFFFF'
+                      }} />
 
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                        {act.title}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
-                        {act.date}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          {act.title}
+                          {isFeedback && act.rating && (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              backgroundColor: '#FEF3C7',
+                              color: '#92400E',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              padding: '1px 6px',
+                              borderRadius: '6px',
+                              border: '1px solid #FDE68A'
+                            }}>
+                              <Star size={11} fill="#F59E0B" color="#F59E0B" /> {act.rating}/5
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Image attachment in recent activity if present */}
+                        {act.imageUrl && (
+                          <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <img
+                              src={act.imageUrl}
+                              alt="Feedback Attached"
+                              onClick={() => setPreviewImage(act.imageUrl)}
+                              style={{
+                                width: '48px',
+                                height: '48px',
+                                borderRadius: '6px',
+                                objectFit: 'cover',
+                                border: '1.5px solid #BBF7D0',
+                                cursor: 'pointer',
+                                transition: 'transform 0.15s ease'
+                              }}
+                              title="Click to zoom attached image"
+                            />
+                            <div 
+                              style={{ fontSize: '11.5px', color: '#16A34A', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }} 
+                              onClick={() => setPreviewImage(act.imageUrl)}
+                            >
+                              <ImageIcon size={13} /> View Attached Screenshot &rarr;
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ fontSize: '11px', color: '#64748B', marginTop: '3px' }}>
+                          {act.date}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -1146,14 +1218,257 @@ export default function UserManagementDetail() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {safeData.recentActivity.map((act: any, idx: number) => (
-              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid #F1F5F9' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: act.color || '#2563EB' }} />
-                <div style={{ flex: 1, fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>{act.title}</div>
-                <div style={{ fontSize: '11.5px', color: '#64748B' }}>{act.date}</div>
-              </div>
-            ))}
+            {safeData.recentActivity.map((act: any, idx: number) => {
+              const isFeedback = act.action === 'FEEDBACK_SUBMITTED' || act.rating || act.imageUrl;
+              return (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 0', borderBottom: '1px solid #F1F5F9' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                    <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: act.color || (isFeedback ? '#FFB800' : '#2563EB'), flexShrink: 0 }} />
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
+                      {act.title}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {act.imageUrl && (
+                      <button
+                        onClick={() => setPreviewImage(act.imageUrl)}
+                        style={{
+                          backgroundColor: '#F0FDF4',
+                          color: '#166534',
+                          border: '1px solid #BBF7D0',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '11.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <ImageIcon size={12} /> Image Proof
+                      </button>
+                    )}
+                    <div style={{ fontSize: '11.5px', color: '#64748B', whiteSpace: 'nowrap' }}>{act.date}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        </div>
+      )}
+
+      {/* ─── Tab: Feedback & Reviews ──────────────────────────────────────── */}
+      {activeTab === 'Feedback & Reviews' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px 28px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h2 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Star color="#F59E0B" fill="#F59E0B" size={20} /> Citizen Feedback & Experience Ratings
+              </h2>
+              <p style={{ margin: 0, marginTop: '4px', fontSize: '13px', color: '#64748B' }}>
+                Feedback and proof screenshots submitted by {safeData.fullName} via the Cybersave Mobile App
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: '#FEF3C7',
+                border: '1px solid #FDE68A',
+                padding: '6px 14px',
+                borderRadius: '8px'
+              }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#92400E' }}>Overall Rating:</span>
+                <span style={{ fontSize: '15px', fontWeight: 900, color: '#B45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  ★ {safeData.feedbacks.length > 0 ? (safeData.feedbacks.reduce((acc: number, f: any) => acc + (f.rating || 5), 0) / safeData.feedbacks.length).toFixed(1) : '5.0'} / 5.0
+                </span>
+              </div>
+              <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                &larr; Back to Overview
+              </button>
+            </div>
+          </div>
+
+          {safeData.feedbacks.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '60px 20px',
+              backgroundColor: '#F8FAFC',
+              borderRadius: '12px',
+              border: '1px dashed #CBD5E1'
+            }}>
+              <MessageSquare size={40} color="#94A3B8" style={{ marginBottom: '12px' }} />
+              <div style={{ fontSize: '15px', fontWeight: 700, color: '#334155' }}>No Feedback Submitted Yet</div>
+              <div style={{ fontSize: '13px', color: '#64748B', marginTop: '4px' }}>
+                Feedback and attached screenshots submitted by {safeData.fullName} via the Cybersave Mobile App will appear here in real time.
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {safeData.feedbacks.map((fb: any, idx: number) => {
+                const numericRating = fb.rating || 5;
+                return (
+                  <div
+                    key={fb.id || idx}
+                    style={{
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      backgroundColor: '#FAFCFF',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}
+                  >
+                    {/* Feedback Header: Stars + Category + Date */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {/* Rating Stars Row */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              size={18}
+                              color={star <= numericRating ? '#F59E0B' : '#CBD5E1'}
+                              fill={star <= numericRating ? '#F59E0B' : 'transparent'}
+                            />
+                          ))}
+                        </div>
+                        <span style={{ fontSize: '14px', fontWeight: 800, color: '#B45309' }}>
+                          {numericRating} / 5
+                        </span>
+                        <span style={{
+                          backgroundColor: '#EFF6FF',
+                          color: '#1E40AF',
+                          fontSize: '11.5px',
+                          fontWeight: 700,
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          border: '1px solid #BFDBFE'
+                        }}>
+                          {fb.improvementCategory || fb.category || 'App Experience'}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={13} /> {fb.date || fb.dateTime || 'Recently'}
+                      </div>
+                    </div>
+
+                    {/* Feedback Content Text */}
+                    <div style={{
+                      backgroundColor: '#FFFFFF',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '8px',
+                      padding: '14px 16px',
+                      fontSize: '13.5px',
+                      lineHeight: '1.6',
+                      color: '#1E293B',
+                      fontWeight: 500
+                    }}>
+                      "{fb.feedbackText}"
+                    </div>
+
+                    {/* Attached Cloudinary Image Section */}
+                    {fb.imageUrl ? (
+                      <div style={{
+                        marginTop: '4px',
+                        padding: '12px 14px',
+                        backgroundColor: '#F0FDF4',
+                        border: '1px solid #BBF7D0',
+                        borderRadius: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '12px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <img
+                            src={fb.imageUrl}
+                            alt="Citizen Feedback Proof"
+                            onClick={() => setPreviewImage(fb.imageUrl)}
+                            style={{
+                              width: '56px',
+                              height: '56px',
+                              borderRadius: '8px',
+                              objectFit: 'cover',
+                              border: '1.5px solid #86EFAC',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.06)'
+                            }}
+                            title="Click to view full image"
+                          />
+                          <div>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <CheckCircle size={14} color="#16A34A" /> Attached Proof / Screenshot
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#15803D', marginTop: '2px' }}>
+                              Stored securely on Cloudinary CDN
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            onClick={() => setPreviewImage(fb.imageUrl)}
+                            style={{
+                              backgroundColor: '#FFFFFF',
+                              color: '#166534',
+                              border: '1px solid #86EFAC',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <Eye size={13} /> Zoom Image
+                          </button>
+                          <a
+                            href={fb.imageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              backgroundColor: '#16A34A',
+                              color: '#FFFFFF',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              textDecoration: 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <ExternalLink size={13} /> Open Cloudinary
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '11.5px', color: '#94A3B8', fontStyle: 'italic' }}>
+                        No screenshot attached to this feedback
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1449,7 +1764,101 @@ export default function UserManagementDetail() {
         </div>
       )}
 
+      {/* ─── Attached Proof / Image Modal ─────────────────────────────────── */}
+      {previewImage && (
+        <div 
+          onClick={() => setPreviewImage(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 2000,
+            padding: '24px'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              maxWidth: '720px',
+              width: '100%',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)'
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '16px 20px',
+              borderBottom: '1px solid #E2E8F0'
+            }}>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ImageIcon size={18} color="#2563EB" /> Citizen Attached Image Proof
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <a
+                  href={previewImage}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: '#2563EB',
+                    textDecoration: 'none'
+                  }}
+                >
+                  <ExternalLink size={14} /> Full Resolution
+                </a>
+                <button
+                  onClick={() => setPreviewImage(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                >
+                  <X size={20} color="#64748B" />
+                </button>
+              </div>
+            </div>
+
+            <div style={{
+              padding: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: '#0F172A',
+              overflow: 'auto',
+              maxHeight: 'calc(90vh - 120px)'
+            }}>
+              <img
+                src={previewImage}
+                alt="Enlarged feedback proof"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '70vh',
+                  objectFit: 'contain',
+                  borderRadius: '8px'
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+
 
