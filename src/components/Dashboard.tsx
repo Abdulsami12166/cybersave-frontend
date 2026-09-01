@@ -139,9 +139,10 @@ export default function Dashboard() {
 
   const revenueToday = todayApps.reduce((acc, a) => acc + (a.feeAmount || 50), 0);
   const totalRevenue = normalizedApplications.reduce((acc, a) => acc + (a.feeAmount || 50), 0);
-  const pendingCount = normalizedApplications.filter(a => a.status === 'In Review' || a.status === 'Pending' || a.status === 'Processing').length;
-  const approvedTodayCount = todayApps.filter(a => a.status === 'Approved' || a.status === 'Completed').length;
-  const rejectedTodayCount = todayApps.filter(a => a.status === 'Rejected').length;
+  const pendingCount = normalizedApplications.filter(a => a.status === 'In Review' || a.status === 'Pending' || a.status === 'Processing' || a.rawStatus === 'SUBMITTED' || a.rawStatus === 'VERIFYING' || a.rawStatus === 'IN_PROGRESS').length;
+  const totalApprovedCount = normalizedApplications.filter(a => a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
+  const approvedTodayCount = todayApps.filter(a => a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
+  const rejectedTodayCount = todayApps.filter(a => a.status === 'Rejected' || a.rawStatus === 'REJECTED').length;
 
   const displayRevenueToday = (data?.stats?.revenueToday !== undefined && data?.stats?.revenueToday !== null)
     ? data.stats.revenueToday
@@ -155,9 +156,14 @@ export default function Dashboard() {
     ? data.stats.pendingApps
     : pendingCount;
 
-  const displayApprovedToday = (data?.stats?.completedAppsToday !== undefined && data?.stats?.completedAppsToday !== null)
-    ? data.stats.completedAppsToday
-    : approvedTodayCount;
+  const displayApproved = (data?.stats?.totalApproved !== undefined && data?.stats?.totalApproved !== null)
+    ? data.stats.totalApproved
+    : (data?.stats?.approvedApps !== undefined && data?.stats?.approvedApps !== null)
+      ? data.stats.approvedApps
+      : totalApprovedCount;
+
+  // Fallback to local calculated count if 0 but local has approved applications
+  const finalApprovedCount = displayApproved > 0 ? displayApproved : totalApprovedCount;
 
   // 7-Day Chart Ingestion & Settlement Data (Zero decimal artifacts)
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -170,7 +176,7 @@ export default function Dashboard() {
       day: dayLabel,
       date: d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
       revenue: isToday ? displayRevenueToday : (idx === 5 ? Math.max(0, displayRevenueToday - 55) : 0),
-      approved: isToday ? displayApprovedToday : 0,
+      approved: isToday ? finalApprovedCount : 0,
       pending: isToday ? displayPending : 0,
       rejected: isToday ? rejectedTodayCount : 0,
     };
@@ -198,9 +204,9 @@ export default function Dashboard() {
   const filteredApps = normalizedApplications.filter((app: NormalizedApplication) => {
     const matchesFilter = 
       tableFilter === 'All' ||
-      (tableFilter === 'In Review' && (app.status === 'In Review' || app.status === 'Pending' || app.status === 'Processing')) ||
-      (tableFilter === 'Approved' && (app.status === 'Approved' || app.status === 'Completed')) ||
-      (tableFilter === 'Rejected' && app.status === 'Rejected');
+      (tableFilter === 'In Review' && (app.status === 'In Review' || app.status === 'Pending' || app.status === 'Processing' || app.rawStatus === 'SUBMITTED' || app.rawStatus === 'VERIFYING' || app.rawStatus === 'IN_PROGRESS')) ||
+      (tableFilter === 'Approved' && (app.status === 'Approved' || app.status === 'Completed' || app.rawStatus === 'APPROVED' || app.rawStatus === 'COMPLETED')) ||
+      (tableFilter === 'Rejected' && (app.status === 'Rejected' || app.rawStatus === 'REJECTED'));
 
     const matchesSearch = 
       tableSearch.trim() === '' ||
@@ -373,7 +379,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Metric 4: Verified & Dispatched */}
+        {/* Metric 4: Approved & Dispatched */}
         <div style={{
           background: '#FFFFFF',
           borderRadius: '10px',
@@ -384,18 +390,18 @@ export default function Dashboard() {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Approved / Dispatched
+              Approved Applications
             </span>
             <span style={{ background: '#F0FDFA', color: '#0F766E', fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>
-              Completed
+              Real-Time
             </span>
           </div>
           <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-            {displayApprovedToday}
+            {finalApprovedCount}
           </div>
           <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <CheckCircle2 size={13} color="#0D9488" />
-            <span>Certificates issued</span>
+            <span><strong>{approvedTodayCount}</strong> approved today • {finalApprovedCount} total</span>
           </div>
         </div>
       </div>
