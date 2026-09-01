@@ -145,8 +145,17 @@ export default function UserManagementDetail() {
         else handleRefresh();
       };
 
+      const handleFeedbackEvent = (eventData: any) => {
+        showToast(`★ New ${eventData?.feedback?.rating || 5}-Star Citizen Feedback received!`);
+        handleRefresh();
+      };
+
       socket.on('response_user_detail', handleUserDetail);
       socket.on('user_detail_updated', handleUserDetail);
+      socket.on('new_user_feedback', handleFeedbackEvent);
+      socket.on('feedback_submitted', handleRefresh);
+      socket.on('user_activity_updated', handleRefresh);
+      socket.on('audit_log_added', handleRefresh);
       socket.on('applications_updated', handleRefresh);
       socket.on('new_application_submitted', handleRefresh);
       socket.on('application_status_changed', handleRefresh);
@@ -157,6 +166,10 @@ export default function UserManagementDetail() {
       return () => {
         socket.off('response_user_detail', handleUserDetail);
         socket.off('user_detail_updated', handleUserDetail);
+        socket.off('new_user_feedback', handleFeedbackEvent);
+        socket.off('feedback_submitted', handleRefresh);
+        socket.off('user_activity_updated', handleRefresh);
+        socket.off('audit_log_added', handleRefresh);
         socket.off('applications_updated', handleRefresh);
         socket.off('new_application_submitted', handleRefresh);
         socket.off('application_status_changed', handleRefresh);

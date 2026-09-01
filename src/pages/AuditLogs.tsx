@@ -10,11 +10,23 @@ export default function AuditLogs() {
   useEffect(() => {
     if (socket && connected) {
       socket.emit('request_audit_logs');
-      socket.on('response_audit_logs', (resData) => setData(resData));
+      const handleLogs = (resData: any) => setData(resData);
+      const handleRefresh = () => socket.emit('request_audit_logs');
+
+      socket.on('response_audit_logs', handleLogs);
+      socket.on('audit_logs_updated', handleLogs);
+      socket.on('new_user_feedback', handleRefresh);
+      socket.on('audit_log_added', handleRefresh);
+      socket.on('user_activity_updated', handleRefresh);
+
+      return () => {
+        socket.off('response_audit_logs', handleLogs);
+        socket.off('audit_logs_updated', handleLogs);
+        socket.off('new_user_feedback', handleRefresh);
+        socket.off('audit_log_added', handleRefresh);
+        socket.off('user_activity_updated', handleRefresh);
+      };
     }
-    return () => {
-      if (socket) socket.off('response_audit_logs');
-    };
   }, [socket, connected]);
 
   if (!data) return <div>Connecting to live audit logs...</div>;
