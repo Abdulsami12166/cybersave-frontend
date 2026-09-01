@@ -42,9 +42,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Refresh profile data from DB
     const syncProfile = async () => {
       try {
-        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-        const res = await fetch(`${backendUrl}/api/admin/profile`);
-        if (res.ok) {
+        const primaryUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+        let res = await fetch(`${primaryUrl}/api/admin/profile`).catch(() => null);
+        if (!res?.ok && primaryUrl !== 'https://cybersave-6tfo.onrender.com') {
+          res = await fetch(`https://cybersave-6tfo.onrender.com/api/admin/profile`).catch(() => null);
+        }
+        if (res && res.ok) {
           const prof = await res.json();
           if (prof) {
             setAdmin((prev) => {
@@ -52,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...(prev || { id: 'admin-root-01', email: 'admin@cybersave.com', role: 'Super Admin', permissions: ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'] }),
                 name: prof.name || prev?.name || 'Suresh Kumar Sharma',
                 email: prof.email || prev?.email || 'admin@cybersave.com',
-                phone: prof.phone || prev?.phone,
+                phone: prof.phone !== undefined && prof.phone !== null && prof.phone !== '' ? prof.phone : prev?.phone,
                 avatarUrl: prof.avatarUrl !== undefined ? prof.avatarUrl : prev?.avatarUrl,
                 role: prev?.role || 'Super Admin',
                 permissions: (prev?.permissions && prev.permissions.length > 0)

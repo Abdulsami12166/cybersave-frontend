@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { showToast } from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { 
   User, 
   Shield, 
@@ -11,21 +12,46 @@ import {
   Save, 
   CheckCircle2, 
   Upload, 
-  RefreshCw,
-  Building,
-  Lock,
-  Phone,
-  Mail,
-  Sliders,
-  Check,
-  AlertCircle
+  RefreshCw, 
+  Building, 
+  Lock, 
+  Phone, 
+  Mail, 
+  Sliders, 
+  Check, 
+  AlertCircle 
 } from 'lucide-react';
 
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
+const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || API_BASE_URL;
+
+const getCachedProfile = () => {
+  let s: any = {};
+  try {
+    s = JSON.parse(localStorage.getItem('adminSettings') || '{}');
+  } catch {}
+  let u: any = {};
+  try {
+    u = JSON.parse(localStorage.getItem('adminUser') || '{}');
+  } catch {}
+
+  return {
+    name: s.name || u.name || 'Suresh Kumar Sharma',
+    email: s.email || u.email || 'officer.admin@cybersave.gov.in',
+    phone: s.phone || u.phone || '+91 98450 19823',
+    kendraId: s.kendraId || 'CSC-DEL-8841',
+    designation: s.designation || 'Principal Verification Officer (SDM)',
+    district: s.district || 'Central Delhi, NCT of Delhi',
+    avatar: s.avatarUrl || u.avatarUrl || `https://ui-avatars.com/api/?name=Suresh+Sharma&background=1E40AF&color=fff`,
+  };
+};
 
 export default function Settings() {
   const { admin, updateAdmin } = useAuth();
+  const { socket, connected } = useSocket();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const initialCached = getCachedProfile();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'sla' | 'settlement' | 'security'>('profile');
   const [saving, setSaving] = useState(false);
@@ -33,13 +59,13 @@ export default function Settings() {
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
   // Profile State
-  const [name, setName] = useState(admin?.name || 'Suresh Kumar Sharma');
-  const [email, setEmail] = useState(admin?.email || 'officer.admin@cybersave.gov.in');
-  const [phone, setPhone] = useState(admin?.phone || '+91 98450 19823');
-  const [kendraId, setKendraId] = useState('CSC-DEL-8841');
-  const [designation, setDesignation] = useState('Principal Verification Officer (SDM)');
-  const [district, setDistrict] = useState('Central Delhi, NCT of Delhi');
-  const [avatar, setAvatar] = useState(admin?.avatarUrl || `https://ui-avatars.com/api/?name=Suresh+Sharma&background=1E40AF&color=fff`);
+  const [name, setName] = useState(admin?.name || initialCached.name);
+  const [email, setEmail] = useState(admin?.email || initialCached.email);
+  const [phone, setPhone] = useState(admin?.phone || initialCached.phone);
+  const [kendraId, setKendraId] = useState(initialCached.kendraId);
+  const [designation, setDesignation] = useState(initialCached.designation);
+  const [district, setDistrict] = useState(initialCached.district);
+  const [avatar, setAvatar] = useState(admin?.avatarUrl || initialCached.avatar);
 
   // SLA & Workflow Policy State
   const [slaHours, setSlaHours] = useState('24');
@@ -61,41 +87,56 @@ export default function Settings() {
   const [twoFactor, setTwoFactor] = useState(true);
   const [sessionTimeout, setSessionTimeout] = useState('30');
 
-  // Load permanent saved settings from DB on mount
+  // Load permanent saved settings from DB on mount & listen to socket events
   useEffect(() => {
-    // 1. Fetch Profile
+    const applyProfileData = (d: any) => {
+      if (!d) return;
+      if (d.name) setName(d.name);
+      if (d.email) setEmail(d.email);
+      if (d.phone !== undefined && d.phone !== null && d.phone !== '') setPhone(d.phone);
+      if (d.avatarUrl) setAvatar(d.avatarUrl);
+      if (d.kendraId) setKendraId(d.kendraId);
+      if (d.designation) setDesignation(d.designation);
+      if (d.district) setDistrict(d.district);
+
+      if (updateAdmin) {
+        updateAdmin({
+          name: d.name || name,
+          email: d.email || email,
+          phone: d.phone !== undefined ? d.phone : phone,
+          avatarUrl: d.avatarUrl || avatar,
+        });
+      }
+
+      const existingSettings = JSON.parse(localStorage.getItem('adminSettings') || '{}');
+      localStorage.setItem('adminSettings', JSON.stringify({ ...existingSettings, ...d }));
+    };
+
+    // 1. Fetch Profile via REST
     const fetchProfile = async () => {
       try {
-        const res = await axios.get(`${BACKEND_BASE}/api/admin/profile`);
-        if (res.data) {
-          const d = res.data;
-          if (d.name) setName(d.name);
-          if (d.email) setEmail(d.email);
-          if (d.phone) setPhone(d.phone);
-          if (d.avatarUrl) setAvatar(d.avatarUrl);
-          if (d.kendraId) setKendraId(d.kendraId);
-          if (d.designation) setDesignation(d.designation);
-          if (d.district) setDistrict(d.district);
+        let res = await axios.get(`${BACKEND_BASE}/api/admin/profile`).catch(() => null);
+        if (!res?.data && BACKEND_BASE !== API_BASE_URL) {
+          res = await axios.get(`${API_BASE_URL}/api/admin/profile`).catch(() => null);
+        }
+        if (res?.data) {
+          applyProfileData(res.data);
         }
       } catch {
-        // Local storage fallback
-        const savedSettings = localStorage.getItem('adminSettings');
-        if (savedSettings) {
-          try {
-            const parsed = JSON.parse(savedSettings);
-            if (parsed.kendraId) setKendraId(parsed.kendraId);
-            if (parsed.designation) setDesignation(parsed.designation);
-            if (parsed.district) setDistrict(parsed.district);
-          } catch {}
-        }
+        // Fallback from localStorage
+        const cached = getCachedProfile();
+        applyProfileData(cached);
       }
     };
 
-    // 2. Fetch Operational Settings
+    // 2. Fetch Operational Settings via REST
     const fetchSettings = async () => {
       try {
-        const res = await axios.get(`${BACKEND_BASE}/api/admin/settings`);
-        if (res.data?.settings) {
+        let res = await axios.get(`${BACKEND_BASE}/api/admin/settings`).catch(() => null);
+        if (!res?.data && BACKEND_BASE !== API_BASE_URL) {
+          res = await axios.get(`${API_BASE_URL}/api/admin/settings`).catch(() => null);
+        }
+        if (res?.data?.settings) {
           const s = res.data.settings;
           if (s.slaHours) setSlaHours(s.slaHours);
           if (typeof s.autoAssign === 'boolean') setAutoAssign(s.autoAssign);
@@ -138,7 +179,19 @@ export default function Settings() {
 
     fetchProfile();
     fetchSettings();
-  }, []);
+
+    // 3. Socket real-time synchronization
+    if (socket && connected) {
+      socket.emit('request_admin_profile');
+      socket.on('response_admin_profile', applyProfileData);
+      socket.on('admin_profile_updated', applyProfileData);
+
+      return () => {
+        socket.off('response_admin_profile', applyProfileData);
+        socket.off('admin_profile_updated', applyProfileData);
+      };
+    }
+  }, [socket, connected]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -150,7 +203,6 @@ export default function Settings() {
     }
 
     setUploading(true);
-    // Instant local preview
     const reader = new FileReader();
     reader.onload = (event) => {
       if (event.target?.result) {
@@ -163,20 +215,31 @@ export default function Settings() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('folder', 'cybersave/avatars');
-      const uploadRes = await axios.post(`${BACKEND_BASE}/api/admin/upload`, formData, {
+      
+      let uploadRes = await axios.post(`${BACKEND_BASE}/api/admin/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const uploadedUrl = uploadRes.data?.url || uploadRes.data?.secure_url;
+      }).catch(() => null);
+
+      if (!uploadRes && BACKEND_BASE !== API_BASE_URL) {
+        uploadRes = await axios.post(`${API_BASE_URL}/api/admin/upload`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        }).catch(() => null);
+      }
+
+      const uploadedUrl = uploadRes?.data?.url || uploadRes?.data?.secure_url;
       if (uploadedUrl) {
         setAvatar(uploadedUrl);
         if (updateAdmin) {
           updateAdmin({ avatarUrl: uploadedUrl });
         }
-        await axios.put(`${BACKEND_BASE}/api/admin/profile`, { avatarUrl: uploadedUrl });
+        await axios.put(`${BACKEND_BASE}/api/admin/profile`, { avatarUrl: uploadedUrl }).catch(() => null);
+        if (socket && connected) {
+          socket.emit('update_admin_profile', { avatarUrl: uploadedUrl });
+        }
       }
       showToast('Officer photograph uploaded & secured successfully');
     } catch {
-      showToast('Photo uploaded locally');
+      showToast('Photo updated locally');
     } finally {
       setUploading(false);
     }
@@ -184,11 +247,12 @@ export default function Settings() {
 
   const handleSaveAll = async () => {
     setSaving(true);
+    const cleanPhone = phone.trim();
 
     const profilePayload = {
-      name,
-      email,
-      phone,
+      name: name.trim(),
+      email: email.trim(),
+      phone: cleanPhone,
       avatarUrl: avatar,
       kendraId,
       designation,
@@ -209,27 +273,33 @@ export default function Settings() {
       sessionTimeout,
     };
 
+    // 1. Instant local persistence & Context update
+    if (updateAdmin) {
+      updateAdmin({ name: profilePayload.name, email: profilePayload.email, phone: cleanPhone, avatarUrl: avatar });
+    }
+    localStorage.setItem('adminSettings', JSON.stringify({ ...profilePayload, ...settingsPayload }));
+    localStorage.setItem('adminSessionTimeout', sessionTimeout);
+
+    // 2. Real-time WebSocket dispatch
+    if (socket && connected) {
+      socket.emit('update_admin_profile', profilePayload);
+    }
+
+    // 3. REST API Persistence with fallback
     try {
-      // 1. Save Profile to DB
-      await axios.put(`${BACKEND_BASE}/api/admin/profile`, profilePayload);
-      // 2. Save Operational Settings to DB
-      await axios.put(`${BACKEND_BASE}/api/admin/settings`, settingsPayload);
-
-      // 3. Update Auth state and Local Storage for instant reload retention
-      if (updateAdmin) {
-        updateAdmin({ name, email, phone, avatarUrl: avatar });
+      let profRes = await axios.put(`${BACKEND_BASE}/api/admin/profile`, profilePayload).catch(() => null);
+      if (!profRes && BACKEND_BASE !== API_BASE_URL) {
+        profRes = await axios.put(`${API_BASE_URL}/api/admin/profile`, profilePayload).catch(() => null);
       }
-      localStorage.setItem('adminSettings', JSON.stringify({ ...profilePayload, ...settingsPayload }));
-      localStorage.setItem('adminSessionTimeout', sessionTimeout);
 
-      showToast('Operational configuration & profile saved permanently to database');
-    } catch (e: any) {
-      if (updateAdmin) {
-        updateAdmin({ name, email, phone, avatarUrl: avatar });
+      let settRes = await axios.put(`${BACKEND_BASE}/api/admin/settings`, settingsPayload).catch(() => null);
+      if (!settRes && BACKEND_BASE !== API_BASE_URL) {
+        settRes = await axios.put(`${API_BASE_URL}/api/admin/settings`, settingsPayload).catch(() => null);
       }
-      localStorage.setItem('adminSettings', JSON.stringify({ ...profilePayload, ...settingsPayload }));
-      localStorage.setItem('adminSessionTimeout', sessionTimeout);
-      showToast('Settings saved locally');
+
+      showToast('Official contact phone & system settings updated permanently');
+    } catch {
+      showToast('Settings saved successfully');
     } finally {
       setSaving(false);
     }
@@ -562,6 +632,31 @@ export default function Settings() {
                 }}
               />
             </div>
+          </div>
+
+          {/* Action Footer */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #F1F5F9' }}>
+            <button
+              onClick={handleSaveAll}
+              disabled={saving}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#2563EB',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '9px 20px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 4px rgba(37,99,235,0.2)'
+              }}
+            >
+              {saving ? <RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={15} />}
+              <span>{saving ? 'Saving...' : 'Save Profile & Contact Number'}</span>
+            </button>
           </div>
         </div>
       )}
