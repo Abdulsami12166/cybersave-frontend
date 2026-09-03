@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
-import { UserCheck, ShieldCheck, Clock, UserX, Search } from 'lucide-react';
+import { UserCheck, ShieldCheck, Clock, UserX, Search, X } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
 export default function Operators() {
@@ -331,7 +331,11 @@ export default function Operators() {
                 <button 
                   className="action-btn" 
                   style={{flex: 1, justifyContent: 'center'}}
-                  onClick={() => { setManagingOp(op); setOpPermissions(op.permissions || []); }}
+                  onClick={() => { 
+                    setManagingOp(op); 
+                    const currentPerms = Array.isArray(op.permissions) ? op.permissions : [];
+                    setOpPermissions(Array.from(new Set([...currentPerms, 'SETTINGS']))); 
+                  }}
                 >
                   Manage Access
                 </button>
