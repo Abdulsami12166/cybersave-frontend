@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
+import { useAuth } from '../context/AuthContext';
 import {
   FileText, CheckCircle, Clock, FileBadge, ArrowRight, ArrowLeft,
   ShieldCheck, Check, X, AlertTriangle, Download, Eye, CreditCard,
@@ -81,6 +82,7 @@ export default function ApplicationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
+  const { admin } = useAuth();
   const [app, setApp] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -260,6 +262,12 @@ export default function ApplicationDetail() {
     setActionLoading(true);
     const rejReason = newStatus === 'REJECTED' ? 'Documents could not be verified by the administrative officer.' : undefined;
 
+    const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
+    const adminName = currentAdminUser.name || (currentAdminUser.email ? currentAdminUser.email.split('@')[0] : 'Sub-Admin Operator');
+    const adminEmail = currentAdminUser.email || '';
+    const adminId = currentAdminUser.id || '';
+    const adminRole = currentAdminUser.role || (adminEmail === 'admin@cybersave.com' ? 'Super Administrator' : 'Sub-Admin / Operator');
+
     // Socket for instant sync
     if (socket) {
       socket.emit('update_application_status', {
@@ -268,6 +276,10 @@ export default function ApplicationDetail() {
         refNumber: app.id || app.refNumber,
         status: newStatus,
         rejectionReason: rejReason,
+        adminId,
+        adminName,
+        adminEmail,
+        adminRole,
       });
     }
 
@@ -278,10 +290,17 @@ export default function ApplicationDetail() {
       await fetch(`${backendUrl}/api/v1/applications/${targetId}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, rejectionReason: rejReason }),
+        body: JSON.stringify({
+          status: newStatus,
+          rejectionReason: rejReason,
+          adminId,
+          adminName,
+          adminEmail,
+          adminRole,
+        }),
       });
       window.dispatchEvent(new CustomEvent('cybersave_toast', {
-        detail: { message: `Application ${app.refNumber || app.id} marked as ${newStatus}!` },
+        detail: { message: `Application ${app.refNumber || app.id} marked as ${newStatus} by ${adminName}!` },
       }));
     } catch (e) {
       console.warn('REST status update error:', e);
