@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, FileText, Grid, UserSquare2, 
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
@@ -15,9 +15,10 @@ export const showToast = (message: string, type: 'success' | 'error' = 'success'
 
 export default function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [toast, setToast] = useState<{message: string, type: string} | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const { admin, logout } = useAuth();
+  const { admin, logout, updateAdmin } = useAuth();
   const { socket } = useSocket();
 
   useEffect(() => {
@@ -29,9 +30,18 @@ export default function Layout() {
     return () => window.removeEventListener('cybersave_toast', handleToast);
   }, []);
 
-  // Force logout when administrator suspends this operator account
+  // Live permission updates from Super Admin via WebSockets
   useEffect(() => {
     if (socket && admin?.id) {
+      const handlePermissionsUpdated = (data: { id: string; permissions: string[] }) => {
+        if (data?.id === admin.id) {
+          updateAdmin({ permissions: data.permissions });
+          window.dispatchEvent(new CustomEvent('cybersave_toast', {
+            detail: { message: 'Your administrative access permissions have been updated in real-time.', type: 'success' }
+          }));
+        }
+      };
+
       const handleForceLogout = (data: any) => {
         if (!data?.userId || data.userId === admin.id) {
           showToast(data?.message || 'Your account has been suspended by an Administrator.', 'error');
@@ -42,15 +52,17 @@ export default function Layout() {
         }
       };
 
+      socket.on('operator_permissions_updated', handlePermissionsUpdated);
       socket.on('force_logout', handleForceLogout);
       socket.on('operator_suspended', handleForceLogout);
 
       return () => {
+        socket.off('operator_permissions_updated', handlePermissionsUpdated);
         socket.off('force_logout', handleForceLogout);
         socket.off('operator_suspended', handleForceLogout);
       };
     }
-  }, [socket, admin?.id, logout, navigate]);
+  }, [socket, admin?.id, logout, navigate, updateAdmin]);
 
   const navSections = [
     {
@@ -58,13 +70,13 @@ export default function Layout() {
       items: [
         { icon: <LayoutDashboard size={18} />, label: 'Command Center', path: '/', requiredPermission: 'DASHBOARD' },
         { icon: <FileText size={18} />, label: 'Applications Queue', path: '/applications', requiredPermission: 'APPLICATIONS' },
-        { icon: <ArrowLeftRight size={18} />, label: 'Settlement Journal', path: '/transactions', requiredPermission: 'DASHBOARD' },
+        { icon: <ArrowLeftRight size={18} />, label: 'Settlement Journal', path: '/transactions', requiredPermission: 'TRANSACTIONS' },
       ]
     },
     {
       title: 'GOVERNANCE & REGISTRY',
       items: [
-        { icon: <Grid size={18} />, label: 'Service Schemes', path: '/services', requiredPermission: 'APPLICATIONS' },
+        { icon: <Grid size={18} />, label: 'Service Schemes', path: '/services', requiredPermission: 'SERVICES' },
         { icon: <Users size={18} />, label: 'Citizen Directory', path: '/users', requiredPermission: 'USERS' },
         { icon: <UserSquare2 size={18} />, label: 'Seva Kendra Operators', path: '/operators', requiredPermission: 'OPERATORS' },
       ]
@@ -72,31 +84,43 @@ export default function Layout() {
     {
       title: 'AUDIT & COMPLIANCE',
       items: [
-        { icon: <HelpCircle size={18} />, label: 'Citizen Grievances', path: '/support', requiredPermission: 'DASHBOARD' },
-        { icon: <BarChart3 size={18} />, label: 'SLA Analytics', path: '/analytics', requiredPermission: 'REPORTS' },
-        { icon: <ShieldCheck size={18} />, label: 'Security Audit Logs', path: '/audit', requiredPermission: 'SETTINGS' },
-        { icon: <Bell size={18} />, label: 'Broadcast Dispatches', path: '/notifications', requiredPermission: 'DASHBOARD' },
+        { icon: <HelpCircle size={18} />, label: 'Citizen Grievances', path: '/support', requiredPermission: 'SUPPORT' },
+        { icon: <BarChart3 size={18} />, label: 'SLA Analytics', path: '/analytics', requiredPermission: 'ANALYTICS' },
+        { icon: <ShieldCheck size={18} />, label: 'Security Audit Logs', path: '/audit', requiredPermission: 'AUDIT' },
+        { icon: <Bell size={18} />, label: 'Broadcast Dispatches', path: '/notifications', requiredPermission: 'NOTIFICATIONS' },
         { icon: <Settings size={18} />, label: 'System Configuration', path: '/settings', requiredPermission: 'SETTINGS' },
       ]
     }
   ];
 
   const isSuperAdmin = 
-    !admin?.role || 
-    admin?.role === 'SUPER_ADMIN' || 
-    admin?.role === 'Super Admin' || 
-    admin?.role === 'ADMIN' || 
     admin?.email === 'admin@cybersave.com' || 
-    admin?.email === 'officer.admin@cybersave.gov.in' ||
+    admin?.role === 'SUPER_ADMIN' ||
     admin?.permissions?.includes('ALL') ||
-    admin?.permissions?.includes('SUPER_ADMIN') ||
-    !admin?.permissions ||
-    admin?.permissions?.length === 0;
+    admin?.permissions?.includes('SUPER_ADMIN');
 
-  const defaultPermissions = ['DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'];
-  const adminPermissions = (admin?.permissions && admin.permissions.length > 0)
-    ? admin.permissions
-    : defaultPermissions;
+  const userPermissions = Array.isArray(admin?.permissions) ? admin.permissions : [];
+
+  const hasAccess = (requiredPermission?: string) => {
+    if (isSuperAdmin) return true;
+    if (!requiredPermission) return true;
+    return userPermissions.includes(requiredPermission);
+  };
+
+  // Route protection: Enforce least privilege routing access
+  const allNavItems = navSections.flatMap(s => s.items);
+  useEffect(() => {
+    if (isSuperAdmin) return;
+    const currentPath = location.pathname;
+    const matchedItem = allNavItems.find(item => item.path === currentPath || (item.path !== '/' && currentPath.startsWith(item.path)));
+    if (matchedItem && !hasAccess(matchedItem.requiredPermission)) {
+      // Find the first authorized navigation route for this sub-admin
+      const firstAllowed = allNavItems.find(item => hasAccess(item.requiredPermission));
+      if (firstAllowed) {
+        navigate(firstAllowed.path, { replace: true });
+      }
+    }
+  }, [location.pathname, isSuperAdmin, userPermissions]);
 
   const toggleDarkMode = () => {
     const root = document.documentElement;
@@ -183,7 +207,7 @@ export default function Layout() {
         <div style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '18px', flex: 1 }}>
           {navSections.map((section, sIdx) => {
             const visibleItems = section.items.filter(
-              item => isSuperAdmin || !item.requiredPermission || adminPermissions.includes(item.requiredPermission)
+              item => hasAccess(item.requiredPermission)
             );
 
             if (visibleItems.length === 0) return null;

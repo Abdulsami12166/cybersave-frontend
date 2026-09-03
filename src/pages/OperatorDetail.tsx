@@ -59,72 +59,53 @@ export default function OperatorDetail() {
   const [requestingDocUpdate, setRequestingDocUpdate] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; title: string } | null>(null);
 
-  // Permissions state
+  // Permissions & Access Modal state
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const [showAccessModal, setShowAccessModal] = useState(false);
 
   const ALL_PERMISSION_KEYS = [
-    'REG_MANAGE_VEHICLES',
-    'DISPATCH_OPS_CONTROL',
-    'CONF_TELEMATICS_RULES',
-    'VERIFY_DRIVER_CREDS',
-    'ISSUE_COMPLIANCE_OVERRIDES',
-    'PURGE_EXPIRED_AUDITS',
-    'BROADCAST_EMERGENCY_MSGS',
-    'CONF_SLACK_WEBHOOKS',
-    'GEN_MONTHLY_AUDITS',
-    'EXPORT_RAW_TELEMETRY',
-    'CREATE_FIELD_ACCOUNTS',
-    'MODIFY_SECURITY_ACCESS',
     'DASHBOARD',
     'APPLICATIONS',
-    'OPERATORS',
+    'TRANSACTIONS',
+    'SERVICES',
     'USERS',
-    'SETTINGS',
-    'REPORTS'
+    'OPERATORS',
+    'SUPPORT',
+    'ANALYTICS',
+    'AUDIT',
+    'NOTIFICATIONS',
+    'SETTINGS'
   ];
 
   const PERMISSION_GROUPS = [
     {
-      category: 'Fleet Management',
-      key: 'FLEET_MGMT',
+      category: 'Operations Management',
+      key: 'OPS_MGMT',
       items: [
-        { id: 'REG_MANAGE_VEHICLES', title: 'Register & Manage Vehicles', desc: 'Allows registering new fleet assets, assigning ID tags, and updating technical vehicle profiles.' },
-        { id: 'DISPATCH_OPS_CONTROL', title: 'Dispatch Operations Control', desc: 'Enables dispatching drivers, assigning routes, and issuing immediate operational overrides.' },
-        { id: 'CONF_TELEMATICS_RULES', title: 'Configure Telematics Rules', desc: 'Configure sensor thresholds, GPS ping intervals, and active speed limit geo-fencing policies.' },
+        { id: 'DASHBOARD', title: 'Command Center (Dashboard)', desc: 'Access real-time operational overview, key performance indicators, quick stats, and application charts.' },
+        { id: 'APPLICATIONS', title: 'Applications Queue', desc: 'Process citizen applications, verify attached documents, approve, reject, and issue certificates.' },
+        { id: 'TRANSACTIONS', title: 'Settlement Journal', desc: 'Inspect financial transactions, citizen payment status, revenue collections, and fee receipts.' },
       ]
     },
     {
-      category: 'Documents & Compliance',
-      key: 'DOCS_COMPLIANCE',
+      category: 'Governance & Citizen Registry',
+      key: 'GOV_REGISTRY',
       items: [
-        { id: 'VERIFY_DRIVER_CREDS', title: 'Verify Driver Credentials', desc: 'Audit and approve submitted driver licenses, medical fitness forms, and commercial insurance policies.' },
-        { id: 'ISSUE_COMPLIANCE_OVERRIDES', title: 'Issue Legal Compliance Overrides', desc: 'Allows manual bypass of regional regulatory holds in exceptional/emergency contexts.' },
-        { id: 'PURGE_EXPIRED_AUDITS', title: 'Purge Expired Audit Files', desc: 'Permanently delete historical physical records in accordance with institutional data retention policies.' },
+        { id: 'SERVICES', title: 'Service Schemes', desc: 'Manage government schemes catalog, configure department services, eligibility criteria, and fee structures.' },
+        { id: 'USERS', title: 'Citizen Directory', desc: 'View citizen registries, inspect identity records, KYC status, and dispatch direct notifications.' },
+        { id: 'OPERATORS', title: 'Seva Kendra Operators', desc: 'Manage Seva Kendra staff accounts, provision operators, and configure least-privilege feature access.' },
       ]
     },
     {
-      category: 'Alerts & Notifications',
-      key: 'ALERTS_NOTIF',
+      category: 'Audit, Support & System Control',
+      key: 'AUDIT_CONTROL',
       items: [
-        { id: 'BROADCAST_EMERGENCY_MSGS', title: 'Broadcast Emergency Messages', desc: 'Initiate system-wide high-priority flash notifications to all actively active fleet drivers.' },
-        { id: 'CONF_SLACK_WEBHOOKS', title: 'Configure Slack/Webhooks Alerts', desc: 'Route automated telemetry warning spikes directly to internal devops channels.' },
-      ]
-    },
-    {
-      category: 'Reports & Analytics',
-      key: 'REPORTS_ANALYTICS',
-      items: [
-        { id: 'GEN_MONTHLY_AUDITS', title: 'Generate Monthly Compliance Audits', desc: 'Compile comprehensive, cryptographically-signed security compliance dossiers.' },
-        { id: 'EXPORT_RAW_TELEMETRY', title: 'Export Raw Telemetry Streams', desc: 'Export unprocessed time-series GPS, speed, and fuel telemetry as JSON/CSV streams.' },
-      ]
-    },
-    {
-      category: 'User Management',
-      key: 'USER_MGMT',
-      items: [
-        { id: 'CREATE_FIELD_ACCOUNTS', title: 'Create Field Operator Accounts', desc: 'Allows provisioning profile shells for junior and contract field team members.' },
-        { id: 'MODIFY_SECURITY_ACCESS', title: 'Modify Operator Security Access', desc: 'Assign, edit, or strip explicit security permission flags from active operators.' },
+        { id: 'SUPPORT', title: 'Citizen Grievances', desc: 'Respond to and resolve citizen support tickets, grievances, and feedback requests.' },
+        { id: 'ANALYTICS', title: 'SLA Analytics', desc: 'Review operational performance metrics, turnaround times, and statutory SLA compliance.' },
+        { id: 'AUDIT', title: 'Security Audit Logs', desc: 'Access tamper-evident cryptographic security audit trails and administrator activity logs.' },
+        { id: 'NOTIFICATIONS', title: 'Broadcast Dispatches', desc: 'Dispatch emergency announcements, circulars, and broadcast messages to citizens.' },
+        { id: 'SETTINGS', title: 'System Configuration', desc: 'Configure portal operational settings, official contact phone, maintenance mode, and backups.' },
       ]
     }
   ];
@@ -543,6 +524,13 @@ export default function OperatorDetail() {
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <button 
               className="action-btn"
+              style={{ padding: '8px 18px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, background: '#1d4ed8' }}
+              onClick={() => setShowAccessModal(true)}
+            >
+              <ShieldCheck size={14} /> Manage Access
+            </button>
+            <button 
+              className="date-picker-btn"
               style={{ padding: '8px 18px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
               onClick={() => setShowEditModal(true)}
             >
@@ -1607,6 +1595,126 @@ export default function OperatorDetail() {
             </div>
             <div style={{ padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', minHeight: 300 }}>
               <img src={previewDoc.url} alt={previewDoc.title} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 8 }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MANAGE ACCESS (LEAST PRIVILEGE) MODAL ─── */}
+      {showAccessModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div style={{ background: '#ffffff', borderRadius: 16, width: '100%', maxWidth: 580, maxHeight: '90vh', overflowY: 'auto', padding: 28, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#0f172a' }}>Manage Access & Least Privilege</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+                  Configuring allowed features for <strong style={{ color: '#1e40af' }}>{operator.name}</strong> ({operator.email || 'No email'})
+                </p>
+              </div>
+              <button onClick={() => setShowAccessModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0', padding: '10px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>
+                Active Privileges: <strong style={{ color: '#2563eb' }}>{selectedPermissions.length} / {ALL_PERMISSION_KEYS.length} features allowed</strong>
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedPermissions([...ALL_PERMISSION_KEYS])}
+                  style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  Select All
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedPermissions([])}
+                  style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, cursor: 'pointer' }}
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
+              {PERMISSION_GROUPS.map((group) => {
+                const allGroupEnabled = group.items.every(item => selectedPermissions.includes(item.id));
+                return (
+                  <div key={group.key} style={{ border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {group.category}
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => toggleCategoryGroup(group)}
+                        style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        {allGroupEnabled ? 'Deselect Group' : 'Select Group'}
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {group.items.map((item) => {
+                        const isEnabled = selectedPermissions.includes(item.id);
+                        return (
+                          <label 
+                            key={item.id} 
+                            style={{
+                              display: 'flex', 
+                              alignItems: 'flex-start', 
+                              gap: 12, 
+                              padding: '10px 14px', 
+                              background: isEnabled ? '#f0f7ff' : '#ffffff',
+                              borderBottom: '1px solid #f8fafc',
+                              cursor: 'pointer',
+                              transition: 'background 0.15s ease'
+                            }}
+                          >
+                            <input 
+                              type="checkbox" 
+                              checked={isEnabled} 
+                              onChange={() => togglePermission(item.id)}
+                              style={{ marginTop: 3, width: 17, height: 17, accentColor: '#2563eb', cursor: 'pointer' }}
+                            />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: isEnabled ? '#1e40af' : '#1e293b' }}>
+                                {item.title}
+                              </div>
+                              <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                                {item.desc}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+              <button 
+                type="button"
+                className="date-picker-btn" 
+                onClick={() => setShowAccessModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                className="action-btn" 
+                onClick={async () => {
+                  await handleSavePermissions();
+                  setShowAccessModal(false);
+                }} 
+                disabled={savingPermissions}
+                style={{ padding: '8px 22px' }}
+              >
+                {savingPermissions ? 'Saving...' : 'Save & Enforce Access'}
+              </button>
             </div>
           </div>
         </div>

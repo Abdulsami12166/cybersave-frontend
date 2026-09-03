@@ -21,7 +21,19 @@ export default function Operators() {
   const [newOpPass, setNewOpPass] = useState('');
   const [newOpFeats, setNewOpFeats] = useState<string[]>(['DASHBOARD']);
 
-  const FEATURES = ['DASHBOARD', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'USERS', 'REPORTS'];
+  const ALL_FEATURES = [
+    { id: 'DASHBOARD', label: 'Command Center (Dashboard)', desc: 'View live operational KPIs, transaction overview & quick metrics' },
+    { id: 'APPLICATIONS', label: 'Applications Queue', desc: 'Verify, process, approve and reject citizen service applications' },
+    { id: 'TRANSACTIONS', label: 'Settlement Journal', desc: 'Inspect daily revenue, fees, and government service transaction ledgers' },
+    { id: 'SERVICES', label: 'Service Schemes', desc: 'Manage e-governance service catalog, forms, rules & requirements' },
+    { id: 'USERS', label: 'Citizen Directory', desc: 'Browse citizen accounts, activity history, and send direct notifications' },
+    { id: 'OPERATORS', label: 'Seva Kendra Operators', desc: 'Provision operators, manage access permissions, and audit operator accounts' },
+    { id: 'SUPPORT', label: 'Citizen Grievances', desc: 'Manage, resolve and respond to citizen support tickets and feedback' },
+    { id: 'ANALYTICS', label: 'SLA Analytics', desc: 'Review operational performance metrics, workload trends, and SLA reports' },
+    { id: 'AUDIT', label: 'Security Audit Logs', desc: 'Review cryptographic security logs and operator activity trail' },
+    { id: 'NOTIFICATIONS', label: 'Broadcast Dispatches', desc: 'Compose and broadcast high-priority announcements and alerts to citizens' },
+    { id: 'SETTINGS', label: 'System Configuration', desc: 'Configure portal operational settings, contact details & system maintenance' },
+  ];
 
   const fetchOperatorsRest = async () => {
     try {
@@ -75,25 +87,75 @@ export default function Operators() {
     };
   }, [socket, connected]);
 
-  const handleAddOperatorSubmit = () => {
-    if (socket && newOpName && newOpEmail && newOpPass) {
-      socket.emit('add_new_operator', { 
-        name: newOpName, email: newOpEmail, password: newOpPass, permissions: newOpFeats 
+  const handleAddOperatorSubmit = async () => {
+    if (!newOpName.trim() || !newOpEmail.trim() || !newOpPass.trim()) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Name, email, and password are required!', type: 'error' } }));
+      return;
+    }
+
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+      await fetch(`${backendUrl}/api/v1/operators`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newOpName.trim(),
+          email: newOpEmail.trim(),
+          password: newOpPass.trim(),
+          permissions: newOpFeats,
+          department: 'Operations',
+        }),
       });
+
+      if (socket) {
+        socket.emit('add_new_operator', { 
+          name: newOpName.trim(), 
+          email: newOpEmail.trim(), 
+          password: newOpPass.trim(), 
+          permissions: newOpFeats,
+          department: 'Operations'
+        });
+      }
+
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Operator "${newOpName}" created successfully with selected features!` } }));
+      setShowAddOpModal(false);
+      setNewOpName('');
+      setNewOpEmail('');
+      setNewOpPass('');
+      setNewOpFeats(['DASHBOARD']);
+      fetchOperatorsRest();
+    } catch (err) {
+      console.warn('Create operator error:', err);
     }
   };
 
-  const handleSaveAccess = () => {
-    if (socket && managingOp) {
-      socket.emit('update_operator_access', { id: managingOp.id, permissions: opPermissions });
+  const handleSaveAccess = async () => {
+    if (!managingOp) return;
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+      await fetch(`${backendUrl}/api/v1/operators/${managingOp.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissions: opPermissions }),
+      });
+
+      if (socket) {
+        socket.emit('update_operator_access', { id: managingOp.id, permissions: opPermissions });
+      }
+
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Access permissions updated for ${managingOp.name}!` } }));
+      setManagingOp(null);
+      fetchOperatorsRest();
+    } catch (e) {
+      console.warn('Save access error:', e);
     }
   };
 
-  const togglePermission = (feat: string) => {
-    if (opPermissions.includes(feat)) {
-      setOpPermissions(opPermissions.filter(p => p !== feat));
+  const togglePermission = (featId: string) => {
+    if (opPermissions.includes(featId)) {
+      setOpPermissions(opPermissions.filter(p => p !== featId));
     } else {
-      setOpPermissions([...opPermissions, feat]);
+      setOpPermissions([...opPermissions, featId]);
     }
   };
 
@@ -274,30 +336,84 @@ export default function Operators() {
           ))}
         </div>
         
-        {/* Ponytail: Simple inline modal for managing access */}
+        {/* Manage Access Modal - Least Privilege Control */}
         {managingOp && (
-          <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100}}>
-            <div style={{background: 'white', padding: 32, borderRadius: 12, width: 400}}>
-              <h3 style={{marginBottom: 8, fontSize: 18}}>Manage Access</h3>
-              <p style={{marginBottom: 24, fontSize: 14, color: '#6b7280'}}>Editing permissions for {managingOp.name}</p>
-              
-              <div style={{display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24}}>
-                {FEATURES.map(feat => (
-                  <label key={feat} style={{display: 'flex', alignItems: 'center', gap: 12, fontSize: 14}}>
-                    <input 
-                      type="checkbox" 
-                      checked={opPermissions.includes(feat)} 
-                      onChange={() => togglePermission(feat)}
-                      style={{width: 16, height: 16}}
-                    />
-                    {feat}
-                  </label>
-                ))}
+          <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000}}>
+            <div style={{background: 'white', padding: 28, borderRadius: 16, width: 560, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12}}>
+                <div>
+                  <h3 style={{margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a'}}>Manage Access & Least Privilege</h3>
+                  <p style={{margin: '4px 0 0', fontSize: 13, color: '#64748b'}}>
+                    Configuring permitted portal features for <strong style={{color: '#1e40af'}}>{managingOp.name}</strong> ({managingOp.email || 'No email'})
+                  </p>
+                </div>
+                <button onClick={() => setManagingOp(null)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4}}>
+                  <X size={20} />
+                </button>
               </div>
 
-              <div style={{display: 'flex', gap: 12, justifyContent: 'flex-end'}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0', padding: '10px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0'}}>
+                <span style={{fontSize: 12, fontWeight: 700, color: '#334155'}}>
+                  Active Privileges: <strong style={{color: '#2563eb'}}>{opPermissions.length} / {ALL_FEATURES.length} features allowed</strong>
+                </span>
+                <div style={{display: 'flex', gap: 8}}>
+                  <button 
+                    type="button" 
+                    onClick={() => setOpPermissions(ALL_FEATURES.map(f => f.id))}
+                    style={{background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, cursor: 'pointer'}}
+                  >
+                    Select All
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setOpPermissions([])}
+                    style={{background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, cursor: 'pointer'}}
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              <div style={{display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24}}>
+                {ALL_FEATURES.map(feat => {
+                  const isChecked = opPermissions.includes(feat.id);
+                  return (
+                    <label 
+                      key={feat.id} 
+                      style={{
+                        display: 'flex', 
+                        alignItems: 'flex-start', 
+                        gap: 12, 
+                        padding: '10px 14px', 
+                        borderRadius: 10,
+                        border: isChecked ? '1px solid #93c5fd' : '1px solid #f1f5f9',
+                        background: isChecked ? '#f0f7ff' : '#ffffff',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <input 
+                        type="checkbox" 
+                        checked={isChecked} 
+                        onChange={() => togglePermission(feat.id)}
+                        style={{marginTop: 3, width: 17, height: 17, accentColor: '#2563eb', cursor: 'pointer'}}
+                      />
+                      <div style={{flex: 1}}>
+                        <div style={{fontSize: 13, fontWeight: 700, color: isChecked ? '#1e40af' : '#1e293b'}}>
+                          {feat.label}
+                        </div>
+                        <div style={{fontSize: 11.5, color: '#64748b', marginTop: 2}}>
+                          {feat.desc}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div style={{display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 14, borderTop: '1px solid #f1f5f9'}}>
                 <button className="date-picker-btn" onClick={() => setManagingOp(null)}>Cancel</button>
-                <button className="action-btn" onClick={handleSaveAccess}>Save Access</button>
+                <button className="action-btn" onClick={handleSaveAccess} style={{padding: '8px 20px'}}>Save Access Privileges</button>
               </div>
             </div>
           </div>
@@ -316,42 +432,108 @@ export default function Operators() {
       </div>
 
       {showAddOpModal && (
-        <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000}}>
-          <div style={{background: 'white', padding: 24, borderRadius: 12, width: 450}}>
-            <h3 style={{marginBottom: 16}}>Add New Operator</h3>
-            <div style={{marginBottom: 12}}>
-              <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Full Name</label>
-              <input type="text" value={newOpName} onChange={e => setNewOpName(e.target.value)} style={{width: '100%', padding: '10px', border: '1px solid #e5e7eb', borderRadius: 6}} />
+        <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000}}>
+          <div style={{background: 'white', padding: 28, borderRadius: 16, width: 560, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)'}}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
+              <h3 style={{margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a'}}>Add New Seva Kendra Operator</h3>
+              <button onClick={() => setShowAddOpModal(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4}}>
+                <X size={20} />
+              </button>
             </div>
-            <div style={{marginBottom: 12}}>
-              <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Email Address (Gmail)</label>
-              <input type="email" value={newOpEmail} onChange={e => setNewOpEmail(e.target.value)} style={{width: '100%', padding: '10px', border: '1px solid #e5e7eb', borderRadius: 6}} />
-            </div>
-            <div style={{marginBottom: 16}}>
-              <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Password</label>
-              <input type="password" value={newOpPass} onChange={e => setNewOpPass(e.target.value)} style={{width: '100%', padding: '10px', border: '1px solid #e5e7eb', borderRadius: 6}} />
-            </div>
-            <div style={{marginBottom: 24}}>
-              <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Select Features</label>
-              <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
-                {FEATURES.map(feat => (
-                  <label key={feat} style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 13}}>
-                    <input 
-                      type="checkbox" 
-                      checked={newOpFeats.includes(feat)} 
-                      onChange={() => {
-                        if (newOpFeats.includes(feat)) setNewOpFeats(newOpFeats.filter(f => f !== feat));
-                        else setNewOpFeats([...newOpFeats, feat]);
-                      }} 
-                    />
-                    {feat}
-                  </label>
-                ))}
+
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12}}>
+              <div>
+                <label style={{display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6, color: '#334155'}}>Full Name (Unique Creation Name) *</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Ramesh Kumar"
+                  value={newOpName} 
+                  onChange={e => setNewOpName(e.target.value)} 
+                  style={{width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13}} 
+                />
+              </div>
+              <div>
+                <label style={{display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6, color: '#334155'}}>Email Address *</label>
+                <input 
+                  type="email" 
+                  placeholder="e.g. ramesh.kendra@gmail.com"
+                  value={newOpEmail} 
+                  onChange={e => setNewOpEmail(e.target.value)} 
+                  style={{width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13}} 
+                />
               </div>
             </div>
-            <div style={{display: 'flex', gap: 12, justifyContent: 'flex-end'}}>
+
+            <div style={{marginBottom: 16}}>
+              <label style={{display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6, color: '#334155'}}>Initial Password *</label>
+              <input 
+                type="password" 
+                placeholder="Temporary login password"
+                value={newOpPass} 
+                onChange={e => setNewOpPass(e.target.value)} 
+                style={{width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13}} 
+              />
+            </div>
+
+            <div style={{marginBottom: 20}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10}}>
+                <label style={{fontSize: 12, fontWeight: 700, color: '#334155'}}>Select Allowed Features (Least Privilege Access)</label>
+                <div style={{display: 'flex', gap: 6}}>
+                  <button 
+                    type="button" 
+                    onClick={() => setNewOpFeats(ALL_FEATURES.map(f => f.id))}
+                    style={{background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, cursor: 'pointer'}}
+                  >
+                    Select All
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setNewOpFeats([])}
+                    style={{background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, cursor: 'pointer'}}
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              <div style={{display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto', paddingRight: 4}}>
+                {ALL_FEATURES.map(feat => {
+                  const isChecked = newOpFeats.includes(feat.id);
+                  return (
+                    <label 
+                      key={feat.id} 
+                      style={{
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 10, 
+                        padding: '8px 12px', 
+                        borderRadius: 8,
+                        border: isChecked ? '1px solid #93c5fd' : '1px solid #f1f5f9',
+                        background: isChecked ? '#f0f7ff' : '#fafafa',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <input 
+                        type="checkbox" 
+                        checked={isChecked} 
+                        onChange={() => {
+                          if (isChecked) setNewOpFeats(newOpFeats.filter(f => f !== feat.id));
+                          else setNewOpFeats([...newOpFeats, feat.id]);
+                        }} 
+                        style={{width: 16, height: 16, accentColor: '#2563eb', cursor: 'pointer'}}
+                      />
+                      <span style={{fontSize: 12.5, fontWeight: isChecked ? 700 : 500, color: isChecked ? '#1e40af' : '#334155'}}>
+                        {feat.label}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 12, borderTop: '1px solid #f1f5f9'}}>
               <button className="date-picker-btn" onClick={() => setShowAddOpModal(false)}>Cancel</button>
-              <button className="action-btn" onClick={handleAddOperatorSubmit}>Create Operator</button>
+              <button className="action-btn" onClick={handleAddOperatorSubmit} style={{padding: '8px 20px'}}>Create Operator</button>
             </div>
           </div>
         </div>

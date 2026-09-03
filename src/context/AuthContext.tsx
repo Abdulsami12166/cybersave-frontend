@@ -39,35 +39,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Refresh profile data from DB
+    // Refresh profile data from DB preserving sub-admin identities and permissions
     const syncProfile = async () => {
       try {
+        const storedAdminRaw = localStorage.getItem('adminUser');
+        if (!storedAdminRaw) return;
+        const currentAdmin = JSON.parse(storedAdminRaw);
         const primaryUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-        let res = await fetch(`${primaryUrl}/api/admin/profile`).catch(() => null);
-        if (!res?.ok && primaryUrl !== 'https://cybersave-6tfo.onrender.com') {
-          res = await fetch(`https://cybersave-6tfo.onrender.com/api/admin/profile`).catch(() => null);
-        }
-        if (res && res.ok) {
-          const prof = await res.json();
-          if (prof) {
-            setAdmin((prev) => {
-              const updated = {
-                ...(prev || { id: 'admin-root-01', email: 'admin@cybersave.com', role: 'Super Admin', permissions: ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'] }),
-                name: prof.name || prev?.name || 'Suresh Kumar Sharma',
-                email: prof.email || prev?.email || 'admin@cybersave.com',
-                phone: prof.phone !== undefined && prof.phone !== null && prof.phone !== '' ? prof.phone : prev?.phone,
-                avatarUrl: prof.avatarUrl !== undefined ? prof.avatarUrl : prev?.avatarUrl,
-                role: prev?.role || 'Super Admin',
-                permissions: (prev?.permissions && prev.permissions.length > 0)
-                  ? prev.permissions
-                  : ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'],
-              };
-              localStorage.setItem('adminUser', JSON.stringify(updated));
-              return updated;
-            });
+
+        if (currentAdmin.email === 'admin@cybersave.com') {
+          let res = await fetch(`${primaryUrl}/api/admin/profile`).catch(() => null);
+          if (!res?.ok && primaryUrl !== 'https://cybersave-6tfo.onrender.com') {
+            res = await fetch(`https://cybersave-6tfo.onrender.com/api/admin/profile`).catch(() => null);
+          }
+          if (res && res.ok) {
+            const prof = await res.json();
+            if (prof) {
+              setAdmin((prev) => {
+                const updated = {
+                  ...(prev || currentAdmin),
+                  name: prof.name || prev?.name || 'Super Administrator',
+                  email: 'admin@cybersave.com',
+                  phone: prof.phone !== undefined && prof.phone !== null && prof.phone !== '' ? prof.phone : prev?.phone,
+                  avatarUrl: prof.avatarUrl !== undefined ? prof.avatarUrl : prev?.avatarUrl,
+                  role: 'Super Admin',
+                  permissions: ['SUPER_ADMIN', 'ALL'],
+                };
+                localStorage.setItem('adminUser', JSON.stringify(updated));
+                return updated;
+              });
+            }
+          }
+        } else if (currentAdmin.id) {
+          // Sub-admin: Sync their own actual profile and permissions from DB
+          let res = await fetch(`${primaryUrl}/api/v1/operators/${currentAdmin.id}`).catch(() => null);
+          if (!res?.ok && primaryUrl !== 'https://cybersave-6tfo.onrender.com') {
+            res = await fetch(`https://cybersave-6tfo.onrender.com/api/v1/operators/${currentAdmin.id}`).catch(() => null);
+          }
+          if (res && res.ok) {
+            const opData = await res.json();
+            if (opData) {
+              setAdmin((prev) => {
+                const updated = {
+                  ...(prev || currentAdmin),
+                  name: opData.name || prev?.name || currentAdmin.name,
+                  email: opData.email || prev?.email || currentAdmin.email,
+                  phone: opData.phone || prev?.phone,
+                  avatarUrl: opData.avatarUrl !== undefined ? opData.avatarUrl : prev?.avatarUrl,
+                  role: opData.role || 'Field Operator',
+                  permissions: Array.isArray(opData.permissions) ? opData.permissions : (prev?.permissions || []),
+                };
+                localStorage.setItem('adminUser', JSON.stringify(updated));
+                return updated;
+              });
+            }
           }
         }
-      } catch {}
+      } catch (e) {
+        console.warn('syncProfile note:', e);
+      }
     };
 
     if (storedToken) {
