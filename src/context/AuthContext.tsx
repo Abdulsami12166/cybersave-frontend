@@ -150,12 +150,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateAdmin = (updatedData: Partial<Admin>) => {
     setAdmin((prev) => {
+      const isSuper = (updatedData.email || prev?.email) === 'admin@cybersave.com';
       const merged = { 
-        ...(prev || { id: 'admin-root-01', email: 'officer.admin@cybersave.gov.in', role: 'Super Admin', permissions: ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'] }), 
+        ...(prev || { id: 'admin-root-01', email: '', role: 'Sub-Admin / Operator', permissions: [] }), 
         ...updatedData 
       } as Admin;
-      if (!merged.permissions || merged.permissions.length === 0) {
-        merged.permissions = ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'];
+      if (isSuper) {
+        merged.role = 'Super Admin';
+        merged.permissions = ['SUPER_ADMIN', 'ALL'];
+      } else {
+        merged.role = merged.role === 'Super Admin' ? 'Sub-Admin / Operator' : (merged.role || 'Sub-Admin / Operator');
+        merged.permissions = Array.isArray(merged.permissions) ? merged.permissions : [];
       }
       localStorage.setItem('adminUser', JSON.stringify(merged));
       return merged;

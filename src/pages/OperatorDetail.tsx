@@ -276,16 +276,17 @@ export default function OperatorDetail() {
   const handleSavePermissions = async () => {
     if (!operator) return;
     setSavingPermissions(true);
+    const finalPermissions = Array.from(new Set([...selectedPermissions, 'SETTINGS']));
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       await fetch(`${backendUrl}/api/v1/operators/${operator.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ permissions: selectedPermissions }),
+        body: JSON.stringify({ permissions: finalPermissions }),
       });
 
       if (socket) {
-        socket.emit('update_operator_access', { id: operator.id, permissions: selectedPermissions });
+        socket.emit('update_operator_access', { id: operator.id, permissions: finalPermissions });
       }
 
       window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Permissions saved and enforced across portal!' } }));
@@ -298,6 +299,7 @@ export default function OperatorDetail() {
   };
 
   const togglePermission = (permId: string) => {
+    if (permId === 'SETTINGS') return; // Settings is always normal for everyone
     if (selectedPermissions.includes(permId)) {
       setSelectedPermissions(selectedPermissions.filter(p => p !== permId));
     } else {
@@ -1012,7 +1014,8 @@ export default function OperatorDetail() {
                     {/* Category Sub-Items */}
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {group.items.map((item, iIdx) => {
-                        const isEnabled = selectedPermissions.includes(item.id);
+                        const isAlways = item.id === 'SETTINGS';
+                        const isEnabled = isAlways || selectedPermissions.includes(item.id);
                         return (
                           <div 
                             key={item.id} 
@@ -1021,26 +1024,34 @@ export default function OperatorDetail() {
                               justifyContent: 'space-between', 
                               alignItems: 'center', 
                               padding: '14px 18px',
+                              background: isAlways ? '#f0fdf4' : 'transparent',
                               borderBottom: iIdx === group.items.length - 1 ? 'none' : '1px solid #f1f5f9'
                             }}
                           >
                             <div style={{ flex: 1, paddingRight: 16 }}>
-                              <div style={{ fontWeight: 600, fontSize: 13, color: isEnabled ? '#0f172a' : '#94a3b8', marginBottom: 3 }}>
-                                {item.title}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: isAlways ? '#15803d' : (isEnabled ? '#0f172a' : '#94a3b8') }}>
+                                  {item.title}
+                                </span>
+                                {isAlways && (
+                                  <span style={{ background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0', padding: '1px 7px', borderRadius: 4, fontSize: 10.5, fontWeight: 700 }}>
+                                    Normal for Everyone (Always Active)
+                                  </span>
+                                )}
                               </div>
                               <div style={{ fontSize: 11.5, color: isEnabled ? '#64748b' : '#cbd5e1', lineHeight: 1.4 }}>
                                 {item.desc}
                               </div>
                             </div>
                             <div 
-                              onClick={() => togglePermission(item.id)}
+                              onClick={() => !isAlways && togglePermission(item.id)}
                               style={{
                                 width: 38, 
                                 height: 22, 
                                 borderRadius: 11, 
                                 background: isEnabled ? '#10b981' : '#e2e8f0', 
                                 position: 'relative',
-                                cursor: 'pointer',
+                                cursor: isAlways ? 'default' : 'pointer',
                                 transition: 'background 0.2s ease',
                                 flexShrink: 0
                               }}
@@ -1657,7 +1668,8 @@ export default function OperatorDetail() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {group.items.map((item) => {
-                        const isEnabled = selectedPermissions.includes(item.id);
+                        const isAlways = item.id === 'SETTINGS';
+                        const isEnabled = isAlways || selectedPermissions.includes(item.id);
                         return (
                           <label 
                             key={item.id} 
@@ -1666,21 +1678,29 @@ export default function OperatorDetail() {
                               alignItems: 'flex-start', 
                               gap: 12, 
                               padding: '10px 14px', 
-                              background: isEnabled ? '#f0f7ff' : '#ffffff',
+                              background: isAlways ? '#f0fdf4' : (isEnabled ? '#f0f7ff' : '#ffffff'),
                               borderBottom: '1px solid #f8fafc',
-                              cursor: 'pointer',
+                              cursor: isAlways ? 'default' : 'pointer',
                               transition: 'background 0.15s ease'
                             }}
                           >
                             <input 
                               type="checkbox" 
                               checked={isEnabled} 
-                              onChange={() => togglePermission(item.id)}
-                              style={{ marginTop: 3, width: 17, height: 17, accentColor: '#2563eb', cursor: 'pointer' }}
+                              disabled={isAlways}
+                              onChange={() => !isAlways && togglePermission(item.id)}
+                              style={{ marginTop: 3, width: 17, height: 17, accentColor: isAlways ? '#16a34a' : '#2563eb', cursor: isAlways ? 'default' : 'pointer' }}
                             />
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: isEnabled ? '#1e40af' : '#1e293b' }}>
-                                {item.title}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: isAlways ? '#15803d' : (isEnabled ? '#1e40af' : '#1e293b') }}>
+                                  {item.title}
+                                </span>
+                                {isAlways && (
+                                  <span style={{ background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0', padding: '1px 7px', borderRadius: 4, fontSize: 10.5, fontWeight: 700 }}>
+                                    Normal for Everyone (Always Active)
+                                  </span>
+                                )}
                               </div>
                               <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
                                 {item.desc}

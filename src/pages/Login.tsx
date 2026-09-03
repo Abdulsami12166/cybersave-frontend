@@ -27,12 +27,13 @@ const Login: React.FC = () => {
       });
 
       const { token, admin } = response.data;
+      const isSuperAdminEmail = cleanEmail === 'admin@cybersave.com';
       const enrichedAdmin = {
         ...admin,
-        role: admin?.role || 'Super Admin',
-        permissions: (admin?.permissions && admin.permissions.length > 0)
+        role: isSuperAdminEmail ? 'Super Admin' : (admin?.role && admin.role !== 'Super Admin' ? admin.role : 'Sub-Admin / Operator'),
+        permissions: (admin?.permissions && Array.isArray(admin.permissions))
           ? admin.permissions
-          : ['ALL', 'DASHBOARD', 'USERS', 'APPLICATIONS', 'OPERATORS', 'SETTINGS', 'REPORTS'],
+          : (isSuperAdminEmail ? ['SUPER_ADMIN', 'ALL'] : []),
       };
       login(token, enrichedAdmin);
       
