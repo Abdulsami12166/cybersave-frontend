@@ -25,7 +25,19 @@ import {
 const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
 const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || API_BASE_URL;
 
-const getCachedProfile = () => {
+const getCachedProfile = (isSuper: boolean, currentAdmin: any) => {
+  if (!isSuper && currentAdmin) {
+    return {
+      name: currentAdmin.name || 'Field Operator',
+      email: currentAdmin.email || '',
+      phone: currentAdmin.phone || '',
+      kendraId: currentAdmin.employeeId || (currentAdmin.id ? `OPS-${currentAdmin.id.slice(-4).toUpperCase()}` : 'SEVA-KEN-OP'),
+      designation: currentAdmin.role || 'Seva Kendra Field Operator',
+      district: currentAdmin.district || currentAdmin.department || 'Operational District',
+      avatar: currentAdmin.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentAdmin.name || 'Operator')}&background=1E40AF&color=fff`,
+    };
+  }
+
   let s: any = {};
   try {
     s = JSON.parse(localStorage.getItem('adminSettings') || '{}');
@@ -37,7 +49,7 @@ const getCachedProfile = () => {
 
   return {
     name: s.name || u.name || 'Suresh Kumar Sharma',
-    email: s.email || u.email || 'officer.admin@cybersave.gov.in',
+    email: s.email || u.email || 'admin@cybersave.com',
     phone: s.phone || u.phone || '+91 98450 19823',
     kendraId: s.kendraId || 'CSC-DEL-8841',
     designation: s.designation || 'Principal Verification Officer (SDM)',
@@ -51,7 +63,8 @@ export default function Settings() {
   const { socket, connected } = useSocket();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const initialCached = getCachedProfile();
+  const isSuperAdmin = admin?.email === 'admin@cybersave.com' || admin?.role === 'SUPER_ADMIN';
+  const initialCached = getCachedProfile(isSuperAdmin, admin);
 
   const [activeTab, setActiveTab] = useState<'profile' | 'sla' | 'settlement' | 'security'>('profile');
   const [saving, setSaving] = useState(false);
@@ -67,14 +80,14 @@ export default function Settings() {
   const [district, setDistrict] = useState(initialCached.district);
   const [avatar, setAvatar] = useState(admin?.avatarUrl || initialCached.avatar);
 
-  // SLA & Workflow Policy State
+  // SLA & Workflow Policy State (Super Admin Only)
   const [slaHours, setSlaHours] = useState('24');
   const [autoAssign, setAutoAssign] = useState(true);
   const [smsNotifs, setSmsNotifs] = useState(true);
   const [whatsappNotifs, setWhatsappNotifs] = useState(true);
   const [strictOcr, setStrictOcr] = useState(true);
 
-  // Settlement State
+  // Settlement State (Super Admin Only)
   const [bankAccount, setBankAccount] = useState('•••• •••• •••• 9842');
   const [ifscCode, setIfscCode] = useState('SBIN0001248');
   const [settlementCycle, setSettlementCycle] = useState('T+1 (Next Business Day)');
@@ -89,6 +102,35 @@ export default function Settings() {
 
   // Load permanent saved settings from DB on mount & listen to socket events
   useEffect(() => {
+    if (!isSuperAdmin) {
+      // Sub-admin / Operator: strictly fetch their own operator profile from DB
+      const fetchOperatorSelf = async () => {
+        const opId = admin?.id || admin?.email;
+        if (!opId) return;
+        try {
+          let res = await axios.get(`${BACKEND_BASE}/api/v1/operators/${opId}`).catch(() => null);
+          if (!res?.data && BACKEND_BASE !== API_BASE_URL) {
+            res = await axios.get(`${API_BASE_URL}/api/v1/operators/${opId}`).catch(() => null);
+          }
+          if (res?.data) {
+            const op = res.data;
+            if (op.name) setName(op.name);
+            if (op.email) setEmail(op.email);
+            if (op.phone) setPhone(op.phone);
+            if (op.district) setDistrict(op.district);
+            if (op.avatarUrl) setAvatar(op.avatarUrl);
+            if (op.employeeId) setKendraId(op.employeeId);
+            if (op.department) setDesignation(op.department);
+          }
+        } catch (e) {
+          console.warn('[Settings] fetch operator self note:', e);
+        }
+      };
+      fetchOperatorSelf();
+      return; // Do NOT fetch super admin profile or settings!
+    }
+
+    // Super Admin: Fetch Master Profile & Operational Settings
     const applyProfileData = (d: any) => {
       if (!d) return;
       if (d.name) setName(d.name);
@@ -112,7 +154,6 @@ export default function Settings() {
       localStorage.setItem('adminSettings', JSON.stringify({ ...existingSettings, ...d }));
     };
 
-    // 1. Fetch Profile via REST
     const fetchProfile = async () => {
       try {
         let res = await axios.get(`${BACKEND_BASE}/api/admin/profile`).catch(() => null);
@@ -123,13 +164,11 @@ export default function Settings() {
           applyProfileData(res.data);
         }
       } catch {
-        // Fallback from localStorage
-        const cached = getCachedProfile();
+        const cached = getCachedProfile(true, admin);
         applyProfileData(cached);
       }
     };
 
-    // 2. Fetch Operational Settings via REST
     const fetchSettings = async () => {
       try {
         let res = await axios.get(`${BACKEND_BASE}/api/admin/settings`).catch(() => null);
@@ -180,7 +219,7 @@ export default function Settings() {
     fetchProfile();
     fetchSettings();
 
-    // 3. Socket real-time synchronization
+    // Socket real-time synchronization for Super Admin
     if (socket && connected) {
       socket.emit('request_admin_profile');
       socket.on('response_admin_profile', applyProfileData);
@@ -191,7 +230,7 @@ export default function Settings() {
         socket.off('admin_profile_updated', applyProfileData);
       };
     }
-  }, [socket, connected]);
+  }, [socket, connected, isSuperAdmin, admin?.id, admin?.email]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -232,12 +271,19 @@ export default function Settings() {
         if (updateAdmin) {
           updateAdmin({ avatarUrl: uploadedUrl });
         }
-        await axios.put(`${BACKEND_BASE}/api/admin/profile`, { avatarUrl: uploadedUrl }).catch(() => null);
-        if (socket && connected) {
-          socket.emit('update_admin_profile', { avatarUrl: uploadedUrl });
+        if (isSuperAdmin) {
+          await axios.put(`${BACKEND_BASE}/api/admin/profile`, { avatarUrl: uploadedUrl }).catch(() => null);
+          if (socket && connected) {
+            socket.emit('update_admin_profile', { avatarUrl: uploadedUrl });
+          }
+        } else if (admin?.id) {
+          await axios.put(`${BACKEND_BASE}/api/v1/operators/${admin.id}`, { avatarUrl: uploadedUrl }).catch(() => null);
+          if (socket && connected) {
+            socket.emit('update_operator_profile', { id: admin.id, avatarUrl: uploadedUrl });
+          }
         }
       }
-      showToast('Officer photograph uploaded & secured successfully');
+      showToast('Photograph uploaded & secured successfully');
     } catch {
       showToast('Photo updated locally');
     } finally {
@@ -273,19 +319,19 @@ export default function Settings() {
       sessionTimeout,
     };
 
-    // 1. Instant local persistence & Context update
+    // Instant local persistence & Context update for Super Admin
     if (updateAdmin) {
       updateAdmin({ name: profilePayload.name, email: profilePayload.email, phone: cleanPhone, avatarUrl: avatar });
     }
     localStorage.setItem('adminSettings', JSON.stringify({ ...profilePayload, ...settingsPayload }));
     localStorage.setItem('adminSessionTimeout', sessionTimeout);
 
-    // 2. Real-time WebSocket dispatch
+    // Real-time WebSocket dispatch
     if (socket && connected) {
       socket.emit('update_admin_profile', profilePayload);
     }
 
-    // 3. REST API Persistence with fallback
+    // REST API Persistence
     try {
       let profRes = await axios.put(`${BACKEND_BASE}/api/admin/profile`, profilePayload).catch(() => null);
       if (!profRes && BACKEND_BASE !== API_BASE_URL) {
@@ -297,9 +343,59 @@ export default function Settings() {
         settRes = await axios.put(`${API_BASE_URL}/api/admin/settings`, settingsPayload).catch(() => null);
       }
 
-      showToast('Official contact phone & system settings updated permanently');
+      showToast('Master system settings & governance policy updated permanently');
     } catch {
       showToast('Settings saved successfully');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveOperatorSelf = async () => {
+    setSaving(true);
+    const cleanPhone = phone.trim();
+    const opId = admin?.id || admin?.email;
+
+    try {
+      if (opId) {
+        let res = await axios.put(`${BACKEND_BASE}/api/v1/operators/${opId}`, {
+          fullName: name.trim(),
+          phone: cleanPhone,
+          avatarUrl: avatar,
+          district,
+        }).catch(() => null);
+
+        if (!res && BACKEND_BASE !== API_BASE_URL) {
+          await axios.put(`${API_BASE_URL}/api/v1/operators/${opId}`, {
+            fullName: name.trim(),
+            phone: cleanPhone,
+            avatarUrl: avatar,
+            district,
+          }).catch(() => null);
+        }
+      }
+
+      if (socket && connected && opId) {
+        socket.emit('update_operator_profile', {
+          id: opId,
+          fullName: name.trim(),
+          phone: cleanPhone,
+          avatarUrl: avatar,
+          district,
+        });
+      }
+
+      if (updateAdmin) {
+        updateAdmin({
+          name: name.trim(),
+          phone: cleanPhone,
+          avatarUrl: avatar,
+        });
+      }
+
+      showToast('Operator profile details updated successfully');
+    } catch {
+      showToast('Profile updated locally');
     } finally {
       setSaving(false);
     }
@@ -321,16 +417,23 @@ export default function Settings() {
 
     setUpdatingPassword(true);
     try {
-      const res = await axios.post(`${BACKEND_BASE}/api/admin/change-password`, {
+      const payload: any = {
         currentPassword: currentPass,
         newPassword: newPass,
         confirmPassword: confirmPass,
-      });
+      };
+      if (admin?.id) payload.userId = admin.id;
+      if (admin?.email) payload.email = admin.email;
+
+      let res = await axios.post(`${BACKEND_BASE}/api/admin/change-password`, payload).catch(() => null);
+      if (!res && BACKEND_BASE !== API_BASE_URL) {
+        res = await axios.post(`${API_BASE_URL}/api/admin/change-password`, payload);
+      }
 
       setCurrentPass('');
       setNewPass('');
       setConfirmPass('');
-      showToast(res.data?.message || 'Officer security credentials updated & secured successfully');
+      showToast(res?.data?.message || 'Password credentials updated & secured successfully');
     } catch (err: any) {
       const errorMsg = err.response?.data?.message || 'Failed to update password. Please check your current password.';
       showToast(errorMsg, 'error');
@@ -357,15 +460,17 @@ export default function Settings() {
       }}>
         <div>
           <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-            Operational Console Settings & Governance Policy
+            {isSuperAdmin ? 'Master System Configuration & Governance Policy' : 'Operator Profile & Kendra Configuration'}
           </h1>
           <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
-            Kendra center parameters, officer authorization, verification SLA thresholds, and security controls
+            {isSuperAdmin
+              ? 'National portal parameters, master administrator authorization, verification SLA thresholds, and security controls'
+              : 'Personal operator identity credentials, assigned Seva Kendra branch, and security preferences'}
           </p>
         </div>
 
         <button
-          onClick={handleSaveAll}
+          onClick={isSuperAdmin ? handleSaveAll : handleSaveOperatorSelf}
           disabled={saving}
           style={{
             display: 'flex',
@@ -383,7 +488,7 @@ export default function Settings() {
           }}
         >
           {saving ? <RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={15} />}
-          <span>{saving ? 'Saving...' : 'Save Configuration'}</span>
+          <span>{saving ? 'Saving...' : (isSuperAdmin ? 'Save Master Configuration' : 'Save Operator Profile')}</span>
         </button>
       </div>
 
@@ -395,12 +500,18 @@ export default function Settings() {
         paddingBottom: '2px',
         overflowX: 'auto'
       }}>
-        {[
-          { id: 'profile', label: 'Officer & Kendra Profile', icon: <User size={16} /> },
-          { id: 'sla', label: 'Verification & SLA Workflow', icon: <Sliders size={16} /> },
-          { id: 'settlement', label: 'Treasury & Settlements', icon: <CreditCard size={16} /> },
-          { id: 'security', label: 'Security & Access Control', icon: <Shield size={16} /> },
-        ].map((tab) => (
+        {(isSuperAdmin
+          ? [
+              { id: 'profile', label: 'Master Officer & Kendra Profile', icon: <User size={16} /> },
+              { id: 'sla', label: 'Verification & SLA Workflow', icon: <Sliders size={16} /> },
+              { id: 'settlement', label: 'Treasury & Settlements', icon: <CreditCard size={16} /> },
+              { id: 'security', label: 'Security & Master Access', icon: <Shield size={16} /> },
+            ]
+          : [
+              { id: 'profile', label: 'Operator Profile & Kendra Details', icon: <User size={16} /> },
+              { id: 'security', label: 'Security & Credentials', icon: <Shield size={16} /> },
+            ]
+        ).map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
@@ -440,10 +551,12 @@ export default function Settings() {
         }}>
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-              Officer Credentials & Seva Kendra Details
+              {isSuperAdmin ? 'Master Officer Credentials & Seva Kendra Details' : 'Operator Identity & Kendra Branch Details'}
             </h3>
             <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
-              Official administrative identity used for digital certificate signing and audit ledgers
+              {isSuperAdmin 
+                ? 'Official administrative identity used for digital certificate signing and master audit ledgers'
+                : 'Personal operator information associated with your Seva Kendra terminal and operational actions'}
             </p>
           </div>
 
@@ -487,7 +600,7 @@ export default function Settings() {
                     cursor: 'pointer'
                   }}
                 >
-                  <Upload size={14} /> {uploading ? 'Processing...' : 'Upload Official Photograph'}
+                  <Upload size={14} /> {uploading ? 'Processing...' : (isSuperAdmin ? 'Upload Official Photograph' : 'Upload Operator Photo')}
                 </button>
                 <button
                   onClick={() => setAvatar(`https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=1E40AF&color=fff`)}
@@ -514,7 +627,7 @@ export default function Settings() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                Officer Full Name
+                {isSuperAdmin ? 'Master Officer Full Name' : 'Operator Full Name'}
               </label>
               <input
                 type="text"
@@ -533,20 +646,30 @@ export default function Settings() {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                Official Government Email
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
+                  {isSuperAdmin ? 'Master Official Email' : 'Operator Account Email'}
+                </label>
+                {!isSuperAdmin && (
+                  <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#2563eb', background: '#eff6ff', padding: '1px 6px', borderRadius: '4px' }}>
+                    Assigned by Super Admin
+                  </span>
+                )}
+              </div>
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                disabled={!isSuperAdmin}
+                onChange={(e) => isSuperAdmin && setEmail(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '9px 12px',
                   borderRadius: '7px',
                   border: '1px solid #CBD5E1',
+                  background: isSuperAdmin ? '#FFFFFF' : '#F8FAFC',
+                  cursor: isSuperAdmin ? 'text' : 'not-allowed',
                   fontSize: '13px',
-                  color: '#0F172A',
+                  color: isSuperAdmin ? '#0F172A' : '#64748B',
                   outline: 'none'
                 }}
               />
@@ -574,7 +697,7 @@ export default function Settings() {
 
             <div>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                Kendra Center ID
+                {isSuperAdmin ? 'National Kendra Hub ID' : 'Assigned Operator ID'}
               </label>
               <input
                 type="text"
@@ -600,14 +723,18 @@ export default function Settings() {
               <input
                 type="text"
                 value={designation}
-                onChange={(e) => setDesignation(e.target.value)}
+                disabled={!isSuperAdmin}
+                onChange={(e) => isSuperAdmin && setDesignation(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '9px 12px',
                   borderRadius: '7px',
                   border: '1px solid #CBD5E1',
+                  background: isSuperAdmin ? '#FFFFFF' : '#F8FAFC',
+                  cursor: isSuperAdmin ? 'text' : 'not-allowed',
                   fontSize: '13px',
-                  color: '#0F172A',
+                  color: isSuperAdmin ? '#0F172A' : '#475569',
+                  fontWeight: isSuperAdmin ? 400 : 600,
                   outline: 'none'
                 }}
               />
@@ -634,10 +761,64 @@ export default function Settings() {
             </div>
           </div>
 
+          {/* Active Permissions Summary for Sub-Admin */}
+          {!isSuperAdmin && (
+            <div style={{
+              background: '#F8FAFC',
+              borderRadius: '10px',
+              border: '1px solid #E2E8F0',
+              padding: '16px 20px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 800, color: '#1E293B' }}>
+                  Active Least-Privilege Module Access
+                </h4>
+                <span style={{ fontSize: '11px', color: '#2563EB', fontWeight: 700, background: '#EFF6FF', padding: '2px 8px', borderRadius: '4px' }}>
+                  Managed by Super Administrator
+                </span>
+              </div>
+              <p style={{ margin: '0 0 12px', fontSize: '12px', color: '#64748B' }}>
+                The following features in the portal are enabled for your operator credentials:
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {(Array.isArray(admin?.permissions) && admin.permissions.length > 0 ? admin.permissions : ['DASHBOARD', 'SETTINGS']).map((perm) => (
+                  <span 
+                    key={perm}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: '#FFFFFF',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: '6px',
+                      padding: '5px 10px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#0F172A'
+                    }}
+                  >
+                    <CheckCircle2 size={13} color="#16A34A" />
+                    {perm === 'DASHBOARD' ? 'Command Center' :
+                     perm === 'APPLICATIONS' ? 'Applications Queue' :
+                     perm === 'TRANSACTIONS' ? 'Settlement Journal' :
+                     perm === 'SERVICES' ? 'Service Schemes' :
+                     perm === 'USERS' ? 'Citizen Directory' :
+                     perm === 'OPERATORS' ? 'Seva Kendra Operators' :
+                     perm === 'SUPPORT' ? 'Citizen Grievances' :
+                     perm === 'ANALYTICS' ? 'SLA Analytics' :
+                     perm === 'AUDIT' ? 'Security Audit Logs' :
+                     perm === 'NOTIFICATIONS' ? 'Broadcast Dispatches' :
+                     perm === 'SETTINGS' ? 'System Configuration (Standard)' : perm}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Action Footer */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #F1F5F9' }}>
             <button
-              onClick={handleSaveAll}
+              onClick={isSuperAdmin ? handleSaveAll : handleSaveOperatorSelf}
               disabled={saving}
               style={{
                 display: 'flex',
@@ -655,14 +836,14 @@ export default function Settings() {
               }}
             >
               {saving ? <RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={15} />}
-              <span>{saving ? 'Saving...' : 'Save Profile & Contact Number'}</span>
+              <span>{saving ? 'Saving...' : (isSuperAdmin ? 'Save Master Configuration' : 'Save Operator Profile')}</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* ─── TAB 2: Verification & SLA Workflow ────────────────────────────── */}
-      {activeTab === 'sla' && (
+      {/* ─── TAB 2: Verification & SLA Workflow (Super Admin Only) ──────────── */}
+      {isSuperAdmin && activeTab === 'sla' && (
         <div style={{
           background: '#FFFFFF',
           borderRadius: '12px',
@@ -802,8 +983,8 @@ export default function Settings() {
         </div>
       )}
 
-      {/* ─── TAB 3: Treasury & Settlements ─────────────────────────────────── */}
-      {activeTab === 'settlement' && (
+      {/* ─── TAB 3: Treasury & Settlements (Super Admin Only) ──────────────── */}
+      {isSuperAdmin && activeTab === 'settlement' && (
         <div style={{
           background: '#FFFFFF',
           borderRadius: '12px',
