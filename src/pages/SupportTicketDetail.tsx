@@ -1,29 +1,76 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
+import { useAuth } from '../context/AuthContext';
 import { Paperclip } from 'lucide-react';
 
 export default function SupportTicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
+  const { admin } = useAuth();
   const [ticket, setTicket] = useState<any>(null);
   const [replyText, setReplyText] = useState('');
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (socket && connected) {
       socket.emit('request_ticket_thread', { id });
-      socket.on('response_ticket_thread', (data) => setTicket(data));
+      const handleThread = (data: any) => setTicket(data);
+      socket.on('response_ticket_thread', handleThread);
+      socket.on('support_tickets_updated', () => {
+        socket.emit('request_ticket_thread', { id });
+      });
+
+      return () => {
+        socket.off('response_ticket_thread', handleThread);
+      };
     }
-    return () => {
-      if (socket) socket.off('response_ticket_thread');
-    };
   }, [socket, connected, id]);
 
-  const sendReply = () => {
-    if (!replyText.trim()) return;
-    socket?.emit('send_ticket_reply', { id, text: replyText });
-    setReplyText('');
+  const sendReply = async () => {
+    if (!replyText.trim() || sending) return;
+    setSending(true);
+
+    const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
+    const adminName = currentAdminUser.name || (currentAdminUser.email ? currentAdminUser.email.split('@')[0] : 'Support Officer (SDM)');
+    const adminEmail = currentAdminUser.email || '';
+    const adminId = currentAdminUser.id || '';
+    const adminRole = currentAdminUser.role || (adminEmail === 'admin@cybersave.com' ? 'Super Administrator' : 'Sub-Admin / Operator');
+
+    const payload = {
+      id,
+      text: replyText.trim(),
+      adminId,
+      adminName,
+      adminEmail,
+      adminRole,
+    };
+
+    // 1. Socket dispatch
+    if (socket) {
+      socket.emit('send_ticket_reply', payload);
+    }
+
+    // 2. REST dispatch for guaranteed delivery & DB save
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      await fetch(`${backendUrl}/api/v1/support/tickets/${id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: `Official response sent to citizen ${ticket?.reporter?.name || 'user'} successfully!` }
+      }));
+    } catch (e) {
+      console.warn('REST support reply error:', e);
+    } finally {
+      setSending(false);
+      setReplyText('');
+      if (socket) socket.emit('request_ticket_thread', { id });
+    }
   };
 
   if (!ticket) return <div style={{padding: 24}}>Loading Ticket...</div>;
@@ -114,7 +161,7 @@ export default function SupportTicketDetail() {
               <textarea 
                 rows={4} 
                 value={replyText} onChange={e => setReplyText(e.target.value)}
-                placeholder="Type your response to John Smith here..."
+                placeholder={`Type your official response to ${ticket?.reporter?.name || 'citizen'} here...`}
                 style={{width: '100%', padding: '12px', border: '1px solid #e5e7eb', borderRadius: 8, outline: 'none', resize: 'none', marginBottom: 12}}
               />
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
@@ -123,7 +170,14 @@ export default function SupportTicketDetail() {
                 </button>
                 <div style={{display: 'flex', gap: 12}}>
                   <button className="date-picker-btn">Save Draft</button>
-                  <button className="action-btn" onClick={sendReply}>Send Reply</button>
+                  <button 
+                    className="action-btn" 
+                    onClick={sendReply}
+                    disabled={sending || !replyText.trim()}
+                    style={{ opacity: sending || !replyText.trim() ? 0.6 : 1 }}
+                  >
+                    {sending ? 'Sending Response...' : 'Send Reply'}
+                  </button>
                 </div>
               </div>
             </div>
