@@ -47,15 +47,45 @@ export default function Refunds() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [selectedQuickDecline, setSelectedQuickDecline] = useState('');
 
+  const getApiBase = () => {
+    return import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+  };
+
   const fetchRefunds = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('/api/v1/refunds');
-      if (Array.isArray(res.data)) {
-        setRefunds(res.data);
-      } else {
-        setRefunds([]);
+      const base = getApiBase();
+      const token = localStorage.getItem('adminToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      // 1. Primary target
+      let res = await axios.get(`${base}/api/v1/refunds`, { headers }).catch(() => null);
+
+      // 2. Fallback to production Render backend if primary was localhost or failed
+      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
+        res = await axios.get(`https://cybersave-6tfo.onrender.com/api/v1/refunds`, { headers }).catch(() => null);
       }
+
+      // 3. Fallback to localhost 3000 if running locally
+      if ((!res || !res.data) && base !== 'http://localhost:3000') {
+        res = await axios.get(`http://localhost:3000/api/v1/refunds`, { headers }).catch(() => null);
+      }
+
+      // 4. Fallback to relative proxy
+      if (!res || !res.data) {
+        res = await axios.get('/api/v1/refunds', { headers }).catch(() => null);
+      }
+
+      const raw = res?.data;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.data)
+        ? raw.data
+        : Array.isArray(raw?.refunds)
+        ? raw.refunds
+        : [];
+
+      setRefunds(list);
     } catch (err: any) {
       console.error('Error fetching refunds:', err);
       showToast('Failed to load refund requests', 'error');
@@ -73,23 +103,28 @@ export default function Refunds() {
     if (!socket) return;
 
     const handleNewRefund = (newRefund: any) => {
-      showToast(`New Refund #${newRefund.refNumber} received for ${newRefund.serviceTitle}!`, 'success');
+      if (!newRefund) return;
+      showToast(`New Refund #${newRefund.refNumber || ''} received for ${newRefund.serviceTitle || 'Scheme'}!`, 'success');
       setRefunds((prev) => {
         const exists = prev.some((r) => r.id === newRefund.id || r.refNumber === newRefund.refNumber);
         if (exists) {
-          return prev.map((r) => (r.id === newRefund.id ? newRefund : r));
+          return prev.map((r) => (r.id === newRefund.id ? { ...r, ...newRefund } : r));
         }
         return [newRefund, ...prev];
       });
     };
 
     const handleRefundsUpdated = (updatedRefund: any) => {
+      if (!updatedRefund?.id) {
+        fetchRefunds();
+        return;
+      }
       setRefunds((prev) => {
-        if (!updatedRefund?.id) {
-          fetchRefunds();
-          return prev;
+        const exists = prev.some((r) => r.id === updatedRefund.id || r.refNumber === updatedRefund.refNumber);
+        if (exists) {
+          return prev.map((r) => (r.id === updatedRefund.id ? { ...r, ...updatedRefund } : r));
         }
-        return prev.map((r) => (r.id === updatedRefund.id ? { ...r, ...updatedRefund } : r));
+        return [updatedRefund, ...prev];
       });
     };
 
@@ -113,13 +148,24 @@ export default function Refunds() {
 
     try {
       setActionLoading(approveTarget.id);
+      const base = getApiBase();
+      const token = localStorage.getItem('adminToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const adminName = admin?.name || admin?.email || 'Admin Authority';
-      const res = await axios.post(`/api/v1/refunds/${approveTarget.id}/approve`, {
+      const payload = {
         adminNotes: approveNotes.trim() || 'Refund approved. Amount credited to citizen wallet.',
         adminName,
-      });
+      };
 
-      if (res.data?.success) {
+      let res = await axios.post(`${base}/api/v1/refunds/${approveTarget.id}/approve`, payload, { headers }).catch(() => null);
+      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
+        res = await axios.post(`https://cybersave-6tfo.onrender.com/api/v1/refunds/${approveTarget.id}/approve`, payload, { headers }).catch(() => null);
+      }
+      if (!res || !res.data) {
+        res = await axios.post(`/api/v1/refunds/${approveTarget.id}/approve`, payload, { headers }).catch(() => null);
+      }
+
+      if (res?.data?.success) {
         showToast(`Refund #${approveTarget.refNumber} approved! ₹${Number(approveTarget.amount).toFixed(2)} credited to citizen wallet.`, 'success');
         setRefunds((prev) =>
           prev.map((r) =>
@@ -136,6 +182,8 @@ export default function Refunds() {
         );
         setApproveTarget(null);
         setApproveNotes('');
+      } else {
+        showToast(res?.data?.message || 'Failed to approve refund', 'error');
       }
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to approve refund', 'error');
@@ -151,13 +199,24 @@ export default function Refunds() {
 
     try {
       setActionLoading(rejectTarget.id);
+      const base = getApiBase();
+      const token = localStorage.getItem('adminToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const adminName = admin?.name || admin?.email || 'Admin Authority';
-      const res = await axios.post(`/api/v1/refunds/${rejectTarget.id}/reject`, {
+      const payload = {
         rejectionReason: finalReason,
         adminName,
-      });
+      };
 
-      if (res.data?.success) {
+      let res = await axios.post(`${base}/api/v1/refunds/${rejectTarget.id}/reject`, payload, { headers }).catch(() => null);
+      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
+        res = await axios.post(`https://cybersave-6tfo.onrender.com/api/v1/refunds/${rejectTarget.id}/reject`, payload, { headers }).catch(() => null);
+      }
+      if (!res || !res.data) {
+        res = await axios.post(`/api/v1/refunds/${rejectTarget.id}/reject`, payload, { headers }).catch(() => null);
+      }
+
+      if (res?.data?.success) {
         showToast(`Refund #${rejectTarget.refNumber} declined.`, 'success');
         setRefunds((prev) =>
           prev.map((r) =>
@@ -175,6 +234,8 @@ export default function Refunds() {
         setRejectTarget(null);
         setRejectionReason('');
         setSelectedQuickDecline('');
+      } else {
+        showToast(res?.data?.message || 'Failed to decline refund', 'error');
       }
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to decline refund', 'error');
@@ -185,11 +246,11 @@ export default function Refunds() {
 
   // KPIs
   const totalCount = refunds.length;
-  const pendingCount = refunds.filter((r) => r.status === 'PENDING').length;
-  const approvedCount = refunds.filter((r) => r.status === 'APPROVED').length;
-  const rejectedCount = refunds.filter((r) => r.status === 'REJECTED').length;
+  const pendingCount = refunds.filter((r) => (r.status || '').toUpperCase() === 'PENDING').length;
+  const approvedCount = refunds.filter((r) => (r.status || '').toUpperCase() === 'APPROVED').length;
+  const rejectedCount = refunds.filter((r) => (r.status || '').toUpperCase() === 'REJECTED').length;
   const totalRefundedAmount = refunds
-    .filter((r) => r.status === 'APPROVED')
+    .filter((r) => (r.status || '').toUpperCase() === 'APPROVED')
     .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
   // Reason list for filter
@@ -205,7 +266,8 @@ export default function Refunds() {
   const filteredRefunds = useMemo(() => {
     return refunds
       .filter((r) => {
-        if (filter !== 'ALL' && r.status !== filter) return false;
+        const s = (r.status || '').toUpperCase();
+        if (filter !== 'ALL' && s !== filter) return false;
         if (reasonFilter !== 'ALL' && r.reason !== reasonFilter) return false;
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
@@ -568,8 +630,9 @@ export default function Refunds() {
                   const citizenEmail = r.user?.email || 'N/A';
                   const citizenPhone = r.user?.phone || r.user?.profile?.phone || 'N/A';
                   const appRef = r.application?.refNumber || 'N/A';
-                  const isPending = r.status === 'PENDING';
-                  const isApproved = r.status === 'APPROVED';
+                  const statusUpper = (r.status || '').toUpperCase();
+                  const isPending = statusUpper === 'PENDING';
+                  const isApproved = statusUpper === 'APPROVED';
                   const isCopied = copiedId === r.id;
 
                   // Initials

@@ -102,13 +102,37 @@ export default function ApplicationDetail() {
   const [refundInfo, setRefundInfo] = useState<any>(null);
   const [refundActionLoading, setRefundActionLoading] = useState(false);
 
+  const getBackendUrl = () => {
+    return import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+  };
+
   const fetchRefund = async (targetId?: string) => {
     try {
       const tid = targetId || id;
       if (!tid) return;
-      const res = await axios.get(`/api/v1/refunds?applicationId=${tid}`);
-      if (Array.isArray(res.data) && res.data.length > 0) {
-        setRefundInfo(res.data[0]);
+      const base = getBackendUrl();
+      const token = localStorage.getItem('adminToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      let res = await axios.get(`${base}/api/v1/refunds?applicationId=${tid}`, { headers }).catch(() => null);
+      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
+        res = await axios.get(`https://cybersave-6tfo.onrender.com/api/v1/refunds?applicationId=${tid}`, { headers }).catch(() => null);
+      }
+      if (!res || !res.data) {
+        res = await axios.get(`/api/v1/refunds?applicationId=${tid}`, { headers }).catch(() => null);
+      }
+
+      const raw = res?.data;
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.data)
+        ? raw.data
+        : Array.isArray(raw?.refunds)
+        ? raw.refunds
+        : [];
+
+      if (list.length > 0) {
+        setRefundInfo(list[0]);
       }
     } catch (e) {
       // ignore
@@ -120,14 +144,33 @@ export default function ApplicationDetail() {
     if (!window.confirm(`Approve refund #${refundInfo.refNumber} and re-credit ₹${Number(refundInfo.amount).toFixed(2)} to citizen wallet?`)) return;
     try {
       setRefundActionLoading(true);
-      const adminName = admin?.fullName || admin?.email || 'Admin Authority';
-      const res = await axios.post(`/api/v1/refunds/${refundInfo.id}/approve`, { adminName });
-      if (res.data?.success) {
+      const base = getBackendUrl();
+      const token = localStorage.getItem('adminToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const adminName = admin?.name || admin?.email || 'Admin Authority';
+      const payload = {
+        adminNotes: 'Refund approved. Amount credited to citizen wallet.',
+        adminName,
+      };
+
+      let res = await axios.post(`${base}/api/v1/refunds/${refundInfo.id}/approve`, payload, { headers }).catch(() => null);
+      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
+        res = await axios.post(`https://cybersave-6tfo.onrender.com/api/v1/refunds/${refundInfo.id}/approve`, payload, { headers }).catch(() => null);
+      }
+      if (!res || !res.data) {
+        res = await axios.post(`/api/v1/refunds/${refundInfo.id}/approve`, payload, { headers }).catch(() => null);
+      }
+
+      if (res?.data?.success) {
         window.dispatchEvent(new CustomEvent('cybersave_toast', {
           detail: { message: `Refund #${refundInfo.refNumber} approved! ₹${refundInfo.amount} credited to wallet.`, type: 'success' }
         }));
         setRefundInfo((prev: any) => ({ ...prev, status: 'APPROVED', processedBy: adminName }));
         fetchApp();
+      } else {
+        window.dispatchEvent(new CustomEvent('cybersave_toast', {
+          detail: { message: res?.data?.message || 'Failed to approve refund', type: 'error' }
+        }));
       }
     } catch (err: any) {
       window.dispatchEvent(new CustomEvent('cybersave_toast', {
@@ -144,17 +187,33 @@ export default function ApplicationDetail() {
     if (reason === null) return;
     try {
       setRefundActionLoading(true);
-      const adminName = admin?.fullName || admin?.email || 'Admin Authority';
-      const res = await axios.post(`/api/v1/refunds/${refundInfo.id}/reject`, {
+      const base = getBackendUrl();
+      const token = localStorage.getItem('adminToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const adminName = admin?.name || admin?.email || 'Admin Authority';
+      const payload = {
         rejectionReason: reason || 'Declined by administration.',
         adminName,
-      });
-      if (res.data?.success) {
+      };
+
+      let res = await axios.post(`${base}/api/v1/refunds/${refundInfo.id}/reject`, payload, { headers }).catch(() => null);
+      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
+        res = await axios.post(`https://cybersave-6tfo.onrender.com/api/v1/refunds/${refundInfo.id}/reject`, payload, { headers }).catch(() => null);
+      }
+      if (!res || !res.data) {
+        res = await axios.post(`/api/v1/refunds/${refundInfo.id}/reject`, payload, { headers }).catch(() => null);
+      }
+
+      if (res?.data?.success) {
         window.dispatchEvent(new CustomEvent('cybersave_toast', {
           detail: { message: `Refund #${refundInfo.refNumber} declined.`, type: 'success' }
         }));
         setRefundInfo((prev: any) => ({ ...prev, status: 'REJECTED', adminNotes: reason }));
         fetchApp();
+      } else {
+        window.dispatchEvent(new CustomEvent('cybersave_toast', {
+          detail: { message: res?.data?.message || 'Failed to decline refund', type: 'error' }
+        }));
       }
     } catch (err: any) {
       window.dispatchEvent(new CustomEvent('cybersave_toast', {
