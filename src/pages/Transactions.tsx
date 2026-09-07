@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useSocket } from '../context/SocketContext';
-import { ArrowLeftRight, CreditCard, DollarSign, Search, Download, CheckCircle, ShieldCheck } from 'lucide-react';
+import { ArrowLeftRight, CreditCard, DollarSign, Search, Download, CheckCircle, ShieldCheck, RotateCcw } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
 import { formatIndianDate, normalizeAppId, normalizeCitizenName } from '../utils/normalize';
@@ -10,7 +10,7 @@ export default function Transactions() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterMethod, setFilterMethod] = useState('ALL');
+  const [filterMethod, setFilterMethod] = useState<'ALL' | 'RAZORPAY' | 'PORTAL' | 'REFUNDED'>('ALL');
 
   useEffect(() => {
     if (socket && connected) {
@@ -27,12 +27,18 @@ export default function Transactions() {
 
       socket.on('response_transactions_data', handleData);
       socket.on('transactions_updated', handleRefresh);
+      socket.on('dashboard_updated', handleRefresh);
+      socket.on('refund_approved', handleRefresh);
+      socket.on('refunds_updated', handleRefresh);
       socket.on('new_application_submitted', handleRefresh);
       socket.on('applications_updated', handleRefresh);
 
       return () => {
         socket.off('response_transactions_data', handleData);
         socket.off('transactions_updated', handleRefresh);
+        socket.off('dashboard_updated', handleRefresh);
+        socket.off('refund_approved', handleRefresh);
+        socket.off('refunds_updated', handleRefresh);
         socket.off('new_application_submitted', handleRefresh);
         socket.off('applications_updated', handleRefresh);
       };
@@ -67,12 +73,14 @@ export default function Transactions() {
         (txn.refNumber && txn.refNumber.toLowerCase().includes(q)) ||
         (txn.customer && txn.customer.toLowerCase().includes(q)) ||
         (txn.service && txn.service.toLowerCase().includes(q)) ||
+        (txn.refundRef && txn.refundRef.toLowerCase().includes(q)) ||
         (txn.paymentMethod && txn.paymentMethod.toLowerCase().includes(q));
 
       const matchesFilter =
         filterMethod === 'ALL' ||
-        (filterMethod === 'RAZORPAY' && txn.paymentMethod?.toLowerCase().includes('razorpay')) ||
-        (filterMethod === 'PORTAL' && !txn.paymentMethod?.toLowerCase().includes('razorpay'));
+        (filterMethod === 'RAZORPAY' && txn.paymentMethod?.toLowerCase().includes('razorpay') && txn.status !== 'REFUNDED') ||
+        (filterMethod === 'PORTAL' && !txn.paymentMethod?.toLowerCase().includes('razorpay') && txn.status !== 'REFUNDED') ||
+        (filterMethod === 'REFUNDED' && (txn.status === 'REFUNDED' || txn.isRefunded));
 
       return matchesSearch && matchesFilter;
     });
@@ -80,7 +88,7 @@ export default function Transactions() {
 
   const handleExportCSV = () => {
     if (!filteredTransactions || filteredTransactions.length === 0) return;
-    const headers = ['Transaction ID', 'Reference Number', 'Date & Time (IST)', 'Customer', 'Service', 'Payment Method', 'Amount (INR)', 'Status'];
+    const headers = ['Transaction ID', 'Reference Number', 'Date & Time (IST)', 'Customer', 'Service', 'Payment Method', 'Amount (INR)', 'Status', 'Refund Ref'];
     const rows = filteredTransactions.map((t: any) => [
       `"${t.id || ''}"`,
       `"${t.refNumber || ''}"`,
@@ -90,6 +98,7 @@ export default function Transactions() {
       `"${t.paymentMethod || 'Govt Portal'}"`,
       t.amount || 50,
       `"${t.status || 'SUCCESS'}"`,
+      `"${t.refundRef || ''}"`,
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -100,6 +109,11 @@ export default function Transactions() {
     link.click();
     document.body.removeChild(link);
   };
+
+  const refundedCount = useMemo(() => {
+    if (!transactions) return 0;
+    return transactions.filter((t: any) => t.status === 'REFUNDED' || t.isRefunded).length;
+  }, [transactions]);
 
   if (loading) {
     return (
@@ -117,8 +131,8 @@ export default function Transactions() {
       </div>
       <div className="dashboard-title-row" style={{ marginBottom: 24 }}>
         <div className="dashboard-title">
-          <h1>Financial Transactions</h1>
-          <p>Monitor real-time service payments, Razorpay test settlements and application fees</p>
+          <h1>Financial Transactions & Revenue Realization</h1>
+          <p>Monitor real-time service receipts, Razorpay settlements, realized daily revenue, and processed citizen refunds</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className="date-picker-btn" onClick={handleExportCSV} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -127,27 +141,40 @@ export default function Transactions() {
         </div>
       </div>
 
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <StatCard 
           icon={<DollarSign color="#10b981" />} iconBg="#d1fae5"
-          title="Total Processed" value={`₹${(stats?.totalAmount || 0).toLocaleString()}`} 
-          trend="Platform lifetime" trendType="neutral" 
+          title="Daily Realized Revenue" 
+          value={`₹${(stats?.revenueToday ?? stats?.totalAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
+          trend={stats?.todayRefunds ? `₹${stats.todayRefunds} refunded today` : "Net settled receipts today"} 
+          trendType={stats?.todayRefunds ? "neutral" : "positive"} 
         />
         <StatCard 
-          icon={<ArrowLeftRight color="#2563eb" />} iconBg="#eff6ff"
-          title="Total Transactions" value={(stats?.totalCount || 0).toLocaleString()} 
-          trend="Real-time synced" trendType="neutral" 
+          icon={<DollarSign color="#2563eb" />} iconBg="#eff6ff"
+          title="Total Realized (Net)" 
+          value={`₹${(stats?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
+          trend={stats?.refundedAmount ? `Net after ₹${stats.refundedAmount.toLocaleString()} refunds` : "Platform lifetime net"} 
+          trendType="neutral" 
         />
         <StatCard 
-          icon={<CreditCard color="#f59e0b" />} iconBg="#fef3c7"
-          title="Avg. Fee" value={`₹${stats?.totalCount ? Math.round(stats.totalAmount / stats.totalCount) : 55}`} 
-          trend="Per application" trendType="neutral" 
+          icon={<RotateCcw color="#d97706" />} iconBg="#fef3c7"
+          title="Approved Refunds" 
+          value={`₹${(stats?.refundedAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
+          trend={`${refundedCount} applications refunded`} 
+          trendType="neutral" 
+        />
+        <StatCard 
+          icon={<ArrowLeftRight color="#6366f1" />} iconBg="#eef2ff"
+          title="Total Ledger Entries" 
+          value={(stats?.totalCount || transactions?.length || 0).toLocaleString()} 
+          trend="Real-time WebSocket synced" 
+          trendType="neutral" 
         />
       </div>
 
       <div className="table-card" style={{ marginTop: 24, padding: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottom: '1px solid var(--border-color)', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button 
               className="date-picker-btn" 
               style={{
@@ -184,6 +211,18 @@ export default function Transactions() {
             >
               Portal Payments
             </button>
+            <button 
+              className="date-picker-btn" 
+              style={{
+                borderColor: filterMethod === 'REFUNDED' ? '#D97706' : '#e5e7eb',
+                color: filterMethod === 'REFUNDED' ? '#B45309' : '#4b5563',
+                background: filterMethod === 'REFUNDED' ? '#FEF3C7' : 'transparent',
+                fontWeight: 600
+              }}
+              onClick={() => setFilterMethod('REFUNDED')}
+            >
+              Refunded ({refundedCount})
+            </button>
           </div>
 
           {/* Search Box */}
@@ -191,7 +230,7 @@ export default function Transactions() {
             <Search size={16} color="#9ca3af" style={{ marginRight: 8 }} />
             <input 
               type="text"
-              placeholder="Search TXN ID, customer, service..."
+              placeholder="Search TXN ID, customer, service, refund..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 13, width: '100%', color: '#111827' }}
@@ -224,8 +263,13 @@ export default function Transactions() {
                   <td style={{ fontWeight: 600, color: '#2563eb' }}>
                     <div>{txn.id}</div>
                     {txn.refNumber && txn.refNumber !== txn.id ? (
-                      <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>Ref: {txn.refNumber}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>App Ref: {txn.refNumber}</div>
                     ) : null}
+                    {txn.refundRef && (
+                      <div style={{ fontSize: 11, color: '#B45309', fontWeight: 600, marginTop: 2 }}>
+                        {txn.refundRef}
+                      </div>
+                    )}
                   </td>
                   <td style={{ color: '#6b7280', fontSize: 12.5 }}>{txn.dateFormatted}</td>
                   <td style={{ fontWeight: 600, color: '#111827' }}>{txn.customer}</td>
@@ -246,12 +290,39 @@ export default function Transactions() {
                       {txn.paymentMethod || 'Portal Payment'}
                     </span>
                   </td>
-                  <td style={{ fontWeight: 700, color: '#111827' }}>₹{txn.amount}</td>
                   <td>
-                    <span className="badge completed" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <CheckCircle size={12} />
-                      {txn.status || 'SUCCESS'}
-                    </span>
+                    <div style={{ fontWeight: 700, color: txn.status === 'REFUNDED' ? '#B45309' : '#111827' }}>
+                      ₹{txn.amount}
+                    </div>
+                    {txn.status === 'REFUNDED' && (
+                      <div style={{ fontSize: 11, color: '#92400E', fontWeight: 600, marginTop: 2 }}>
+                        Re-credited to Wallet
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    {txn.status === 'REFUNDED' ? (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        color: '#92400E',
+                        background: '#FEF3C7',
+                        border: '1px solid #FDE68A',
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                      }}>
+                        <RotateCcw size={12} color="#D97706" />
+                        REFUNDED
+                      </span>
+                    ) : (
+                      <span className="badge completed" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle size={12} />
+                        {txn.status || 'SUCCESS'}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))

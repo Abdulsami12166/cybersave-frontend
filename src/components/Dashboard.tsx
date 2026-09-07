@@ -102,15 +102,23 @@ export default function Dashboard() {
       };
 
       socket.on('response_dashboard_data', handleDash);
+      socket.on('dashboard_updated', handleAppUpdate);
       socket.on('applications_updated', handleAppUpdate);
       socket.on('new_application_submitted', handleAppUpdate);
       socket.on('application_status_changed', handleAppUpdate);
+      socket.on('refunds_updated', handleAppUpdate);
+      socket.on('refund_approved', handleAppUpdate);
+      socket.on('transactions_updated', handleAppUpdate);
 
       return () => {
         socket.off('response_dashboard_data', handleDash);
+        socket.off('dashboard_updated', handleAppUpdate);
         socket.off('applications_updated', handleAppUpdate);
         socket.off('new_application_submitted', handleAppUpdate);
         socket.off('application_status_changed', handleAppUpdate);
+        socket.off('refunds_updated', handleAppUpdate);
+        socket.off('refund_approved', handleAppUpdate);
+        socket.off('transactions_updated', handleAppUpdate);
       };
     } else {
       const timer = setTimeout(() => setLoading(false), 800);
@@ -137,8 +145,17 @@ export default function Dashboard() {
     return d >= today;
   });
 
-  const revenueToday = todayApps.reduce((acc, a) => acc + (a.feeAmount || 50), 0);
-  const totalRevenue = normalizedApplications.reduce((acc, a) => acc + (a.feeAmount || 50), 0);
+  const isRefunded = (a: NormalizedApplication) =>
+    (a.rawApp?.refundStatus || '').toUpperCase() === 'APPROVED' ||
+    (a.rawApp?.paymentStatus || '').toLowerCase() === 'refunded' ||
+    a.status === 'Refunded';
+
+  const revenueToday = todayApps
+    .filter(a => !isRefunded(a))
+    .reduce((acc, a) => acc + (a.feeAmount || 50), 0);
+  const totalRevenue = normalizedApplications
+    .filter(a => !isRefunded(a))
+    .reduce((acc, a) => acc + (a.feeAmount || 50), 0);
   const pendingCount = normalizedApplications.filter(a => a.status === 'In Review' || a.status === 'Pending' || a.status === 'Processing' || a.rawStatus === 'SUBMITTED' || a.rawStatus === 'VERIFYING' || a.rawStatus === 'IN_PROGRESS').length;
   const totalApprovedCount = normalizedApplications.filter(a => a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
   const approvedTodayCount = todayApps.filter(a => a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
@@ -321,9 +338,14 @@ export default function Dashboard() {
           <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
             ₹{displayRevenueToday.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
             <TrendingUp size={13} color="#10B981" />
             <span><strong>{displayAppsToday}</strong> citizen payments today</span>
+            {Number(data?.stats?.refundedToday || 0) > 0 ? (
+              <span style={{ color: '#D97706', fontWeight: 600, fontSize: '11px', marginLeft: 'auto', background: '#FEF3C7', padding: '1px 6px', borderRadius: '4px' }}>
+                ₹{Number(data.stats.refundedToday).toFixed(2)} refunded
+              </span>
+            ) : null}
           </div>
         </div>
 

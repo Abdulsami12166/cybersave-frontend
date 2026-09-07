@@ -49,9 +49,25 @@ export default function Analytics() {
         setData(resData);
         setLoading(false);
       };
+      const handleRefresh = () => {
+        socket.emit('request_analytics');
+        fetchLiveApps();
+      };
+
       socket.on('response_analytics', handleAnalytics);
+      socket.on('dashboard_updated', handleRefresh);
+      socket.on('refund_approved', handleRefresh);
+      socket.on('refunds_updated', handleRefresh);
+      socket.on('transactions_updated', handleRefresh);
+      socket.on('applications_updated', handleRefresh);
+
       return () => {
         socket.off('response_analytics', handleAnalytics);
+        socket.off('dashboard_updated', handleRefresh);
+        socket.off('refund_approved', handleRefresh);
+        socket.off('refunds_updated', handleRefresh);
+        socket.off('transactions_updated', handleRefresh);
+        socket.off('applications_updated', handleRefresh);
       };
     } else {
       const t = setTimeout(() => setLoading(false), 800);
@@ -64,7 +80,17 @@ export default function Analytics() {
   const pendingCount = realApps.filter(a => a.status === 'SUBMITTED' || a.status === 'VERIFYING' || a.status === 'IN_PROGRESS').length || data?.stats?.pendingReview || 4;
   const rejectedCount = realApps.filter(a => a.status === 'REJECTED').length || 0;
 
-  const totalFeeCollected = realApps.reduce((acc, a) => acc + (typeof a.feePaid === 'number' ? a.feePaid : 50), 0);
+  const isRefunded = (a: any) =>
+    (a.refundStatus || '').toUpperCase() === 'APPROVED' ||
+    (a.paymentStatus || '').toLowerCase() === 'refunded';
+
+  const totalFeeCollected = realApps
+    .filter(a => !isRefunded(a))
+    .reduce((acc, a) => acc + (typeof a.feePaid === 'number' ? a.feePaid : 50), 0);
+
+  const totalRefundsDeducted = realApps
+    .filter(a => isRefunded(a))
+    .reduce((acc, a) => acc + (typeof a.feePaid === 'number' ? a.feePaid : 50), 0);
 
   // 7-Day Chart Data
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -239,13 +265,13 @@ export default function Analytics() {
           boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
         }}>
           <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
-            Fees Settled (INR)
+            Realized Collections (INR)
           </div>
           <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>
             ₹{totalFeeCollected.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
           <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
-            Razorpay gateway settlement
+            {totalRefundsDeducted > 0 ? `Net after ₹${totalRefundsDeducted.toFixed(2)} approved refunds` : 'Razorpay gateway settlements'}
           </div>
         </div>
       </div>
