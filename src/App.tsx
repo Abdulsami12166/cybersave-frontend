@@ -12,6 +12,7 @@ import Analytics from './pages/Analytics';
 import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
 import Transactions from './pages/Transactions';
+import Refunds from './pages/Refunds';
 import UserManagementDetail from './pages/UserManagementDetail';
 import ApplicationDetail from './pages/ApplicationDetail';
 import OperatorDetail from './pages/OperatorDetail';
@@ -64,6 +65,7 @@ function App() {
               <Route path="support/:id/resolve" element={<SupportTicketResolve />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="transactions" element={<Transactions />} />
+              <Route path="refunds" element={<Refunds />} />
               <Route path="audit" element={<AuditLogs />} />
               <Route path="settings" element={<Settings />} />
             </Route>

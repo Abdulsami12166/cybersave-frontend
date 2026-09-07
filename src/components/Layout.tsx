@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, FileText, Grid, UserSquare2, 
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
   Settings, Search, Sun, PanelLeftClose, LogOut, CheckCircle2, X,
-  Building2, Command, Globe
+  Building2, Command, Globe, RotateCcw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -70,6 +70,7 @@ export default function Layout() {
       items: [
         { icon: <LayoutDashboard size={18} />, label: 'Command Center', path: '/', requiredPermission: 'DASHBOARD' },
         { icon: <FileText size={18} />, label: 'Applications Queue', path: '/applications', requiredPermission: 'APPLICATIONS' },
+        { icon: <RotateCcw size={18} />, label: 'Refund Dispatches', path: '/refunds', requiredPermission: 'APPLICATIONS' },
         { icon: <ArrowLeftRight size={18} />, label: 'Settlement Journal', path: '/transactions', requiredPermission: 'TRANSACTIONS' },
       ]
     },

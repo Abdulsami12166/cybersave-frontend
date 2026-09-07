@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
 import {
   FileText, CheckCircle, Clock, FileBadge, ArrowRight, ArrowLeft,
   ShieldCheck, Check, X, AlertTriangle, Download, Eye, CreditCard,
-  Send, ChevronDown, Flag
+  Send, ChevronDown, Flag, RotateCcw
 } from 'lucide-react';
 
 // ponytail: derive timeline from real application data, no new tables
@@ -98,6 +99,72 @@ export default function ApplicationDetail() {
     { label: 'Operator physical verification done', checked: false },
   ]);
 
+  const [refundInfo, setRefundInfo] = useState<any>(null);
+  const [refundActionLoading, setRefundActionLoading] = useState(false);
+
+  const fetchRefund = async (targetId?: string) => {
+    try {
+      const tid = targetId || id;
+      if (!tid) return;
+      const res = await axios.get(`/api/v1/refunds?applicationId=${tid}`);
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        setRefundInfo(res.data[0]);
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleApproveRefund = async () => {
+    if (!refundInfo) return;
+    if (!window.confirm(`Approve refund #${refundInfo.refNumber} and re-credit ₹${Number(refundInfo.amount).toFixed(2)} to citizen wallet?`)) return;
+    try {
+      setRefundActionLoading(true);
+      const adminName = admin?.fullName || admin?.email || 'Admin Authority';
+      const res = await axios.post(`/api/v1/refunds/${refundInfo.id}/approve`, { adminName });
+      if (res.data?.success) {
+        window.dispatchEvent(new CustomEvent('cybersave_toast', {
+          detail: { message: `Refund #${refundInfo.refNumber} approved! ₹${refundInfo.amount} credited to wallet.`, type: 'success' }
+        }));
+        setRefundInfo((prev: any) => ({ ...prev, status: 'APPROVED', processedBy: adminName }));
+        fetchApp();
+      }
+    } catch (err: any) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: err.response?.data?.message || 'Failed to approve refund', type: 'error' }
+      }));
+    } finally {
+      setRefundActionLoading(false);
+    }
+  };
+
+  const handleRejectRefund = async () => {
+    if (!refundInfo) return;
+    const reason = window.prompt('Enter official reason for declining this refund:');
+    if (reason === null) return;
+    try {
+      setRefundActionLoading(true);
+      const adminName = admin?.fullName || admin?.email || 'Admin Authority';
+      const res = await axios.post(`/api/v1/refunds/${refundInfo.id}/reject`, {
+        rejectionReason: reason || 'Declined by administration.',
+        adminName,
+      });
+      if (res.data?.success) {
+        window.dispatchEvent(new CustomEvent('cybersave_toast', {
+          detail: { message: `Refund #${refundInfo.refNumber} declined.`, type: 'success' }
+        }));
+        setRefundInfo((prev: any) => ({ ...prev, status: 'REJECTED', adminNotes: reason }));
+        fetchApp();
+      }
+    } catch (err: any) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: err.response?.data?.message || 'Failed to decline refund', type: 'error' }
+      }));
+    } finally {
+      setRefundActionLoading(false);
+    }
+  };
+
   const fetchOperators = async () => {
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
@@ -129,6 +196,7 @@ export default function ApplicationDetail() {
         const raw = await res.json();
         setApp(formatApp(raw));
         setLoading(false);
+        fetchRefund(raw.id || id);
       }
     } catch (e) {
       console.warn('[ApplicationDetail] REST fetch error:', e);
@@ -183,6 +251,7 @@ export default function ApplicationDetail() {
 
   useEffect(() => {
     fetchApp();
+    fetchRefund();
     fetchOperators();
 
     if (socket && connected) {
@@ -193,11 +262,18 @@ export default function ApplicationDetail() {
           setApp(formatApp(data));
           setLoading(false);
           setActionLoading(false);
+          fetchRefund(data.id || id);
         }
       };
 
       const handleUpdate = () => {
         socket.emit('request_application_detail', { id });
+        fetchApp();
+        fetchRefund();
+      };
+
+      const handleRefundUpdate = () => {
+        fetchRefund();
         fetchApp();
       };
 
@@ -206,6 +282,8 @@ export default function ApplicationDetail() {
       socket.on('application_status_changed', handleUpdate);
       socket.on('update_application_status_success', handleUpdate);
       socket.on('application_assigned', handleUpdate);
+      socket.on('refunds_updated', handleRefundUpdate);
+      socket.on('new_refund_requested', handleRefundUpdate);
 
       return () => {
         socket.off('response_application_detail', handleDetail);
@@ -213,6 +291,8 @@ export default function ApplicationDetail() {
         socket.off('application_status_changed', handleUpdate);
         socket.off('update_application_status_success', handleUpdate);
         socket.off('application_assigned', handleUpdate);
+        socket.off('refunds_updated', handleRefundUpdate);
+        socket.off('new_refund_requested', handleRefundUpdate);
       };
     }
   }, [socket, connected, id]);
@@ -512,6 +592,143 @@ export default function ApplicationDetail() {
           </div>
         </div>
       </div>
+
+      {/* ─── Dedicated Refund Management Banner ─── */}
+      {refundInfo && (
+        <div style={{
+          marginBottom: 24,
+          background: refundInfo.status === 'APPROVED' ? '#F0FDF4' : refundInfo.status === 'REJECTED' ? '#FEF2F2' : '#FFFBEB',
+          border: `1.5px solid ${refundInfo.status === 'APPROVED' ? '#86EFAC' : refundInfo.status === 'REJECTED' ? '#FECACA' : '#FDE68A'}`,
+          borderRadius: 14,
+          padding: '20px 24px',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, maxWidth: '70%' }}>
+              <div style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                background: refundInfo.status === 'APPROVED' ? '#DCFCE7' : refundInfo.status === 'REJECTED' ? '#FEE2E2' : '#FEF3C7',
+                color: refundInfo.status === 'APPROVED' ? '#16A34A' : refundInfo.status === 'REJECTED' ? '#DC2626' : '#D97706',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <RotateCcw size={22} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>
+                    Refund Claim #{refundInfo.refNumber}
+                  </span>
+                  <span style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    padding: '3px 10px',
+                    borderRadius: 999,
+                    background: refundInfo.status === 'APPROVED' ? '#BBF7D0' : refundInfo.status === 'REJECTED' ? '#FECACA' : '#FDE68A',
+                    color: refundInfo.status === 'APPROVED' ? '#15803D' : refundInfo.status === 'REJECTED' ? '#991B1B' : '#B45309',
+                    letterSpacing: '0.04em',
+                  }}>
+                    {refundInfo.status === 'APPROVED' ? 'APPROVED & CREDITED' : refundInfo.status === 'REJECTED' ? 'DECLINED' : 'PENDING ACTION'}
+                  </span>
+                  <span style={{ fontSize: 17, fontWeight: 800, color: '#059669' }}>
+                    ₹{Number(refundInfo.amount).toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, color: '#475569', marginTop: 6 }}>
+                  <strong>Reason:</strong> <span style={{ color: '#1E293B', fontWeight: 600 }}>{refundInfo.reason}</span>
+                  {refundInfo.details && <span> — {refundInfo.details}</span>}
+                </div>
+                {refundInfo.status === 'APPROVED' && (
+                  <div style={{ fontSize: 12, color: '#15803D', marginTop: 6, fontWeight: 600 }}>
+                    ✓ Amount of ₹{Number(refundInfo.amount).toFixed(2)} re-transferred directly to citizen digital wallet ({refundInfo.processedBy || 'Admin Authority'}).
+                  </div>
+                )}
+                {refundInfo.status === 'REJECTED' && refundInfo.adminNotes && (
+                  <div style={{ fontSize: 12, color: '#B91C1C', marginTop: 6, fontWeight: 600 }}>
+                    ✕ Declined Reason: {refundInfo.adminNotes}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Actions & Proof */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {refundInfo.proofUrl && (
+                <a
+                  href={refundInfo.proofUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 14px',
+                    background: '#FFFFFF',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: '#2563EB',
+                    textDecoration: 'none',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  }}
+                >
+                  <Eye size={14} /> View Cloudinary Proof
+                </a>
+              )}
+              {refundInfo.status === 'PENDING' && (
+                <>
+                  <button
+                    onClick={handleRejectRefund}
+                    disabled={refundActionLoading}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 14px',
+                      background: '#FEE2E2',
+                      color: '#DC2626',
+                      border: '1px solid #FECACA',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      opacity: refundActionLoading ? 0.7 : 1,
+                    }}
+                  >
+                    <X size={14} /> Decline
+                  </button>
+                  <button
+                    onClick={handleApproveRefund}
+                    disabled={refundActionLoading}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 16px',
+                      background: '#16A34A',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(22,163,74,0.3)',
+                      opacity: refundActionLoading ? 0.7 : 1,
+                    }}
+                  >
+                    <Check size={14} /> Approve & Credit ₹{Number(refundInfo.amount).toFixed(2)} to Wallet
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Two Column Layout ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, alignItems: 'start' }}>
