@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useSocket } from '../context/SocketContext';
@@ -14,22 +14,18 @@ import {
   ExternalLink,
   Eye,
   Wallet,
-  ShieldCheck,
-  FileText,
-  User,
-  ArrowUpRight,
-  Filter,
   Check,
   X,
   Copy,
-  Download,
-  AlertTriangle,
-  Info,
   Calendar,
-  Sparkles,
-  Layers,
-  ChevronDown
 } from 'lucide-react';
+
+interface TabItem {
+  id: 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  label: string;
+  count: number;
+  highlight?: boolean;
+}
 
 export default function Refunds() {
   const { socket, connected } = useSocket();
@@ -117,7 +113,7 @@ export default function Refunds() {
 
     try {
       setActionLoading(approveTarget.id);
-      const adminName = admin?.fullName || admin?.email || 'Admin Authority';
+      const adminName = admin?.name || admin?.email || 'Admin Authority';
       const res = await axios.post(`/api/v1/refunds/${approveTarget.id}/approve`, {
         adminNotes: approveNotes.trim() || 'Refund approved. Amount credited to citizen wallet.',
         adminName,
@@ -155,7 +151,7 @@ export default function Refunds() {
 
     try {
       setActionLoading(rejectTarget.id);
-      const adminName = admin?.fullName || admin?.email || 'Admin Authority';
+      const adminName = admin?.name || admin?.email || 'Admin Authority';
       const res = await axios.post(`/api/v1/refunds/${rejectTarget.id}/reject`, {
         rejectionReason: finalReason,
         adminName,
@@ -243,6 +239,13 @@ export default function Refunds() {
     'Application fee is non-refundable per scheme policy',
     'Insufficient or unverifiable supporting proof',
     'Incorrect application reference cited',
+  ];
+
+  const statusTabs: TabItem[] = [
+    { id: 'ALL', label: 'All Claims', count: totalCount },
+    { id: 'PENDING', label: 'Pending Review', count: pendingCount, highlight: pendingCount > 0 },
+    { id: 'APPROVED', label: 'Approved & Credited', count: approvedCount },
+    { id: 'REJECTED', label: 'Declined', count: rejectedCount },
   ];
 
   return (
@@ -372,14 +375,7 @@ export default function Refunds() {
             borderRadius: 8,
           }}
         >
-          {(
-            [
-              { id: 'ALL', label: 'All Claims', count: totalCount },
-              { id: 'PENDING', label: 'Pending Review', count: pendingCount, highlight: pendingCount > 0 },
-              { id: 'APPROVED', label: 'Approved & Credited', count: approvedCount },
-              { id: 'REJECTED', label: 'Declined', count: rejectedCount },
-            ] as const
-          ).map((t) => {
+          {statusTabs.map((t) => {
             const isActive = filter === t.id;
             return (
               <button
@@ -574,7 +570,6 @@ export default function Refunds() {
                   const appRef = r.application?.refNumber || 'N/A';
                   const isPending = r.status === 'PENDING';
                   const isApproved = r.status === 'APPROVED';
-                  const isRejected = r.status === 'REJECTED';
                   const isCopied = copiedId === r.id;
 
                   // Initials
@@ -785,7 +780,7 @@ export default function Refunds() {
                               <button
                                 onClick={() => {
                                   setApproveTarget(r);
-                                  setApproveNotes(`Approved by ${admin?.fullName || 'Admin'}. ₹${r.amount} credited to citizen wallet.`);
+                                  setApproveNotes(`Approved by ${admin?.name || 'Admin'}. ₹${r.amount} credited to citizen wallet.`);
                                 }}
                                 disabled={actionLoading === r.id}
                                 style={{
