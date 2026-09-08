@@ -38,9 +38,99 @@ export default function UserManagementDetail() {
 
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'Overview' | 'Services Used' | 'Documents' | 'Transactions' | 'Activity Log' | 'Feedback & Reviews' | 'Notes'>('Overview');
+  const [activeTab, setActiveTab] = useState<'Overview' | 'Services Used' | 'Documents' | 'Transactions' | 'Session History' | 'Activity Log' | 'Feedback & Reviews' | 'Notes'>('Overview');
   const [showAadhaar, setShowAadhaar] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  // Document Viewer Modal State
+  const [selectedDoc, setSelectedDoc] = useState<{
+    name: string;
+    fileName?: string;
+    fileUrl: string;
+    fileType?: string;
+    fileSize?: number;
+    date?: string;
+    status?: string;
+  } | null>(null);
+  const [docZoom, setDocZoom] = useState(1);
+  const [docRotation, setDocRotation] = useState(0);
+
+  // Safely open document in viewer modal
+  const handleOpenDocument = (doc: any) => {
+    if (!doc || !doc.fileUrl) {
+      showToast('No document file attached for this record', 'error');
+      return;
+    }
+    setDocZoom(1);
+    setDocRotation(0);
+    setSelectedDoc(doc);
+  };
+
+  // Helper to safely open document in new tab (bypasses browser data: URL block)
+  const openDocInNewWindow = (fileUrl: string, fileName?: string) => {
+    if (!fileUrl) return;
+    try {
+      if (fileUrl.startsWith('data:')) {
+        const parts = fileUrl.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const win = window.open(blobUrl, '_blank');
+        if (!win) {
+          showToast('Popup was blocked by browser. Please allow popups.', 'error');
+        }
+      } else {
+        window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e) {
+      window.open(fileUrl, '_blank');
+    }
+  };
+
+  // Helper to trigger direct download with clean file name
+  const downloadDocument = (fileUrl: string, fileName?: string) => {
+    if (!fileUrl) return;
+    try {
+      if (fileUrl.startsWith('data:')) {
+        const parts = fileUrl.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName || 'Citizen_Document.jpg';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      } else {
+        const a = document.createElement('a');
+        a.href = fileUrl;
+        a.download = fileName || 'Citizen_Document.jpg';
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      showToast(`Downloading ${fileName || 'document'}...`);
+    } catch (e) {
+      openDocInNewWindow(fileUrl, fileName);
+    }
+  };
 
   // Notification Modal
   const [notifModalOpen, setNotifModalOpen] = useState(false);
@@ -64,6 +154,8 @@ export default function UserManagementDetail() {
     district: '',
     state: '',
     pinCode: '',
+    registeredCentre: '',
+    assignedOperator: '',
   });
 
   // REST fallback fetch
@@ -97,6 +189,8 @@ export default function UserManagementDetail() {
       district: userData.district || '',
       state: userData.state || '',
       pinCode: userData.pinCode || '',
+      registeredCentre: userData.quickStats?.registeredCentre || '',
+      assignedOperator: userData.quickStats?.assignedOperator || '',
     });
   };
 
@@ -348,8 +442,9 @@ export default function UserManagementDetail() {
       totalServicesUsed: user?.quickStats?.totalServicesUsed ?? (user?.applications?.length || 0),
       totalAmountSpent: user?.quickStats?.totalAmountSpent ?? (user?.applications?.reduce((sum: number, a: any) => sum + (a.rawAmount || a.feePaid || 0), 0) ? `₹${user.applications.reduce((sum: number, a: any) => sum + (a.rawAmount || a.feePaid || 0), 0).toLocaleString('en-IN')}` : '₹0'),
       lastActive: user?.quickStats?.lastActive || '2 hours ago',
-      registeredCentre: user?.quickStats?.registeredCentre || (user?.district && user.district !== '-' ? `CSC ${user.district}` : 'CSC Hazratganj, Lucknow'),
-      assignedOperator: user?.quickStats?.assignedOperator || 'Vikram Tiwari (VLE-0234)',
+      registeredCentre: user?.quickStats?.registeredCentre || (user?.district && user.district !== '-' ? `CSC ${user.district}` : 'CSC Central Seva Kendra (Digital India)'),
+      assignedOperator: user?.quickStats?.assignedOperator || 'Officer Sharma - Verification Incharge (SDM-01)',
+      walletBalance: user?.quickStats?.walletBalance || (user?.wallet ? `₹${Number(user.wallet.balance || 0).toLocaleString('en-IN')}` : '₹0'),
     },
     recentServices: (user?.recentServices && user.recentServices.length > 0)
       ? user.recentServices
@@ -361,32 +456,13 @@ export default function UserManagementDetail() {
               amount: a.amount || (a.feePaid ? `₹${a.feePaid}` : '₹50'),
               status: a.status || 'Completed',
             }))
-          : [
-              { name: 'Aadhaar Address Update', date: '2 Aug 2026', amount: '₹50', status: 'Completed' },
-              { name: 'PAN Card Application', date: '28 Jul 2026', amount: '₹107', status: 'In Progress' },
-              { name: 'Income Certificate', date: '20 Jul 2026', amount: '₹120', status: 'Completed' },
-              { name: 'Electricity Bill Payment', date: '15 Jul 2026', amount: '₹2,123', status: 'Completed' },
-              { name: 'Voter ID Registration', date: '10 Jul 2026', amount: '₹50', status: 'Pending' }
-            ]),
-    uploadedDocuments: (user?.uploadedDocuments && user.uploadedDocuments.length > 0)
-      ? user.uploadedDocuments
-      : [
-          { name: 'Aadhaar Card (front).pdf', date: 'Uploaded 15 Mar 2024', status: 'Verified' },
-          { name: 'PAN Card.pdf', date: 'Uploaded 15 Mar 2024', status: 'Verified' },
-          { name: 'Passport Photo.jpg', date: 'Uploaded 15 Mar 2024', status: 'Verified' },
-          { name: 'Address Proof.pdf', date: 'Uploaded 28 Jul 2026', status: 'Pending Review' },
-          { name: 'Income Proof.pdf', date: 'Uploaded 20 Jul 2026', status: 'Uploaded' }
-        ],
+          : []),
+    uploadedDocuments: Array.isArray(user?.uploadedDocuments) ? user.uploadedDocuments : [],
+    transactions: Array.isArray(user?.transactions) ? user.transactions : [],
+    sessionHistory: Array.isArray(user?.sessionHistory) ? user.sessionHistory : [],
     recentActivity: (user?.recentActivity && user.recentActivity.length > 0)
       ? user.recentActivity
-      : [
-          { title: 'Profile viewed by Operator VLE-0234', date: '2 hours ago', color: '#2563EB' },
-          { title: 'Aadhaar update application completed', date: '2 Aug 2026', color: '#10B981' },
-          { title: 'PAN card application submitted', date: '28 Jul 2026', color: '#2563EB' },
-          { title: 'Payment of ₹107 received', date: '28 Jul 2026', color: '#10B981' },
-          { title: 'Income certificate requested', date: '20 Jul 2026', color: '#F59E0B' },
-          { title: 'Electricity bill ₹1,240 paid', date: '15 Jul 2026', color: '#10B981' }
-        ],
+      : [],
     feedbacks: (user?.feedbacks && user.feedbacks.length > 0)
       ? user.feedbacks
       : []
@@ -608,12 +684,18 @@ export default function UserManagementDetail() {
         {/* Tab Navigation */}
         <div style={{
           display: 'flex',
-          gap: '28px',
+          gap: '24px',
           borderBottom: '1px solid #E2E8F0',
           overflowX: 'auto'
         }}>
-          {(['Overview', 'Services Used', 'Documents', 'Transactions', 'Activity Log', 'Feedback & Reviews', 'Notes'] as const).map((tab) => {
+          {(['Overview', 'Services Used', 'Documents', 'Transactions', 'Session History', 'Activity Log', 'Feedback & Reviews', 'Notes'] as const).map((tab) => {
             const feedbackCount = tab === 'Feedback & Reviews' ? (safeData.feedbacks?.length || 0) : 0;
+            const docCount = tab === 'Documents' ? (safeData.uploadedDocuments?.length || 0) : 0;
+            const txnCount = tab === 'Transactions' ? (safeData.transactions?.length || 0) : 0;
+            const sessCount = tab === 'Session History' ? (safeData.sessionHistory?.length || 0) : 0;
+
+            const badgeCount = feedbackCount || docCount || txnCount || sessCount;
+
             return (
               <button
                 key={tab}
@@ -635,7 +717,7 @@ export default function UserManagementDetail() {
                 }}
               >
                 {tab}
-                {feedbackCount > 0 && (
+                {badgeCount > 0 && (
                   <span style={{
                     fontSize: '11px',
                     fontWeight: 800,
@@ -644,7 +726,7 @@ export default function UserManagementDetail() {
                     padding: '1px 6px',
                     borderRadius: '10px'
                   }}>
-                    {feedbackCount}
+                    {badgeCount}
                   </span>
                 )}
               </button>
@@ -1034,45 +1116,59 @@ export default function UserManagementDetail() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {safeData.uploadedDocuments.map((doc: any, i: number) => {
-                  const isDocVerified = doc.status === 'Verified';
-                  const isPendingReview = doc.status === 'Pending Review';
+                {safeData.uploadedDocuments.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '16px 0', color: '#94A3B8', fontSize: '12.5px' }}>
+                    No documents uploaded yet
+                  </div>
+                ) : (
+                  safeData.uploadedDocuments.map((doc: any, i: number) => {
+                    const isDocVerified = doc.status === 'Verified';
+                    const isPendingReview = doc.status === 'Pending Review';
 
-                  return (
-                    <div
-                      key={doc.id || i}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        cursor: doc.fileUrl ? 'pointer' : 'default'
-                      }}
-                      onClick={() => {
-                        if (doc.fileUrl) window.open(doc.fileUrl, '_blank');
-                      }}
-                    >
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <FileText color="#94A3B8" size={16} />
-                        <div>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                            {doc.name}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '1px' }}>
-                            {doc.date}
+                    return (
+                      <div
+                        key={doc.id || i}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: doc.fileUrl ? 'pointer' : 'default',
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          background: '#F8FAFC',
+                          border: '1px solid #F1F5F9'
+                        }}
+                        onClick={() => {
+                          if (doc.fileUrl) handleOpenDocument(doc);
+                        }}
+                        title="Click to preview document"
+                      >
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <FileText color="#2563EB" size={16} />
+                          <div>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                              {doc.name}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '1px' }}>
+                              {doc.date}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div style={{
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        color: isDocVerified ? '#10B981' : isPendingReview ? '#F59E0B' : '#0D9488'
-                      }}>
-                        {doc.status}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: isDocVerified ? '#10B981' : isPendingReview ? '#F59E0B' : '#0D9488'
+                          }}>
+                            {doc.status}
+                          </span>
+                          <span style={{ fontSize: '12px', color: '#2563EB', fontWeight: 700 }}>&rarr;</span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -1212,10 +1308,19 @@ export default function UserManagementDetail() {
                 {safeData.recentServices.map((s: any, idx: number) => (
                   <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0F172A' }}>{s.name || s.serviceTitle}</td>
-                    <td style={{ padding: '12px 14px', color: '#64748B' }}>{s.date}</td>
-                    <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0F172A' }}>{s.amount}</td>
+                    <td style={{ padding: '12px 14px', color: '#64748B' }}>{s.date || s.appliedAt || 'Recently'}</td>
+                    <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0F172A' }}>{s.amount || s.fee || '₹0'}</td>
                     <td style={{ padding: '12px 14px' }}>
-                      <span style={{ background: s.status === 'Completed' ? '#ECFDF5' : '#EFF6FF', color: s.status === 'Completed' ? '#065F46' : '#1E40AF', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 700 }}>{s.status}</span>
+                      <span style={{
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: s.status === 'COMPLETED' ? '#DCFCE7' : s.status === 'REJECTED' ? '#FEE2E2' : '#FEF3C7',
+                        color: s.status === 'COMPLETED' ? '#16A34A' : s.status === 'REJECTED' ? '#DC2626' : '#D97706'
+                      }}>
+                        {s.status || 'PENDING'}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -1225,7 +1330,7 @@ export default function UserManagementDetail() {
         </div>
       )}
 
-      {/* ─── Tab: Documents ───────────────────────────────────────────────── */}
+      {/* ─── Tab: Documents ──────────────────────────────────────────────── */}
       {activeTab === 'Documents' && (
         <div style={{
           background: '#FFFFFF',
@@ -1234,28 +1339,131 @@ export default function UserManagementDetail() {
           padding: '24px 28px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Citizen Uploaded Identification & Proofs</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Citizen Uploaded Identification & Proofs</h2>
+              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '3px' }}>Real uploaded documents, identity proofs, and application attachments</div>
+            </div>
             <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>&larr; Back to Overview</button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
-            {safeData.uploadedDocuments.map((doc: any, idx: number) => (
-              <div key={idx} style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: '#F8FAFC' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <FileText size={22} color="#2563EB" />
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#10B981', background: '#ECFDF5', padding: '2px 8px', borderRadius: '10px' }}>{doc.status}</span>
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0F172A' }}>{doc.name}</div>
-                  <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px' }}>{doc.date}</div>
-                </div>
-                {doc.fileUrl && (
-                  <a href={doc.fileUrl} target="_blank" rel="noreferrer" style={{ fontSize: '12px', fontWeight: 700, color: '#2563EB', textDecoration: 'none', marginTop: '4px' }}>Open Document &rarr;</a>
-                )}
-              </div>
-            ))}
-          </div>
+          {safeData.uploadedDocuments.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 20px', background: '#F8FAFC', borderRadius: '10px', border: '1px dashed #CBD5E1' }}>
+              <FileText size={36} color="#94A3B8" style={{ margin: '0 auto 12px auto' }} />
+              <div style={{ fontWeight: 700, color: '#334155', fontSize: '14px' }}>No Documents Uploaded</div>
+              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>This citizen has not yet submitted any identity proofs or supporting documents.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+              {safeData.uploadedDocuments.map((doc: any, idx: number) => {
+                const isImage = doc.fileUrl?.startsWith('data:image') || /\.(jpg|jpeg|png|webp|gif)$/i.test(doc.fileName || doc.name);
+                return (
+                  <div
+                    key={doc.id || idx}
+                    onClick={() => handleOpenDocument(doc)}
+                    style={{
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '10px',
+                      padding: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                      background: '#F8FAFC',
+                      cursor: doc.fileUrl ? 'pointer' : 'default',
+                      transition: 'all 0.15s ease',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#93C5FD';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,99,235,0.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#E2E8F0';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.02)';
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <FileText size={20} color="#2563EB" />
+                        </div>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569', background: '#E2E8F0', padding: '2px 8px', borderRadius: '6px' }}>
+                          {isImage ? 'IMAGE' : 'PDF / DOC'}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#10B981', background: '#ECFDF5', padding: '2px 8px', borderRadius: '10px' }}>
+                        {doc.status || 'Verified'}
+                      </span>
+                    </div>
+
+                    {/* Thumbnail Preview if image */}
+                    {isImage && doc.fileUrl && (
+                      <div style={{ width: '100%', height: '140px', borderRadius: '6px', overflow: 'hidden', background: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <img src={doc.fileUrl} alt={doc.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    )}
+
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0F172A', wordBreak: 'break-all' }}>{doc.name || doc.fileName}</div>
+                      <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px' }}>{doc.date}</div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #E2E8F0', marginTop: 'auto' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenDocument(doc);
+                        }}
+                        style={{
+                          background: '#EFF6FF',
+                          border: '1px solid #BFDBFE',
+                          borderRadius: '6px',
+                          padding: '5px 12px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: '#2563EB',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Eye size={13} /> Open Document &rarr;
+                      </button>
+
+                      {doc.fileUrl && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadDocument(doc.fileUrl, doc.name || doc.fileName);
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#64748B',
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11.5px',
+                            fontWeight: 600
+                          }}
+                          title="Download document"
+                        >
+                          <Download size={13} /> Download
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1268,33 +1476,223 @@ export default function UserManagementDetail() {
           padding: '24px 28px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Fee Settlements & Payment Receipts</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Fee Settlements & Real Transaction Ledger</h2>
+              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '3px' }}>Real-time payment gateway transactions, UPI top-ups, service disbursements & refunds</div>
+            </div>
             <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>&larr; Back to Overview</button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '13px', color: '#0F172A' }}>Government Portal Payment Gateway (UPI / QR)</div>
-                <div style={{ fontSize: '11.5px', color: '#64748B' }}>Settlement ID: TXN-2026-98124 • 28 Jul 2026</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 800, fontSize: '14px', color: '#10B981' }}>+ ₹107.00 Paid</div>
-                <div style={{ fontSize: '11px', color: '#10B981', fontWeight: 700 }}>SUCCESS</div>
+          {/* KPI Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+            <div style={{ background: '#F8FAFC', padding: '14px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+              <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Wallet Balance</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', marginTop: '4px' }}>{safeData.quickStats.walletBalance}</div>
+            </div>
+            <div style={{ background: '#F0FDF4', padding: '14px 16px', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
+              <div style={{ fontSize: '12px', color: '#166534', fontWeight: 600 }}>Total Inflow (Credits)</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: '#15803D', marginTop: '4px' }}>
+                ₹{safeData.transactions.filter((t: any) => t.type === 'CREDIT').reduce((sum: number, t: any) => sum + (t.rawAmount || 0), 0).toLocaleString('en-IN')}
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '13px', color: '#0F172A' }}>Electricity Board Direct Debit</div>
-                <div style={{ fontSize: '11.5px', color: '#64748B' }}>Settlement ID: TXN-2026-89104 • 15 Jul 2026</div>
+            <div style={{ background: '#FEF2F2', padding: '14px 16px', borderRadius: '10px', border: '1px solid #FECACA' }}>
+              <div style={{ fontSize: '12px', color: '#991B1B', fontWeight: 600 }}>Total Outflow (Fees Paid)</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: '#DC2626', marginTop: '4px' }}>
+                ₹{safeData.transactions.filter((t: any) => t.type === 'DEBIT').reduce((sum: number, t: any) => sum + (t.rawAmount || 0), 0).toLocaleString('en-IN')}
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 800, fontSize: '14px', color: '#10B981' }}>+ ₹2,123.00 Paid</div>
-                <div style={{ fontSize: '11px', color: '#10B981', fontWeight: 700 }}>SUCCESS</div>
+            </div>
+            <div style={{ background: '#EFF6FF', padding: '14px 16px', borderRadius: '10px', border: '1px solid #BFDBFE' }}>
+              <div style={{ fontSize: '12px', color: '#1E40AF', fontWeight: 600 }}>Total Transactions</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: '#2563EB', marginTop: '4px' }}>
+                {safeData.transactions.length}
               </div>
             </div>
           </div>
+
+          {/* Transactions List */}
+          {safeData.transactions.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 20px', background: '#F8FAFC', borderRadius: '10px', border: '1px dashed #CBD5E1' }}>
+              <CreditCard size={36} color="#94A3B8" style={{ margin: '0 auto 12px auto' }} />
+              <div style={{ fontWeight: 700, color: '#334155', fontSize: '14px' }}>No Transactions Recorded</div>
+              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>This citizen has not completed any wallet additions or service payments yet.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {safeData.transactions.map((tx: any, idx: number) => {
+                const isCredit = tx.type === 'CREDIT';
+                return (
+                  <div key={tx.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '8px',
+                        background: isCredit ? '#ECFDF5' : '#F1F5F9',
+                        color: isCredit ? '#10B981' : '#64748B',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <CreditCard size={18} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0F172A' }}>{tx.title}</div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{tx.refNumber}</span>
+                          <span>•</span>
+                          <span>{tx.dateTime || tx.date}</span>
+                          {tx.category && (
+                            <>
+                              <span>•</span>
+                              <span style={{ background: '#E2E8F0', padding: '1px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700, color: '#475569' }}>
+                                {tx.category}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 800, fontSize: '15px', color: isCredit ? '#10B981' : '#0F172A' }}>
+                        {tx.amount}
+                      </div>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: tx.status === 'SUCCESS' ? '#10B981' : tx.status === 'REFUNDED' ? '#7C3AED' : '#F59E0B', marginTop: '2px' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: tx.status === 'SUCCESS' ? '#10B981' : tx.status === 'REFUNDED' ? '#7C3AED' : '#F59E0B' }} />
+                        {tx.status}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Tab: Session History ─────────────────────────────────────────── */}
+      {activeTab === 'Session History' && (
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '24px 28px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clock size={18} color="#2563EB" /> Citizen Login, Logout & Session Audit History
+              </h2>
+              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '3px' }}>
+                Detailed authentication logs, biometric sessions, IP addresses, and realtime online presence
+              </div>
+            </div>
+            <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '6px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>&larr; Back to Overview</button>
+          </div>
+
+          {/* Session KPI cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+            <div style={{ background: safeData.isOnline ? '#F0FDF4' : '#F8FAFC', padding: '14px 16px', borderRadius: '10px', border: `1px solid ${safeData.isOnline ? '#BBF7D0' : '#E2E8F0'}` }}>
+              <div style={{ fontSize: '12px', color: safeData.isOnline ? '#166534' : '#64748B', fontWeight: 600 }}>Realtime Status</div>
+              <div style={{ fontSize: '17px', fontWeight: 800, color: safeData.isOnline ? '#15803D' : '#475569', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: safeData.isOnline ? '#22C55E' : '#94A3B8' }} />
+                {safeData.isOnline ? 'Active (Online Now)' : 'Offline'}
+              </div>
+            </div>
+            <div style={{ background: '#F8FAFC', padding: '14px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+              <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Last Active Timestamp</div>
+              <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', marginTop: '4px' }}>
+                {safeData.quickStats.lastActive || 'Just now'}
+              </div>
+            </div>
+            <div style={{ background: '#EFF6FF', padding: '14px 16px', borderRadius: '10px', border: '1px solid #BFDBFE' }}>
+              <div style={{ fontSize: '12px', color: '#1E40AF', fontWeight: 600 }}>Total Recorded Sessions</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: '#2563EB', marginTop: '4px' }}>
+                {safeData.sessionHistory.length}
+              </div>
+            </div>
+            <div style={{ background: '#F8FAFC', padding: '14px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+              <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Primary Channel</div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', marginTop: '4px' }}>
+                CyberSave Android App
+              </div>
+            </div>
+          </div>
+
+          {/* Sessions List Table */}
+          {safeData.sessionHistory.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 20px', background: '#F8FAFC', borderRadius: '10px', border: '1px dashed #CBD5E1' }}>
+              <Clock size={36} color="#94A3B8" style={{ margin: '0 auto 12px auto' }} />
+              <div style={{ fontWeight: 700, color: '#334155', fontSize: '14px' }}>No Prior Session History</div>
+              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>Active and closed sessions will appear here as the citizen logs in and out.</div>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #E2E8F0', color: '#475569', fontSize: '12px', fontWeight: 700 }}>
+                    <th style={{ padding: '12px 14px' }}>EVENT / ACTION</th>
+                    <th style={{ padding: '12px 14px' }}>AUTH METHOD</th>
+                    <th style={{ padding: '12px 14px' }}>PLATFORM / CLIENT</th>
+                    <th style={{ padding: '12px 14px' }}>IP ADDRESS</th>
+                    <th style={{ padding: '12px 14px' }}>TIMESTAMP</th>
+                    <th style={{ padding: '12px 14px', textAlign: 'right' }}>SESSION STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {safeData.sessionHistory.map((sess: any, idx: number) => {
+                    const isLogin = sess.event === 'LOGIN' || sess.event === 'ACTIVE';
+                    const isActive = sess.event === 'ACTIVE';
+                    return (
+                      <tr key={sess.id || idx} style={{ borderBottom: '1px solid #F1F5F9', background: isActive ? '#F0FDF4' : 'transparent' }}>
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0F172A' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 8px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            background: isActive ? '#DCFCE7' : isLogin ? '#DBEAFE' : '#F1F5F9',
+                            color: isActive ? '#15803D' : isLogin ? '#1E40AF' : '#475569',
+                            border: `1px solid ${isActive ? '#86EFAC' : isLogin ? '#93C5FD' : '#CBD5E1'}`
+                          }}>
+                            {isActive && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22C55E' }} />}
+                            {sess.event}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', color: '#334155', fontWeight: 600 }}>
+                          {sess.method}
+                        </td>
+                        <td style={{ padding: '12px 14px', color: '#475569' }}>
+                          {sess.platform}
+                        </td>
+                        <td style={{ padding: '12px 14px', fontFamily: 'monospace', color: '#64748B', fontSize: '12px' }}>
+                          {sess.ipAddress}
+                        </td>
+                        <td style={{ padding: '12px 14px', color: '#334155' }}>
+                          {sess.dateTime || sess.date}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                          <span style={{
+                            fontWeight: 700,
+                            fontSize: '11.5px',
+                            color: isActive ? '#15803D' : isLogin ? '#2563EB' : '#64748B'
+                          }}>
+                            {sess.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -1730,6 +2128,28 @@ export default function UserManagementDetail() {
                   style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', outline: 'none' }}
                 />
               </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Registered Centre</label>
+                <input
+                  type="text"
+                  value={editForm.registeredCentre}
+                  onChange={(e) => setEditForm({ ...editForm, registeredCentre: e.target.value })}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', outline: 'none' }}
+                  placeholder="e.g. CSC New Delhi Seva Kendra"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Assigned Operator</label>
+                <input
+                  type="text"
+                  value={editForm.assignedOperator}
+                  onChange={(e) => setEditForm({ ...editForm, assignedOperator: e.target.value })}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', outline: 'none' }}
+                  placeholder="e.g. Officer Sharma (VLE-001)"
+                />
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
@@ -1947,6 +2367,170 @@ export default function UserManagementDetail() {
                   borderRadius: '8px'
                 }}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Document Viewer Modal (Supports Base64, Cloudinary, PDFs) ── */}
+      {selectedDoc && (
+        <div
+          onClick={() => setSelectedDoc(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 2100,
+            padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#0F172A',
+              borderRadius: '14px',
+              maxWidth: '920px',
+              width: '100%',
+              maxHeight: '92vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+              border: '1px solid #334155',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '16px 20px',
+              borderBottom: '1px solid #334155',
+              background: '#1E293B',
+              color: '#F8FAFC',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={18} color="#60A5FA" />
+                  <span>{selectedDoc.name || selectedDoc.fileName || 'Citizen Document'}</span>
+                  <span style={{ fontSize: '11px', background: '#059669', color: '#FFF', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>
+                    {selectedDoc.status || 'Verified'}
+                  </span>
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#94A3B8', marginTop: '2px' }}>
+                  Uploaded: {selectedDoc.date || 'Recent'} • {selectedDoc.fileType || 'Document'}
+                </div>
+              </div>
+
+              {/* Action Toolbar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setDocZoom((z) => Math.min(z + 0.25, 3))}
+                  style={{ background: '#334155', border: 'none', color: '#FFF', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+                  title="Zoom In"
+                >
+                  + Zoom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDocZoom((z) => Math.max(z - 0.25, 0.5))}
+                  style={{ background: '#334155', border: 'none', color: '#FFF', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+                  title="Zoom Out"
+                >
+                  - Zoom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDocRotation((r) => (r + 90) % 360)}
+                  style={{ background: '#334155', border: 'none', color: '#FFF', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+                  title="Rotate 90 deg"
+                >
+                  Rotate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setDocZoom(1); setDocRotation(0); }}
+                  style={{ background: '#334155', border: 'none', color: '#94A3B8', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+                  title="Reset view"
+                >
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openDocInNewWindow(selectedDoc.fileUrl, selectedDoc.name)}
+                  style={{ background: '#2563EB', border: 'none', color: '#FFF', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}
+                  title="Open in new window"
+                >
+                  <ExternalLink size={13} /> New Tab
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadDocument(selectedDoc.fileUrl, selectedDoc.name)}
+                  style={{ background: '#059669', border: 'none', color: '#FFF', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}
+                  title="Download document"
+                >
+                  <Download size={13} /> Download
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDoc(null)}
+                  style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '4px', marginLeft: '6px' }}
+                >
+                  <X size={22} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{
+              flex: 1,
+              overflow: 'auto',
+              padding: '24px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              background: '#0B1120',
+              minHeight: '460px'
+            }}>
+              {selectedDoc.fileUrl ? (
+                selectedDoc.fileType === 'application/pdf' || selectedDoc.name?.toLowerCase().endsWith('.pdf') ? (
+                  <iframe
+                    src={selectedDoc.fileUrl}
+                    title={selectedDoc.name}
+                    style={{ width: '100%', height: '550px', border: 'none', borderRadius: '8px', background: '#FFF' }}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                    <img
+                      src={selectedDoc.fileUrl}
+                      alt={selectedDoc.name}
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '65vh',
+                        objectFit: 'contain',
+                        borderRadius: '6px',
+                        transform: `scale(${docZoom}) rotate(${docRotation}deg)`,
+                        transition: 'transform 0.2s ease',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+                      }}
+                    />
+                  </div>
+                )
+              ) : (
+                <div style={{ color: '#94A3B8', fontSize: '14px', textAlign: 'center' }}>
+                  No file content available for preview.
+                </div>
+              )}
             </div>
           </div>
         </div>
