@@ -245,18 +245,83 @@ export default function UserManagementDetail() {
       };
 
       const handleStatusChanged = (statusData: any) => {
-        if (statusData?.userId === user?.dbId || statusData?.userId === user?.id || statusData?.userId === id) {
-          setUser((prev: any) => prev ? {
+        if (!statusData?.userId) return;
+        setUser((prev: any) => {
+          if (!prev) return prev;
+          const targetId = statusData.userId;
+          const matches =
+            prev.dbId === targetId ||
+            prev.id === targetId ||
+            id === targetId ||
+            (prev.id && typeof prev.id === 'string' && prev.id.toUpperCase().includes(targetId.substring(0, 5).toUpperCase())) ||
+            (id && typeof id === 'string' && id.toUpperCase().includes(targetId.substring(0, 5).toUpperCase()));
+
+          if (!matches) return prev;
+
+          const isNowOnline = statusData.isOnline === true;
+          const updatedSessions = [...(prev.sessionHistory || [])];
+
+          if (isNowOnline) {
+            if (!updatedSessions.some((s: any) => s.id === 'sess_active_now' || s.status === 'Active Now')) {
+              updatedSessions.unshift({
+                id: 'sess_active_now',
+                event: 'ACTIVE',
+                action: 'USER_SESSION_ACTIVE',
+                method: 'Android Mobile Client',
+                platform: 'CyberSave Android App',
+                details: 'Active realtime session connected',
+                ipAddress: statusData.ipAddress || '192.168.1.1 (Connected)',
+                status: 'Active Now',
+                date: 'Active Now',
+                dateTime: 'Currently Active',
+                rawDate: new Date().toISOString(),
+                duration: 'Live Session',
+              });
+            }
+          } else {
+            const filtered = updatedSessions.filter((s: any) => s.id !== 'sess_active_now');
+            filtered.unshift({
+              id: `sess_close_${Date.now()}`,
+              event: 'LOGOUT',
+              action: 'APP_CLOSED',
+              method: 'Android Mobile Client',
+              platform: 'CyberSave Android App',
+              details: 'Citizen app closed / session terminated',
+              ipAddress: statusData.ipAddress || '192.168.1.1',
+              status: 'Session Terminated',
+              date: 'Just now',
+              dateTime: new Date().toLocaleString('en-IN', {
+                day: '2-digit', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+              }),
+              rawDate: new Date().toISOString(),
+            });
+
+            return {
+              ...prev,
+              isOnline: false,
+              lastActive: 'Just now',
+              lastSeenAt: statusData.lastSeenAt || new Date().toISOString(),
+              quickStats: {
+                ...prev.quickStats,
+                lastActive: 'Just now',
+              },
+              sessionHistory: filtered,
+            };
+          }
+
+          return {
             ...prev,
-            isOnline: statusData.isOnline,
-            lastActive: statusData.isOnline ? 'Active Now' : 'Just now',
-            lastSeenAt: statusData.lastSeenAt,
+            isOnline: true,
+            lastActive: 'Active Now',
+            lastSeenAt: statusData.lastSeenAt || new Date().toISOString(),
             quickStats: {
               ...prev.quickStats,
-              lastActive: statusData.isOnline ? 'Active Now' : 'Just now',
-            }
-          } : prev);
-        }
+              lastActive: 'Active Now',
+            },
+            sessionHistory: updatedSessions,
+          };
+        });
       };
 
       socket.on('response_user_detail', handleUserDetail);
@@ -292,7 +357,7 @@ export default function UserManagementDetail() {
       const timer = setTimeout(() => setLoading(false), 800);
       return () => clearTimeout(timer);
     }
-  }, [id, socket, connected, user]);
+  }, [id, socket, connected]);
 
   const handleToggleBlock = () => {
     if (!user) return;
@@ -438,10 +503,14 @@ export default function UserManagementDetail() {
     joinedDate: user?.joinedDate || '15 March 2024',
     status: user?.status === 'BLOCKED' ? 'Blocked' : (user?.status || 'Verified'),
     id: user?.id || `CIT-${(id || '00482').slice(-5).toUpperCase()}`,
+    isOnline: user?.isOnline === true,
+    lastActive: user?.lastActive || user?.quickStats?.lastActive || (user?.isOnline ? 'Active Now' : 'Offline'),
+    lastSeenAt: user?.lastSeenAt,
+    dbId: user?.dbId || user?.id,
     quickStats: {
       totalServicesUsed: user?.quickStats?.totalServicesUsed ?? (user?.applications?.length || 0),
       totalAmountSpent: user?.quickStats?.totalAmountSpent ?? (user?.applications?.reduce((sum: number, a: any) => sum + (a.rawAmount || a.feePaid || 0), 0) ? `₹${user.applications.reduce((sum: number, a: any) => sum + (a.rawAmount || a.feePaid || 0), 0).toLocaleString('en-IN')}` : '₹0'),
-      lastActive: user?.quickStats?.lastActive || '2 hours ago',
+      lastActive: user?.quickStats?.lastActive || user?.lastActive || (user?.isOnline ? 'Active Now' : 'Offline'),
       registeredCentre: user?.quickStats?.registeredCentre || (user?.district && user.district !== '-' ? `CSC ${user.district}` : 'CSC Central Seva Kendra (Digital India)'),
       assignedOperator: user?.quickStats?.assignedOperator || 'Officer Sharma - Verification Incharge (SDM-01)',
       walletBalance: user?.quickStats?.walletBalance || (user?.wallet ? `₹${Number(user.wallet.balance || 0).toLocaleString('en-IN')}` : '₹0'),
@@ -585,7 +654,7 @@ export default function UserManagementDetail() {
                     border: '1px solid #E2E8F0'
                   }}>
                     <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#94A3B8' }} />
-                    Offline {safeData.lastActive ? `• ${safeData.lastActive}` : ''}
+                    Offline {safeData.lastActive && safeData.lastActive !== 'Active Now' && safeData.lastActive !== 'Offline' ? `• ${safeData.lastActive}` : ''}
                   </span>
                 )}
               </div>
