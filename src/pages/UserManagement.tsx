@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { showToast } from '../components/Layout';
 
-const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
 
 export default function UserManagement() {
   const navigate = useNavigate();
@@ -54,15 +54,17 @@ export default function UserManagement() {
 
   const fetchUsersRest = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/users`);
-      if (res.ok) {
-        const users = await res.json();
+      const res = await fetch(`${API_BASE_URL}/api/v1/users`).catch(() => null);
+      if (res && res.ok) {
+        const users = await res.json().catch(() => []);
         if (Array.isArray(users)) {
           setLiveUsers(users);
         }
       }
     } catch (err) {
       console.warn('REST users fetch note:', err);
+    } finally {
+      setLoading(false);
     }
   };
 

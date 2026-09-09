@@ -12,7 +12,66 @@ export default function Transactions() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMethod, setFilterMethod] = useState<'ALL' | 'RAZORPAY' | 'PORTAL' | 'REFUNDED'>('ALL');
 
+  const fetchTransactionsRest = async () => {
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const [appsRes, refundsRes] = await Promise.all([
+        fetch(`${backendUrl}/api/v1/applications`).catch(() => null),
+        fetch(`${backendUrl}/api/v1/refunds`).catch(() => null),
+      ]);
+
+      let apps: any[] = [];
+      let refunds: any[] = [];
+
+      if (appsRes?.ok) {
+        const raw = await appsRes.json().catch(() => []);
+        if (Array.isArray(raw)) apps = raw;
+      }
+      if (refundsRes?.ok) {
+        const raw = await refundsRes.json().catch(() => []);
+        if (Array.isArray(raw)) refunds = raw;
+      }
+
+      if (apps.length > 0 || refunds.length > 0) {
+        const txns = apps.map((a: any) => {
+          const isRef = (a.refundStatus || '').toUpperCase() === 'APPROVED' || (a.paymentStatus || '').toLowerCase() === 'refunded';
+          return {
+            id: a.razorpayPaymentId || `TXN-${(a.refNumber || a.id || '').replace(/\D/g, '').slice(-8) || Math.floor(10000000 + Math.random() * 90000000)}`,
+            refNumber: a.refNumber || a.id,
+            date: a.submittedAt || a.createdAt || new Date().toISOString(),
+            customer: a.user?.profile?.fullName || a.formData?.fullName || a.user?.phone || 'Citizen Applicant',
+            service: a.serviceTitle || a.service?.title || 'Government Service',
+            paymentMethod: a.razorpayPaymentId ? 'Razorpay UPI' : 'Portal Payment',
+            amount: a.feePaid || 50,
+            status: isRef ? 'REFUNDED' : 'SUCCESS',
+            isRefunded: isRef,
+            refundRef: isRef ? `REF-${(a.refNumber || a.id || '').replace(/\D/g, '').slice(-6)}` : undefined,
+          };
+        });
+
+        const totalAmount = txns.filter((t: any) => t.status !== 'REFUNDED').reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
+        const refundedAmount = txns.filter((t: any) => t.status === 'REFUNDED').reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
+
+        setData({
+          transactions: txns,
+          stats: {
+            totalAmount,
+            refundedAmount,
+            totalCount: txns.length,
+            revenueToday: totalAmount,
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[Transactions] REST fetch notice:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    fetchTransactionsRest();
+
     if (socket && connected) {
       socket.emit('request_transactions_data');
       
@@ -23,6 +82,7 @@ export default function Transactions() {
 
       const handleRefresh = () => {
         socket.emit('request_transactions_data');
+        fetchTransactionsRest();
       };
 
       socket.on('response_transactions_data', handleData);
@@ -42,6 +102,9 @@ export default function Transactions() {
         socket.off('new_application_submitted', handleRefresh);
         socket.off('applications_updated', handleRefresh);
       };
+    } else {
+      const timer = setTimeout(() => setLoading(false), 1200);
+      return () => clearTimeout(timer);
     }
   }, [socket, connected]);
 

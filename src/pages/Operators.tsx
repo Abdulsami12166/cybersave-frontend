@@ -37,20 +37,27 @@ export default function Operators() {
 
   const fetchOperatorsRest = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      const res = await fetch(`${backendUrl}/api/v1/operators`);
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-        setLoading(false);
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const res = await fetch(`${backendUrl}/api/v1/operators`).catch(() => null);
+      if (res && res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json) {
+          setData(json);
+        }
       }
     } catch (e) {
       console.warn('[Operators] REST fetch note:', e);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchOperatorsRest();
+
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
 
     if (socket && connected) {
       socket.emit('request_operators_data');
@@ -78,6 +85,7 @@ export default function Operators() {
       });
     }
     return () => {
+      clearTimeout(safetyTimer);
       if (socket) {
         socket.off('response_operators_data');
         socket.off('operators_updated');

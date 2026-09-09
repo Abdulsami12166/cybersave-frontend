@@ -22,7 +22,7 @@ import {
 } from 'recharts';
 import { normalizeApplication, type NormalizedApplication } from '../utils/normalize';
 
-const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
 
 // Custom Human-Crafted Glassmorphism Chart Tooltip
 const CustomChartTooltip = ({ active, payload, label }: any) => {
@@ -75,15 +75,17 @@ export default function Dashboard() {
 
   const fetchLiveApplications = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/applications`);
-      if (res.ok) {
-        const apps = await res.json();
+      const res = await fetch(`${API_BASE_URL}/api/v1/applications`).catch(() => null);
+      if (res && res.ok) {
+        const apps = await res.json().catch(() => []);
         if (Array.isArray(apps)) {
           setRawApps(apps);
         }
       }
     } catch (err) {
       console.warn('Live applications fetch notice:', err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 

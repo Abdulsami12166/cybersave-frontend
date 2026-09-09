@@ -15,8 +15,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-    const newSocket = io(backendUrl);
+    const newSocket = io(backendUrl, {
+      transports: ['polling', 'websocket'],
+      reconnectionAttempts: 10,
+      timeout: 10000,
+    });
     setSocket(newSocket);
 
     newSocket.on('connect', () => setConnected(true));

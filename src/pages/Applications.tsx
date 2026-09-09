@@ -115,9 +115,9 @@ export default function Applications() {
   const fetchApplicationsRest = async () => {
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-      const res = await fetch(`${backendUrl}/api/v1/applications`);
-      if (res.ok) {
-        const list = await res.json();
+      const res = await fetch(`${backendUrl}/api/v1/applications`).catch(() => null);
+      if (res && res.ok) {
+        const list = await res.json().catch(() => []);
         if (Array.isArray(list)) {
           const formatted = list.map(formatApplication);
           const totalApps = formatted.length;
@@ -134,12 +134,13 @@ export default function Applications() {
             stats: { totalApps, todayApps, pending, processing, completed },
             applications: formatted,
           });
-          setLoading(false);
           return formatted;
         }
       }
     } catch (e) {
       console.warn('[Applications] REST fetch error:', e);
+    } finally {
+      setLoading(false);
     }
     return null;
   };
@@ -147,6 +148,10 @@ export default function Applications() {
   useEffect(() => {
     // Initial fetch via REST to immediately populate data
     fetchApplicationsRest();
+
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
 
     // WebSocket real-time subscription
     if (socket) {
@@ -179,6 +184,7 @@ export default function Applications() {
       });
 
       return () => {
+        clearTimeout(safetyTimer);
         socket.off('response_applications_data', handleSocketData);
         socket.off('applications_updated', handleRefresh);
         socket.off('new_application_submitted', handleRefresh);
@@ -187,6 +193,8 @@ export default function Applications() {
         socket.off('update_application_status_success');
       };
     }
+
+    return () => clearTimeout(safetyTimer);
   }, [socket, connected]);
 
   const handleCreate = () => {
