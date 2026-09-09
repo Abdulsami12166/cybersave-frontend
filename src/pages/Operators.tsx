@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { UserCheck, ShieldCheck, Clock, UserX, Search, X } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
+import { apiFetch } from '../utils/apiConfig';
 
 export default function Operators() {
   const navigate = useNavigate();
@@ -37,8 +38,7 @@ export default function Operators() {
 
   const fetchOperatorsRest = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-      const res = await fetch(`${backendUrl}/api/v1/operators`).catch(() => null);
+      const res = await apiFetch('/api/v1/operators').catch(() => null);
       if (res && res.ok) {
         const json = await res.json().catch(() => null);
         if (json) {
@@ -104,8 +104,7 @@ export default function Operators() {
     const finalPermissions = Array.from(new Set([...newOpFeats, 'SETTINGS']));
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      await fetch(`${backendUrl}/api/v1/operators`, {
+      await apiFetch('/api/v1/operators', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -143,8 +142,7 @@ export default function Operators() {
     if (!managingOp) return;
     const finalPermissions = Array.from(new Set([...opPermissions, 'SETTINGS']));
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      await fetch(`${backendUrl}/api/v1/operators/${managingOp.id}`, {
+      await apiFetch(`/api/v1/operators/${managingOp.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissions: finalPermissions }),

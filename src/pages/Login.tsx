@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Lock, User, Eye, EyeOff, Shield } from 'lucide-react';
+import { apiFetch } from '../utils/apiConfig';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -21,12 +21,19 @@ const Login: React.FC = () => {
     const cleanEmail = email.trim().toLowerCase();
 
     try {
-      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com'}/api/auth/login`, {
-        email: cleanEmail,
-        password
+      const res = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password }),
       });
 
-      const { token, admin } = response.data;
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || errJson.message || 'Invalid credentials');
+      }
+
+      const responseData = await res.json();
+      const { token, admin } = responseData;
       const isSuperAdminEmail = cleanEmail === 'admin@cybersave.com';
       const enrichedAdmin = {
         ...admin,

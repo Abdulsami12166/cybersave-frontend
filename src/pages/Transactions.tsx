@@ -4,6 +4,7 @@ import { ArrowLeftRight, CreditCard, DollarSign, Search, Download, CheckCircle, 
 import { StatCard } from '../components/Dashboard';
 
 import { formatIndianDate, normalizeAppId, normalizeCitizenName } from '../utils/normalize';
+import { apiFetch } from '../utils/apiConfig';
 
 export default function Transactions() {
   const { socket, connected } = useSocket();
@@ -14,10 +15,9 @@ export default function Transactions() {
 
   const fetchTransactionsRest = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
       const [appsRes, refundsRes] = await Promise.all([
-        fetch(`${backendUrl}/api/v1/applications`).catch(() => null),
-        fetch(`${backendUrl}/api/v1/refunds`).catch(() => null),
+        apiFetch('/api/v1/applications').catch(() => null),
+        apiFetch('/api/v1/refunds').catch(() => null),
       ]);
 
       let apps: any[] = [];
@@ -70,7 +70,7 @@ export default function Transactions() {
   };
 
   useEffect(() => {
-    fetchTransactionsRest();
+    let debounceTimer: any = null;
 
     if (socket && connected) {
       socket.emit('request_transactions_data');
@@ -81,30 +81,24 @@ export default function Transactions() {
       };
 
       const handleRefresh = () => {
-        socket.emit('request_transactions_data');
-        fetchTransactionsRest();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          socket.emit('request_transactions_data');
+        }, 1200);
       };
 
       socket.on('response_transactions_data', handleData);
       socket.on('transactions_updated', handleRefresh);
-      socket.on('dashboard_updated', handleRefresh);
       socket.on('refund_approved', handleRefresh);
-      socket.on('refunds_updated', handleRefresh);
-      socket.on('new_application_submitted', handleRefresh);
-      socket.on('applications_updated', handleRefresh);
 
       return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_transactions_data', handleData);
         socket.off('transactions_updated', handleRefresh);
-        socket.off('dashboard_updated', handleRefresh);
         socket.off('refund_approved', handleRefresh);
-        socket.off('refunds_updated', handleRefresh);
-        socket.off('new_application_submitted', handleRefresh);
-        socket.off('applications_updated', handleRefresh);
       };
     } else {
-      const timer = setTimeout(() => setLoading(false), 1200);
-      return () => clearTimeout(timer);
+      fetchTransactionsRest();
     }
   }, [socket, connected]);
 

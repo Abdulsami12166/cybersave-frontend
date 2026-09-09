@@ -25,8 +25,9 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { showToast } from '../components/Layout';
+import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
 
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+const API_BASE_URL = getApiBaseUrl();
 
 export default function UserManagement() {
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ export default function UserManagement() {
 
   const fetchUsersRest = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/users`).catch(() => null);
+      const res = await apiFetch('/api/v1/users?limit=50').catch(() => null);
       if (res && res.ok) {
         const users = await res.json().catch(() => []);
         if (Array.isArray(users)) {
@@ -69,18 +70,24 @@ export default function UserManagement() {
   };
 
   useEffect(() => {
-    fetchUsersRest();
+    let debounceTimer: any = null;
+
     if (socket && connected) {
       socket.emit('request_users_data');
       
       const handleUsers = (resData: any) => {
         setData(resData);
+        if (Array.isArray(resData?.users) && resData.users.length > 0) {
+          setLiveUsers(resData.users);
+        }
         setLoading(false);
       };
 
       const handleRefresh = () => {
-        socket.emit('request_users_data');
-        fetchUsersRest();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          socket.emit('request_users_data');
+        }, 1200);
       };
 
       const handleStatusChange = (statusData: any) => {
@@ -128,6 +135,7 @@ export default function UserManagement() {
       });
 
       return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_users_data', handleUsers);
         socket.off('user_status_changed', handleStatusChange);
         socket.off('user_activity_updated', handleRefresh);
@@ -137,8 +145,7 @@ export default function UserManagement() {
         socket.off('block_citizen_success');
       };
     } else {
-      const t = setTimeout(() => setLoading(false), 800);
-      return () => clearTimeout(t);
+      fetchUsersRest();
     }
   }, [socket, connected]);
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { 
@@ -21,6 +21,7 @@ import {
   formatIndianDate, 
   normalizeStatus 
 } from '../utils/normalize';
+import { apiFetch } from '../utils/apiConfig';
 
 export default function Applications() {
   const navigate = useNavigate();
@@ -114,8 +115,7 @@ export default function Applications() {
 
   const fetchApplicationsRest = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-      const res = await fetch(`${backendUrl}/api/v1/applications`).catch(() => null);
+      const res = await apiFetch('/api/v1/applications').catch(() => null);
       if (res && res.ok) {
         const list = await res.json().catch(() => []);
         if (Array.isArray(list)) {
@@ -146,15 +146,9 @@ export default function Applications() {
   };
 
   useEffect(() => {
-    // Initial fetch via REST to immediately populate data
-    fetchApplicationsRest();
+    let debounceTimer: any = null;
 
-    const safetyTimer = setTimeout(() => {
-      setLoading(false);
-    }, 1500);
-
-    // WebSocket real-time subscription
-    if (socket) {
+    if (socket && connected) {
       socket.emit('request_applications_data');
 
       const handleSocketData = (resData: any) => {
@@ -163,8 +157,10 @@ export default function Applications() {
       };
 
       const handleRefresh = () => {
-        socket.emit('request_applications_data');
-        fetchApplicationsRest();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          socket.emit('request_applications_data');
+        }, 1200);
       };
 
       socket.on('response_applications_data', handleSocketData);
@@ -184,7 +180,7 @@ export default function Applications() {
       });
 
       return () => {
-        clearTimeout(safetyTimer);
+        if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_applications_data', handleSocketData);
         socket.off('applications_updated', handleRefresh);
         socket.off('new_application_submitted', handleRefresh);
@@ -192,9 +188,9 @@ export default function Applications() {
         socket.off('create_application_success');
         socket.off('update_application_status_success');
       };
+    } else {
+      fetchApplicationsRest();
     }
-
-    return () => clearTimeout(safetyTimer);
   }, [socket, connected]);
 
   const handleCreate = () => {
@@ -202,6 +198,35 @@ export default function Applications() {
       socket.emit('create_application', { title: newAppTitle, description: newAppDesc });
     }
   };
+
+  const { stats, applications } = data || {};
+
+  // Compute number of applicants applied for each service/scheme
+  const schemeApplicantCounts = useMemo(() => {
+    return ((applications || []) as any[]).reduce((acc: Record<string, number>, app: any) => {
+      const sType = app.serviceType || 'Government Service';
+      acc[sType] = (acc[sType] || 0) + 1;
+      return acc;
+    }, {});
+  }, [applications]);
+
+  const filteredApplications = useMemo(() => {
+    return ((applications || []) as any[]).filter(app => {
+      if (filterType !== 'All' && !app.serviceType?.toLowerCase().includes(filterType.toLowerCase())) return false;
+      if (filterStatus !== 'All' && app.status !== filterStatus) return false;
+      if (filterPriority !== 'All' && app.priority !== filterPriority) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchId = app.id?.toLowerCase().includes(q) || app.refNumber?.toLowerCase().includes(q);
+        const matchCitizen = app.citizen?.toLowerCase().includes(q);
+        const matchService = app.serviceType?.toLowerCase().includes(q);
+        const matchEmail = app.citizenEmail?.toLowerCase().includes(q);
+        const matchPhone = app.citizenPhone?.includes(q);
+        if (!matchId && !matchCitizen && !matchService && !matchEmail && !matchPhone) return false;
+      }
+      return true;
+    });
+  }, [applications, filterType, filterStatus, filterPriority, searchQuery]);
 
   if (loading && !data) {
     return (
@@ -211,31 +236,6 @@ export default function Applications() {
       </div>
     );
   }
-
-  const { stats, applications } = data || {};
-
-  // Compute number of applicants applied for each service/scheme
-  const schemeApplicantCounts = ((applications || []) as any[]).reduce((acc: Record<string, number>, app: any) => {
-    const sType = app.serviceType || 'Government Service';
-    acc[sType] = (acc[sType] || 0) + 1;
-    return acc;
-  }, {});
-
-  const filteredApplications = ((applications || []) as any[]).filter(app => {
-    if (filterType !== 'All' && !app.serviceType?.toLowerCase().includes(filterType.toLowerCase())) return false;
-    if (filterStatus !== 'All' && app.status !== filterStatus) return false;
-    if (filterPriority !== 'All' && app.priority !== filterPriority) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchId = app.id?.toLowerCase().includes(q) || app.refNumber?.toLowerCase().includes(q);
-      const matchCitizen = app.citizen?.toLowerCase().includes(q);
-      const matchService = app.serviceType?.toLowerCase().includes(q);
-      const matchEmail = app.citizenEmail?.toLowerCase().includes(q);
-      const matchPhone = app.citizenPhone?.includes(q);
-      if (!matchId && !matchCitizen && !matchService && !matchEmail && !matchPhone) return false;
-    }
-    return true;
-  });
 
   return (
     <>

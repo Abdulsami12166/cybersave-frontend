@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { apiFetch } from '../utils/apiConfig';
 
 interface Admin {
   id: string;
@@ -45,13 +46,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const storedAdminRaw = localStorage.getItem('adminUser');
         if (!storedAdminRaw) return;
         const currentAdmin = JSON.parse(storedAdminRaw);
-        const primaryUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
 
         if (currentAdmin.email === 'admin@cybersave.com') {
-          let res = await fetch(`${primaryUrl}/api/admin/profile`).catch(() => null);
-          if (!res?.ok && primaryUrl !== 'https://cybersave-6tfo.onrender.com') {
-            res = await fetch(`https://cybersave-6tfo.onrender.com/api/admin/profile`).catch(() => null);
-          }
+          const res = await apiFetch('/api/admin/profile').catch(() => null);
           if (res && res.ok) {
             const prof = await res.json();
             if (prof) {
@@ -72,10 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } else if (currentAdmin.id) {
           // Sub-admin: Sync their own actual profile and permissions from DB
-          let res = await fetch(`${primaryUrl}/api/v1/operators/${currentAdmin.id}`).catch(() => null);
-          if (!res?.ok && primaryUrl !== 'https://cybersave-6tfo.onrender.com') {
-            res = await fetch(`https://cybersave-6tfo.onrender.com/api/v1/operators/${currentAdmin.id}`).catch(() => null);
-          }
+          const res = await apiFetch(`/api/v1/operators/${currentAdmin.id}`).catch(() => null);
           if (res && res.ok) {
             const opData = await res.json();
             if (opData) {

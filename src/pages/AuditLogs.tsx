@@ -19,9 +19,7 @@ import {
 import axios from 'axios';
 import { useSocket } from '../context/SocketContext';
 import { StatCard } from '../components/Dashboard';
-
-const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
-const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || API_BASE_URL;
+import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
 
 interface AuditEntry {
   id: string;
@@ -52,19 +50,20 @@ export default function AuditLogs() {
   // 1. Initial REST fetch for instant rendering + WebSocket live stream
   useEffect(() => {
     let isMounted = true;
+    let debounceTimer: any = null;
 
     const fetchRestAuditLogs = async () => {
       try {
-        let res = await axios.get(`${BACKEND_BASE}/api/v1/audit-logs`).catch(() => null);
-        if (!res?.data?.success && BACKEND_BASE !== API_BASE_URL) {
-          res = await axios.get(`${API_BASE_URL}/api/v1/audit-logs`).catch(() => null);
-        }
-        if (res?.data?.success && isMounted) {
-          setData({
-            stats: res.data.stats,
-            logs: res.data.logs || [],
-          });
-          setLoading(false);
+        const res = await apiFetch('/api/v1/audit-logs').catch(() => null);
+        if (res && res.ok && isMounted) {
+          const json = await res.json().catch(() => null);
+          if (json) {
+            setData({
+              stats: json.stats || { totalEvents: json.logs?.length || 0 },
+              logs: json.logs || (Array.isArray(json) ? json : []),
+            });
+            setLoading(false);
+          }
         }
       } catch (err) {
         console.warn('[AuditLogs] REST fallback note:', err);
@@ -72,8 +71,6 @@ export default function AuditLogs() {
         if (isMounted) setLoading(false);
       }
     };
-
-    fetchRestAuditLogs();
 
     if (socket && connected) {
       socket.emit('request_audit_logs');
@@ -107,7 +104,10 @@ export default function AuditLogs() {
       };
 
       const handleRefresh = () => {
-        socket.emit('request_audit_logs');
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          socket.emit('request_audit_logs');
+        }, 1200);
       };
 
       socket.on('response_audit_logs', handleLogs);
@@ -116,14 +116,18 @@ export default function AuditLogs() {
 
       return () => {
         isMounted = false;
+        if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_audit_logs', handleLogs);
         socket.off('audit_logs_updated', handleRefresh);
         socket.off('audit_log_added', handleLogAdded);
       };
+    } else {
+      fetchRestAuditLogs();
     }
 
     return () => {
       isMounted = false;
+      if (debounceTimer) clearTimeout(debounceTimer);
     };
   }, [socket, connected]);
 

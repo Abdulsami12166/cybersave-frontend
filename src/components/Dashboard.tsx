@@ -21,8 +21,9 @@ import {
   BarChart, Bar
 } from 'recharts';
 import { normalizeApplication, type NormalizedApplication } from '../utils/normalize';
+import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
 
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+const API_BASE_URL = getApiBaseUrl();
 
 // Custom Human-Crafted Glassmorphism Chart Tooltip
 const CustomChartTooltip = ({ active, payload, label }: any) => {
@@ -58,6 +59,34 @@ const CustomChartTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const LiveClock = React.memo(() => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div style={{
+      background: '#F8FAFC',
+      border: '1px solid #E2E8F0',
+      borderRadius: '8px',
+      padding: '8px 14px',
+      fontSize: '12.5px',
+      color: '#334155',
+      fontWeight: 600,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px'
+    }}>
+      <Calendar size={14} color="#64748B" />
+      <span>{currentTime.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+      <span style={{ color: '#94A3B8' }}>•</span>
+      <span style={{ color: '#0F172A' }}>{currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
+    </div>
+  );
+});
+
 export default function Dashboard() {
   const { socket, connected } = useSocket();
   const [data, setData] = useState<any>(null);
@@ -65,17 +94,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [tableFilter, setTableFilter] = useState<'All' | 'In Review' | 'Approved' | 'Rejected'>('All');
   const [tableSearch, setTableSearch] = useState('');
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  // Keep live time updated for real-time dispatch feel
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const fetchLiveApplications = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/applications`).catch(() => null);
+      const res = await apiFetch('/api/v1/applications?limit=25').catch(() => null);
       if (res && res.ok) {
         const apps = await res.json().catch(() => []);
         if (Array.isArray(apps)) {
@@ -90,17 +112,24 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    fetchLiveApplications();
+    let debounceTimer: any = null;
+
     if (socket && connected) {
       socket.emit('request_dashboard_data');
       
       const handleDash = (resData: any) => {
         setData(resData);
+        if (Array.isArray(resData?.recentApps) && resData.recentApps.length > 0) {
+          setRawApps(resData.recentApps);
+        }
         setLoading(false);
       };
+
       const handleAppUpdate = () => {
-        socket.emit('request_dashboard_data');
-        fetchLiveApplications();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          socket.emit('request_dashboard_data');
+        }, 1200);
       };
 
       socket.on('response_dashboard_data', handleDash);
@@ -113,6 +142,7 @@ export default function Dashboard() {
       socket.on('transactions_updated', handleAppUpdate);
 
       return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_dashboard_data', handleDash);
         socket.off('dashboard_updated', handleAppUpdate);
         socket.off('applications_updated', handleAppUpdate);
@@ -123,8 +153,7 @@ export default function Dashboard() {
         socket.off('transactions_updated', handleAppUpdate);
       };
     } else {
-      const timer = setTimeout(() => setLoading(false), 800);
-      return () => clearTimeout(timer);
+      fetchLiveApplications();
     }
   }, [socket, connected, fetchLiveApplications]);
 
@@ -274,23 +303,7 @@ export default function Dashboard() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '8px',
-            padding: '8px 14px',
-            fontSize: '12.5px',
-            color: '#334155',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}>
-            <Calendar size={14} color="#64748B" />
-            <span>{currentTime.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
-            <span style={{ color: '#94A3B8' }}>•</span>
-            <span style={{ color: '#0F172A' }}>{currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
-          </div>
+          <LiveClock />
 
           <button 
             onClick={() => { fetchLiveApplications(); }}

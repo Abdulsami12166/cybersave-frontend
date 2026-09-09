@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getCandidateBackendUrls, setApiBaseUrl } from '../utils/apiConfig';
 
 interface SocketContextProps {
   socket: Socket | null;
@@ -15,19 +16,62 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-    const newSocket = io(backendUrl, {
-      transports: ['polling', 'websocket'],
-      reconnectionAttempts: 10,
-      timeout: 10000,
-    });
-    setSocket(newSocket);
+    const candidates = getCandidateBackendUrls();
+    let currentIdx = 0;
+    let newSocket: Socket | null = null;
+    let isMounted = true;
 
-    newSocket.on('connect', () => setConnected(true));
-    newSocket.on('disconnect', () => setConnected(false));
+    const tryConnect = (index: number) => {
+      if (!isMounted) return;
+      if (index >= candidates.length) {
+        setTimeout(() => {
+          if (isMounted) tryConnect(0);
+        }, 5000);
+        return;
+      }
+
+      const targetUrl = candidates[index];
+      if (newSocket) {
+        newSocket.removeAllListeners();
+        newSocket.close();
+      }
+
+      newSocket = io(targetUrl, {
+        transports: ['websocket', 'polling'],
+        reconnectionAttempts: 3,
+        timeout: 4000,
+      });
+
+      newSocket.on('connect', () => {
+        if (!isMounted) return;
+        setConnected(true);
+        setSocket(newSocket);
+        setApiBaseUrl(targetUrl);
+      });
+
+      newSocket.on('disconnect', () => {
+        if (!isMounted) return;
+        setConnected(false);
+      });
+
+      newSocket.on('connect_error', () => {
+        if (!isMounted) return;
+        if (!newSocket?.connected && currentIdx + 1 < candidates.length) {
+          currentIdx++;
+          tryConnect(currentIdx);
+        }
+      });
+
+      setSocket(newSocket);
+    };
+
+    tryConnect(0);
 
     return () => {
-      newSocket.close();
+      isMounted = false;
+      if (newSocket) {
+        newSocket.close();
+      }
     };
   }, []);
 

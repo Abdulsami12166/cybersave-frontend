@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
 import {
   FileText, CheckCircle, Clock, FileBadge, ArrowRight, ArrowLeft,
   ShieldCheck, Check, X, AlertTriangle, Download, Eye, CreditCard,
@@ -103,39 +104,33 @@ export default function ApplicationDetail() {
   const [refundActionLoading, setRefundActionLoading] = useState(false);
 
   const getBackendUrl = () => {
-    return import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+    return getApiBaseUrl();
   };
 
   const fetchRefund = async (targetId?: string) => {
     try {
       const tid = targetId || id;
       if (!tid) return;
-      const base = getBackendUrl();
       const token = localStorage.getItem('adminToken');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      let res = await axios.get(`${base}/api/v1/refunds?applicationId=${tid}`, { headers }).catch(() => null);
-      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
-        res = await axios.get(`https://cybersave-6tfo.onrender.com/api/v1/refunds?applicationId=${tid}`, { headers }).catch(() => null);
-      }
-      if (!res || !res.data) {
-        res = await axios.get(`/api/v1/refunds?applicationId=${tid}`, { headers }).catch(() => null);
-      }
+      const res = await apiFetch(`/api/v1/refunds?applicationId=${tid}`, { headers }).catch(() => null);
+      if (res && res.ok) {
+        const raw = await res.json().catch(() => []);
+        const list = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.data)
+          ? raw.data
+          : Array.isArray(raw?.refunds)
+          ? raw.refunds
+          : [];
 
-      const raw = res?.data;
-      const list = Array.isArray(raw)
-        ? raw
-        : Array.isArray(raw?.data)
-        ? raw.data
-        : Array.isArray(raw?.refunds)
-        ? raw.refunds
-        : [];
-
-      if (list.length > 0) {
-        setRefundInfo(list[0]);
+        if (list.length > 0) {
+          setRefundInfo(list[0]);
+        }
       }
-    } catch (e) {
-      // ignore
+    } catch (err) {
+      console.warn('Refund fetch error:', err);
     }
   };
 
@@ -226,9 +221,8 @@ export default function ApplicationDetail() {
 
   const fetchOperators = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      const res = await fetch(`${backendUrl}/api/admin/operators`);
-      if (res.ok) {
+      const res = await apiFetch('/api/v1/operators').catch(() => null);
+      if (res && res.ok) {
         const data = await res.json();
         if (Array.isArray(data.operators) && data.operators.length > 0) {
           setOperators(data.operators);
@@ -249,9 +243,8 @@ export default function ApplicationDetail() {
   // ponytail: REST-first fetch, socket for real-time updates
   const fetchApp = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      const res = await fetch(`${backendUrl}/api/v1/applications/${id}`);
-      if (res.ok) {
+      const res = await apiFetch(`/api/v1/applications/${id}`).catch(() => null);
+      if (res && res.ok) {
         const raw = await res.json();
         setApp(formatApp(raw));
         setLoading(false);
@@ -309,9 +302,7 @@ export default function ApplicationDetail() {
   };
 
   useEffect(() => {
-    fetchApp();
-    fetchRefund();
-    fetchOperators();
+    let debounceTimer: any = null;
 
     if (socket && connected) {
       socket.emit('request_application_detail', { id });
@@ -321,19 +312,21 @@ export default function ApplicationDetail() {
           setApp(formatApp(data));
           setLoading(false);
           setActionLoading(false);
-          fetchRefund(data.id || id);
         }
       };
 
       const handleUpdate = () => {
-        socket.emit('request_application_detail', { id });
-        fetchApp();
-        fetchRefund();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          socket.emit('request_application_detail', { id });
+        }, 1200);
       };
 
       const handleRefundUpdate = () => {
-        fetchRefund();
-        fetchApp();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          fetchRefund();
+        }, 1200);
       };
 
       socket.on('response_application_detail', handleDetail);
@@ -345,6 +338,7 @@ export default function ApplicationDetail() {
       socket.on('new_refund_requested', handleRefundUpdate);
 
       return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_application_detail', handleDetail);
         socket.off('applications_updated', handleUpdate);
         socket.off('application_status_changed', handleUpdate);
@@ -353,7 +347,12 @@ export default function ApplicationDetail() {
         socket.off('refunds_updated', handleRefundUpdate);
         socket.off('new_refund_requested', handleRefundUpdate);
       };
+    } else {
+      fetchApp();
+      fetchRefund();
     }
+
+    fetchOperators();
   }, [socket, connected, id]);
 
   const handleAssignOperator = async (operator: any) => {
@@ -373,9 +372,8 @@ export default function ApplicationDetail() {
 
     // 2. REST API call
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       const targetId = app.rawId || app.id;
-      const res = await fetch(`${backendUrl}/api/v1/applications/${targetId}/assign`, {
+      const res = await apiFetch(`/api/v1/applications/${targetId}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operatorName: opDisplayName, operatorId: operator.id }),
@@ -424,9 +422,8 @@ export default function ApplicationDetail() {
 
     // REST for guaranteed persistence
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       const targetId = app.rawId || app.id;
-      await fetch(`${backendUrl}/api/v1/applications/${targetId}/status`, {
+      await apiFetch(`/api/v1/applications/${targetId}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

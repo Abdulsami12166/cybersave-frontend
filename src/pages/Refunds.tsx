@@ -5,6 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../components/Layout';
 import { StatCard } from '../components/Dashboard';
+import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
 import {
   RotateCcw,
   CheckCircle2,
@@ -48,44 +49,28 @@ export default function Refunds() {
   const [selectedQuickDecline, setSelectedQuickDecline] = useState('');
 
   const getApiBase = () => {
-    return import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+    return getApiBaseUrl();
   };
 
   const fetchRefunds = async () => {
     try {
       setLoading(true);
-      const base = getApiBase();
       const token = localStorage.getItem('adminToken');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      // 1. Primary target
-      let res = await axios.get(`${base}/api/v1/refunds`, { headers }).catch(() => null);
+      const res = await apiFetch('/api/v1/refunds', { headers }).catch(() => null);
+      if (res && res.ok) {
+        const raw = await res.json().catch(() => []);
+        const list = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.data)
+          ? raw.data
+          : Array.isArray(raw?.refunds)
+          ? raw.refunds
+          : [];
 
-      // 2. Fallback to production Render backend if primary was localhost or failed
-      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
-        res = await axios.get(`https://cybersave-6tfo.onrender.com/api/v1/refunds`, { headers }).catch(() => null);
+        setRefunds(list);
       }
-
-      // 3. Fallback to localhost 3000 if running locally
-      if ((!res || !res.data) && base !== 'http://localhost:3000') {
-        res = await axios.get(`http://localhost:3000/api/v1/refunds`, { headers }).catch(() => null);
-      }
-
-      // 4. Fallback to relative proxy
-      if (!res || !res.data) {
-        res = await axios.get('/api/v1/refunds', { headers }).catch(() => null);
-      }
-
-      const raw = res?.data;
-      const list = Array.isArray(raw)
-        ? raw
-        : Array.isArray(raw?.data)
-        ? raw.data
-        : Array.isArray(raw?.refunds)
-        ? raw.refunds
-        : [];
-
-      setRefunds(list);
     } catch (err: any) {
       console.error('Error fetching refunds:', err);
       showToast('Failed to load refund requests', 'error');
@@ -101,6 +86,7 @@ export default function Refunds() {
   // Real-time WebSocket Listeners
   useEffect(() => {
     if (!socket) return;
+    let debounceTimer: any = null;
 
     const handleNewRefund = (newRefund: any) => {
       if (!newRefund) return;
@@ -116,7 +102,10 @@ export default function Refunds() {
 
     const handleRefundsUpdated = (updatedRefund: any) => {
       if (!updatedRefund?.id) {
-        fetchRefunds();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          fetchRefunds();
+        }, 1200);
         return;
       }
       setRefunds((prev) => {
@@ -132,6 +121,7 @@ export default function Refunds() {
     socket.on('refunds_updated', handleRefundsUpdated);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       socket.off('new_refund_requested', handleNewRefund);
       socket.off('refunds_updated', handleRefundsUpdated);
     };
