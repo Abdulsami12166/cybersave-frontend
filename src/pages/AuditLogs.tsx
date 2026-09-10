@@ -91,6 +91,9 @@ export default function AuditLogs() {
       }
     };
 
+    // Immediate REST fetch on mount for sub-second audit log rendering
+    fetchRestAuditLogs();
+
     if (socket && connected) {
       socket.emit('request_audit_logs');
 
@@ -142,8 +145,6 @@ export default function AuditLogs() {
         socket.off('audit_logs_updated', handleRefresh);
         socket.off('audit_log_added', handleLogAdded);
       };
-    } else {
-      fetchRestAuditLogs();
     }
 
     return () => {
