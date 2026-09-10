@@ -21,7 +21,8 @@ import {
   normalizeServiceTitle, 
   normalizeFee, 
   formatIndianDate, 
-  normalizeStatus 
+  normalizeStatus,
+  extractSupportingDocuments
 } from '../utils/normalize';
 import { apiFetch } from '../utils/apiConfig';
 
@@ -56,16 +57,7 @@ export default function Applications() {
     const raw = a.rawApp || a;
     const userProfile = raw.user?.profile || a.user?.profile;
     const formData = (raw.formData as any) || (a.formData as any) || {};
-    let docs = (raw.documents as any) || (a.documents as any) || [];
-
-    const cleanedDocs = (Array.isArray(docs) ? docs : [])
-      .filter((d: any) => d && typeof d === 'object' && !Array.isArray(d) && (d.fileUrl || d.url || d.uri || d.fileName || d.label))
-      .map((d: any, idx: number) => ({
-        label: d.label || `Document Proof #${idx + 1}`,
-        fileName: d.fileName || `proof_${idx + 1}.jpg`,
-        fileUrl: d.fileUrl || d.url || d.uri || '',
-        type: d.type || 'Identity Proof',
-      }));
+    const cleanedDocs = extractSupportingDocuments(raw, a);
 
     const mongoId = raw.id || a.rawId || a.dbId || (raw._id ? String(raw._id) : null) || a.id;
     const refNumber = normalizeAppId(raw.refNumber || a.refNumber, mongoId);
@@ -609,7 +601,25 @@ export default function Applications() {
                       </td>
                       <td style={{fontWeight: 600, color: '#111827', padding: '14px 14px'}}>
                         <div>{app.citizen}</div>
-                        {app.citizenEmail ? <div style={{fontSize: 11, color: '#9ca3af', fontWeight: 400}}>{app.citizenEmail}</div> : null}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                          {app.citizenEmail ? <span style={{fontSize: 11, color: '#9ca3af', fontWeight: 400}}>{app.citizenEmail}</span> : null}
+                          {app.documents && app.documents.length > 0 && (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              backgroundColor: '#eff6ff',
+                              color: '#2563eb',
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              border: '1px solid #dbeafe'
+                            }}>
+                              <FileText size={10} /> {app.documents.length} doc{app.documents.length > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{color: '#4b5563', fontWeight: 500, padding: '14px 14px'}}>{app.serviceType}</td>
                       <td style={{padding: '14px 14px', whiteSpace: 'nowrap'}}>
