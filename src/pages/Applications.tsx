@@ -9,7 +9,9 @@ import {
   Eye, 
   Search,
   Users,
-  RefreshCw
+  RefreshCw,
+  Check,
+  X
 } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
@@ -37,6 +39,11 @@ export default function Applications() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newAppTitle, setNewAppTitle] = useState('');
   const [newAppDesc, setNewAppDesc] = useState('');
+
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectingApp, setRejectingApp] = useState<any>(null);
+  const [rejectionReasonText, setRejectionReasonText] = useState('Documents could not be verified by the administrative officer.');
+  const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
 
   const formatApplication = (a: any) => {
     const userProfile = a.user?.profile;
@@ -163,10 +170,33 @@ export default function Applications() {
         }, 1200);
       };
 
+      const handleStatusChanged = (res: any) => {
+        if (res) {
+          setData((prev: any) => {
+            if (!prev || !prev.applications) return prev;
+            const updatedApps = prev.applications.map((app: any) => {
+              const isMatch = (res.id && (app.rawId === res.id || app.id === res.id)) ||
+                              (res.refNumber && (app.refNumber === res.refNumber || app.id === res.refNumber));
+              if (!isMatch) return app;
+              const norm = normalizeStatus(res.status);
+              return {
+                ...app,
+                status: norm.label,
+                rawStatus: res.status,
+                rejectionReason: res.rejectionReason || app.rejectionReason,
+                rawApp: { ...(app.rawApp || {}), status: res.status, rejectionReason: res.rejectionReason }
+              };
+            });
+            return { ...prev, applications: updatedApps };
+          });
+        }
+        handleRefresh();
+      };
+
       socket.on('response_applications_data', handleSocketData);
       socket.on('applications_updated', handleRefresh);
       socket.on('new_application_submitted', handleRefresh);
-      socket.on('application_status_changed', handleRefresh);
+      socket.on('application_status_changed', handleStatusChanged);
       socket.on('create_application_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Application Workflow Created Successfully!' } }));
         setShowCreateModal(false);
@@ -184,7 +214,7 @@ export default function Applications() {
         socket.off('response_applications_data', handleSocketData);
         socket.off('applications_updated', handleRefresh);
         socket.off('new_application_submitted', handleRefresh);
-        socket.off('application_status_changed', handleRefresh);
+        socket.off('application_status_changed', handleStatusChanged);
         socket.off('create_application_success');
         socket.off('update_application_status_success');
       };
@@ -192,6 +222,114 @@ export default function Applications() {
       fetchApplicationsRest();
     }
   }, [socket, connected]);
+
+  const handleQuickApprove = async (app: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const targetId = app.rawId || app.id;
+    const refNum = app.refNumber || app.id;
+    setActionInProgressId(targetId);
+
+    // 1. Optimistic local update
+    setData((prev: any) => {
+      if (!prev || !prev.applications) return prev;
+      const updatedApps = prev.applications.map((a: any) => {
+        if (a.rawId === targetId || a.id === targetId || a.refNumber === refNum) {
+          return {
+            ...a,
+            status: 'Approved',
+            rawStatus: 'APPROVED',
+            rawApp: { ...(a.rawApp || {}), status: 'APPROVED' }
+          };
+        }
+        return a;
+      });
+      return { ...prev, applications: updatedApps };
+    });
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Application #${refNum} approved successfully! ✓` }
+    }));
+
+    // 2. Socket emit for real-time cluster sync
+    if (socket) {
+      socket.emit('update_application_status', {
+        id: targetId,
+        applicationId: targetId,
+        refNumber: refNum,
+        status: 'APPROVED',
+      });
+    }
+
+    // 3. REST API call for persistence
+    try {
+      await apiFetch(`/api/v1/applications/${targetId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'APPROVED' })
+      });
+    } catch (err) {
+      console.warn('Approve REST error:', err);
+    } finally {
+      setActionInProgressId(null);
+    }
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectingApp) return;
+    const app = rejectingApp;
+    const targetId = app.rawId || app.id;
+    const refNum = app.refNumber || app.id;
+    const reason = rejectionReasonText.trim() || 'Documents could not be verified by the administrative officer.';
+    setActionInProgressId(targetId);
+    setShowRejectModal(false);
+
+    // 1. Optimistic local update
+    setData((prev: any) => {
+      if (!prev || !prev.applications) return prev;
+      const updatedApps = prev.applications.map((a: any) => {
+        if (a.rawId === targetId || a.id === targetId || a.refNumber === refNum) {
+          return {
+            ...a,
+            status: 'Rejected',
+            rawStatus: 'REJECTED',
+            rejectionReason: reason,
+            rawApp: { ...(a.rawApp || {}), status: 'REJECTED', rejectionReason: reason }
+          };
+        }
+        return a;
+      });
+      return { ...prev, applications: updatedApps };
+    });
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Application #${refNum} marked as Rejected. ✕` }
+    }));
+
+    // 2. Socket emit for real-time cluster sync
+    if (socket) {
+      socket.emit('update_application_status', {
+        id: targetId,
+        applicationId: targetId,
+        refNumber: refNum,
+        status: 'REJECTED',
+        rejectionReason: reason,
+      });
+    }
+
+    // 3. REST API call
+    try {
+      await apiFetch(`/api/v1/applications/${targetId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'REJECTED', rejectionReason: reason })
+      });
+    } catch (err) {
+      console.warn('Reject REST error:', err);
+    } finally {
+      setActionInProgressId(null);
+      setRejectingApp(null);
+    }
+  };
 
   const handleCreate = () => {
     if (socket && newAppTitle && newAppDesc) {
@@ -461,11 +599,66 @@ export default function Applications() {
                       <td style={{fontWeight: 600, color: '#111827', padding: '14px 14px', whiteSpace: 'nowrap'}}>₹{app.amount}</td>
                       <td style={{color: '#6b7280', fontSize: 13, padding: '14px 14px', whiteSpace: 'nowrap'}}>{app.submitted}</td>
                       <td style={{textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '14px 14px'}}>
-                        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6}}>
+                          {app.rawStatus !== 'APPROVED' && app.status !== 'Approved' && (
+                            <button
+                              style={{
+                                padding: '6px 10px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: '#065f46',
+                                border: '1px solid #a7f3d0',
+                                background: '#d1fae5',
+                                borderRadius: 6,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                cursor: actionInProgressId === (app.rawId || app.id) ? 'not-allowed' : 'pointer',
+                                whiteSpace: 'nowrap',
+                                transition: 'all 0.15s ease',
+                                opacity: actionInProgressId === (app.rawId || app.id) ? 0.6 : 1
+                              }}
+                              onClick={(e) => handleQuickApprove(app, e)}
+                              disabled={actionInProgressId === (app.rawId || app.id)}
+                              title="Quick Approve Application"
+                            >
+                              <Check size={13} /> Approve
+                            </button>
+                          )}
+
+                          {app.rawStatus !== 'REJECTED' && app.status !== 'Rejected' && (
+                            <button
+                              style={{
+                                padding: '6px 10px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: '#991b1b',
+                                border: '1px solid #fecaca',
+                                background: '#fee2e2',
+                                borderRadius: 6,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRejectingApp(app);
+                                setRejectionReasonText('Documents could not be verified by the administrative officer.');
+                                setShowRejectModal(true);
+                              }}
+                              title="Quick Reject Application"
+                            >
+                              <X size={13} /> Reject
+                            </button>
+                          )}
+
                           <button 
                             className="action-view-verify-btn"
                             style={{
-                              padding: '6px 14px',
+                              padding: '6px 12px',
                               fontSize: 12,
                               fontWeight: 600,
                               color: '#2563eb',
@@ -475,7 +668,7 @@ export default function Applications() {
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: 6,
+                              gap: 5,
                               cursor: 'pointer',
                               whiteSpace: 'nowrap'
                             }}
@@ -484,7 +677,7 @@ export default function Applications() {
                               navigate(`/applications/${app.rawId || app.id}`);
                             }}
                           >
-                            <Eye size={13} /> View & Verify
+                            <Eye size={13} /> View
                           </button>
                         </div>
                       </td>
@@ -522,6 +715,98 @@ export default function Applications() {
             <div style={{display: 'flex', gap: 12, justifyContent: 'flex-end'}}>
               <button className="date-picker-btn" onClick={() => setShowCreateModal(false)}>Cancel</button>
               <button className="action-btn" onClick={handleCreate}>Create Flow</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Quick Rejection Reason Modal ─── */}
+      {showRejectModal && rejectingApp && (
+        <div style={{position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, backdropFilter: 'blur(2px)'}}>
+          <div style={{background: 'white', padding: 26, borderRadius: 14, width: 460, maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'}}>
+            <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12}}>
+              <div style={{width: 36, height: 36, borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626'}}>
+                <X size={20} />
+              </div>
+              <div>
+                <h3 style={{margin: 0, fontSize: 17, fontWeight: 700, color: '#111827'}}>Reject Application #{rejectingApp.id}</h3>
+                <p style={{margin: 0, fontSize: 12, color: '#6b7280'}}>Citizen: {rejectingApp.citizen} • {rejectingApp.serviceType}</p>
+              </div>
+            </div>
+
+            <p style={{fontSize: 13, color: '#4b5563', marginBottom: 14, lineHeight: 1.5}}>
+              Specify the official administrative reason for rejecting this application. The citizen will immediately see this reason in their CyberSave mobile app.
+            </p>
+
+            <div style={{marginBottom: 14}}>
+              <label style={{display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6}}>Common Reasons:</label>
+              <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+                {[
+                  'Documents could not be verified by the administrative officer.',
+                  'Aadhaar / Identity document proof mismatch.',
+                  'Uploaded document photo is blurred or illegible.',
+                  'Incomplete supporting documentation submitted.'
+                ].map((reasonOption, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    style={{
+                      textAlign: 'left',
+                      padding: '7px 10px',
+                      borderRadius: 6,
+                      border: rejectionReasonText === reasonOption ? '1.5px solid #ef4444' : '1px solid #e5e7eb',
+                      background: rejectionReasonText === reasonOption ? '#fef2f2' : '#f9fafb',
+                      fontSize: 12,
+                      color: rejectionReasonText === reasonOption ? '#b91c1c' : '#374151',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setRejectionReasonText(reasonOption)}
+                  >
+                    {reasonOption}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{marginBottom: 20}}>
+              <label style={{display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6}}>Custom Reason / Note to Citizen:</label>
+              <textarea
+                value={rejectionReasonText}
+                onChange={(e) => setRejectionReasonText(e.target.value)}
+                style={{width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, minHeight: 70, outline: 'none'}}
+                placeholder="Enter specific instructions or document requirements..."
+              />
+            </div>
+
+            <div style={{display: 'flex', gap: 10, justifyContent: 'flex-end'}}>
+              <button
+                className="date-picker-btn"
+                style={{padding: '8px 16px', fontSize: 13}}
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectingApp(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                style={{
+                  background: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '8px 18px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                onClick={handleConfirmReject}
+              >
+                <X size={15} /> Confirm Rejection
+              </button>
             </div>
           </div>
         </div>

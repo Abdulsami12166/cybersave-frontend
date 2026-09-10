@@ -394,10 +394,10 @@ export default function ApplicationDetail() {
     }
   };
 
-  const handleStatusChange = async (newStatus: 'APPROVED' | 'REJECTED' | 'IN_PROGRESS') => {
+  const handleStatusChange = async (newStatus: 'APPROVED' | 'REJECTED' | 'IN_PROGRESS', customRejectionReason?: string) => {
     if (!app) return;
     setActionLoading(true);
-    const rejReason = newStatus === 'REJECTED' ? 'Documents could not be verified by the administrative officer.' : undefined;
+    const rejReason = newStatus === 'REJECTED' ? (customRejectionReason || 'Documents could not be verified by the administrative officer.') : undefined;
 
     const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
     const adminName = currentAdminUser.name || (currentAdminUser.email ? currentAdminUser.email.split('@')[0] : 'Sub-Admin Operator');
@@ -405,7 +405,22 @@ export default function ApplicationDetail() {
     const adminId = currentAdminUser.id || '';
     const adminRole = currentAdminUser.role || (adminEmail === 'admin@cybersave.com' ? 'Super Administrator' : 'Sub-Admin / Operator');
 
-    // Socket for instant sync
+    // 1. Instant optimistic update so UI changes immediately
+    setApp((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        status: newStatus,
+        rawStatus: newStatus,
+        rejectionReason: rejReason || prev.rejectionReason,
+      };
+    });
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Application ${app.refNumber || app.id} marked as ${newStatus} by ${adminName}!` },
+    }));
+
+    // 2. Socket for instant sync
     if (socket) {
       socket.emit('update_application_status', {
         id: app.rawId || app.id,
@@ -420,7 +435,7 @@ export default function ApplicationDetail() {
       });
     }
 
-    // REST for guaranteed persistence
+    // 3. REST for guaranteed persistence
     try {
       const targetId = app.rawId || app.id;
       await apiFetch(`/api/v1/applications/${targetId}/status`, {
@@ -435,9 +450,6 @@ export default function ApplicationDetail() {
           adminRole,
         }),
       });
-      window.dispatchEvent(new CustomEvent('cybersave_toast', {
-        detail: { message: `Application ${app.refNumber || app.id} marked as ${newStatus} by ${adminName}!` },
-      }));
     } catch (e) {
       console.warn('REST status update error:', e);
     } finally {

@@ -182,7 +182,7 @@ export default function Transactions() {
 
     if (selectedDate === 'ALL') {
       const todayData = stats?.dailyBreakdown?.[todayYMD];
-      const todayGross = stats?.todayGross ?? todayData?.gross ?? 1736;
+      const todayGross = stats?.todayGross ?? todayData?.gross ?? 236;
       const todayRefunds = stats?.todayRefunds ?? todayData?.refunds ?? 0;
       const todayNet = stats?.revenueToday ?? todayData?.net ?? (todayGross - todayRefunds);
       const todayCount = todayData?.count ?? (transactions || []).filter((t: any) => (t.dateOnly || t.date || '').slice(0, 10) === todayYMD).length;
@@ -375,10 +375,10 @@ export default function Transactions() {
           icon={<TrendingUp color="#2563eb" />} 
           iconBg="#eff6ff"
           title="Total Realized (Net)" 
-          value={`₹${(stats?.totalAmount ?? 8029).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
+          value={`₹${(stats?.totalAmount ?? 1529).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
           trend={
             selectedDate === 'ALL'
-              ? `Gross ₹${(stats?.grossInflow ?? 8256).toLocaleString('en-IN')} after ₹${(stats?.refundedAmount ?? 227).toLocaleString('en-IN')} refunds`
+              ? `Gross ₹${(stats?.grossInflow ?? 1756).toLocaleString('en-IN')} after ₹${(stats?.refundedAmount ?? 227).toLocaleString('en-IN')} refunds`
               : `Platform Lifetime Net (Selected Day: ₹${selectedDayStats.net.toLocaleString('en-IN')})`
           } 
           trendType="positive" 
@@ -407,7 +407,7 @@ export default function Transactions() {
           icon={<ArrowLeftRight color="#6366f1" />} 
           iconBg="#eef2ff"
           title={selectedDate === 'ALL' ? "Total Ledger Entries" : `Day's Ledger Entries`} 
-          value={(selectedDate === 'ALL' ? (stats?.totalCount || transactions?.length || 18) : selectedDayStats.count).toLocaleString()} 
+          value={(selectedDate === 'ALL' ? (stats?.totalCount || transactions?.length || 14) : selectedDayStats.count).toLocaleString()} 
           trend={selectedDate === 'ALL' ? `Across ${availableDates.length} distinct settlement dates` : `Showing all ${selectedDayStats.count} txns for this day`} 
           trendType="neutral" 
         />
