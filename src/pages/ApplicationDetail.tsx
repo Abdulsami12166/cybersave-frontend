@@ -80,13 +80,23 @@ function buildTimeline(app: any) {
   return events;
 }
 
+// Instant memory cache for zero-latency detail transitions
+const detailCache = new Map<string, any>();
+try {
+  const s = sessionStorage.getItem('cybersave_detail_cache');
+  if (s) {
+    const obj = JSON.parse(s);
+    Object.entries(obj).forEach(([k, v]) => detailCache.set(k, v));
+  }
+} catch (_) {}
+
 export default function ApplicationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
   const { admin } = useAuth();
-  const [app, setApp] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [app, setApp] = useState<any>(() => (id ? detailCache.get(id) || null : null));
+  const [loading, setLoading] = useState(() => (id ? !detailCache.has(id) : true));
   const [actionLoading, setActionLoading] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [operators, setOperators] = useState<any[]>([]);
@@ -240,76 +250,109 @@ export default function ApplicationDetail() {
     ]);
   };
 
-  // ponytail: REST-first fetch, socket for real-time updates
+  // REST-first fetch with instant fallback, socket for real-time cluster sync
   const fetchApp = async () => {
     try {
       const res = await apiFetch(`/api/v1/applications/${id}`).catch(() => null);
       if (res && res.ok) {
         const raw = await res.json();
-        setApp(formatApp(raw));
-        setLoading(false);
-        fetchRefund(raw.id || id);
+        const formatted = formatApp(raw);
+        if (formatted) {
+          setApp(formatted);
+          setLoading(false);
+          fetchRefund(raw.id || id);
+        }
       }
     } catch (e) {
       console.warn('[ApplicationDetail] REST fetch error:', e);
+    } finally {
+      setLoading(false);
     }
   };
 
   const formatApp = (a: any) => {
-    // ponytail: handle both raw DB response and pre-formatted socket response
-    if (a.rawId) return a; // already formatted from socket
+    if (!a) return null;
+    const raw = a.rawApp || a;
+    const profile = raw.user?.profile || a.user?.profile;
+    const formData = (raw.formData as any) || (a.formData as any) || {};
+    const docs = (raw.documents as any) || (a.documents as any) || [];
 
-    const profile = a.user?.profile;
-    const formData = (a.formData as any) || {};
-    const docs = (a.documents as any) || [];
+    const mongoId = raw.id || a.rawId || a.dbId || (raw._id ? String(raw._id) : null) || a.id;
+    const refNum = raw.refNumber || a.refNumber || (mongoId ? `APP-${mongoId.substring(0, 6).toUpperCase()}` : 'APP-2026');
 
-    return {
-      id: a.refNumber || a.id,
-      rawId: a.id,
-      refNumber: a.refNumber,
-      status: a.status,
-      serviceName: a.serviceTitle || a.service?.title || 'Government Service',
-      serviceCategory: a.service?.category || 'Government',
-      submitted: new Date(a.submittedAt || a.createdAt).toLocaleString('en-IN', {
+    const formatted = {
+      id: refNum,
+      rawId: mongoId,
+      refNumber: refNum,
+      status: raw.status || a.status,
+      serviceName: raw.serviceTitle || raw.service?.title || a.serviceName || a.serviceTitle || 'Government Service',
+      serviceCategory: raw.service?.category || a.serviceCategory || 'Government',
+      submitted: new Date(raw.submittedAt || a.submittedAt || raw.createdAt || Date.now()).toLocaleString('en-IN', {
         day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
       }),
-      submittedAt: a.submittedAt,
-      updatedAt: a.updatedAt,
-      assignedTo: a.officialOfficer || 'Officer Sharma (SDM)',
-      centre: formData.district ? `CSC ${formData.district}, ${formData.stateName || formData.state || ''}` : 'CSC Centre',
+      submittedAt: raw.submittedAt || a.submittedAt,
+      updatedAt: raw.updatedAt || a.updatedAt,
+      assignedTo: raw.officialOfficer || a.assignedTo || 'Principal Verification Officer (SDM)',
+      centre: formData.district ? `CSC ${formData.district}, ${formData.stateName || formData.state || ''}` : (a.centre || 'CSC District Hub'),
       sla: '24h',
-      paymentStatus: a.paymentStatus || 'Success',
-      feePaid: a.feePaid || 50,
-      razorpayPaymentId: a.razorpayPaymentId || '',
-      razorpayOrderId: a.razorpayOrderId || '',
-      rejectionReason: a.rejectionReason,
+      paymentStatus: raw.paymentStatus || a.paymentStatus || 'Verified & Settled',
+      feePaid: raw.feePaid || a.feePaid || a.amount || 50,
+      razorpayPaymentId: raw.razorpayPaymentId || a.razorpayPaymentId || '',
+      razorpayOrderId: raw.razorpayOrderId || a.razorpayOrderId || '',
+      rejectionReason: raw.rejectionReason || a.rejectionReason || '',
       applicant: {
-        name: profile?.fullName || formData.fullName || 'Citizen Applicant',
-        email: a.user?.email || formData.email || '',
-        phone: a.user?.phone || profile?.phone || formData.phone || '',
-        aadhaar: (profile as any)?.aadhaarNumber || formData.aadhaarNumber || 'XXXX XXXX ****',
-        dob: profile?.dob || formData.dob || '',
-        gender: profile?.gender || formData.gender || '',
-        address: profile?.address || formData.address || '',
-        state: profile?.state || formData.stateName || formData.state || '',
-        district: profile?.district || formData.district || '',
-        pinCode: profile?.pinCode || formData.pinCode || '',
-        citizenId: a.userId,
+        name: profile?.fullName || formData.fullName || a.applicant?.name || 'Citizen Applicant',
+        email: raw.user?.email || a.user?.email || formData.email || a.applicant?.email || '',
+        phone: raw.user?.phone || profile?.phone || formData.phone || a.applicant?.phone || a.applicant?.mobile || '',
+        aadhaar: (profile as any)?.aadhaarNumber || formData.aadhaarNumber || a.applicant?.aadhaar || 'Verified Identity Vault',
+        dob: profile?.dob || formData.dob || a.applicant?.dob || '',
+        gender: profile?.gender || formData.gender || a.applicant?.gender || '',
+        address: profile?.address || formData.address || a.applicant?.address || '',
+        state: profile?.state || formData.stateName || formData.state || a.applicant?.state || '',
+        district: profile?.district || formData.district || a.applicant?.district || '',
+        pinCode: profile?.pinCode || formData.pinCode || a.applicant?.pinCode || '',
+        citizenId: raw.userId || a.userId || '',
       },
       formData,
       documents: Array.isArray(docs) ? docs.filter((d: any) => d && typeof d === 'object' && (d.fileUrl || d.url || d.fileName || d.label)) : [],
+      rawApp: raw,
     };
+
+    if (id) {
+      detailCache.set(id, formatted);
+      if (mongoId && mongoId !== id) detailCache.set(mongoId, formatted);
+      if (refNum && refNum !== id) detailCache.set(refNum, formatted);
+      try {
+        const cacheObj: any = {};
+        detailCache.forEach((v, k) => { cacheObj[k] = v; });
+        sessionStorage.setItem('cybersave_detail_cache', JSON.stringify(cacheObj));
+      } catch (_) {}
+    }
+
+    return formatted;
   };
 
   useEffect(() => {
     let debounceTimer: any = null;
 
+    // 1. Immediately invoke REST on mount for instant zero-latency paint
+    fetchApp();
+    fetchRefund();
+    fetchOperators();
+
+    // 2. Safety timer: guaranteed spinner dismissal
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
+
+    // 3. Socket real-time synchronization
     if (socket && connected) {
       socket.emit('request_application_detail', { id });
 
       const handleDetail = (data: any) => {
         if (data) {
-          setApp(formatApp(data));
+          const formatted = formatApp(data);
+          if (formatted) setApp(formatted);
           setLoading(false);
           setActionLoading(false);
         }
@@ -319,14 +362,15 @@ export default function ApplicationDetail() {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           socket.emit('request_application_detail', { id });
-        }, 1200);
+          fetchApp();
+        }, 800);
       };
 
       const handleRefundUpdate = () => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           fetchRefund();
-        }, 1200);
+        }, 800);
       };
 
       socket.on('response_application_detail', handleDetail);
@@ -338,6 +382,7 @@ export default function ApplicationDetail() {
       socket.on('new_refund_requested', handleRefundUpdate);
 
       return () => {
+        clearTimeout(safetyTimer);
         if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_application_detail', handleDetail);
         socket.off('applications_updated', handleUpdate);
@@ -348,11 +393,8 @@ export default function ApplicationDetail() {
         socket.off('new_refund_requested', handleRefundUpdate);
       };
     } else {
-      fetchApp();
-      fetchRefund();
+      return () => clearTimeout(safetyTimer);
     }
-
-    fetchOperators();
   }, [socket, connected, id]);
 
   const handleAssignOperator = async (operator: any) => {

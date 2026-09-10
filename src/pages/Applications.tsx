@@ -25,11 +25,18 @@ import {
 } from '../utils/normalize';
 import { apiFetch } from '../utils/apiConfig';
 
+// Instant module-level cache for zero-latency page renders
+let cachedApplicationsData: any = null;
+try {
+  const s = sessionStorage.getItem('cybersave_apps_cache');
+  if (s) cachedApplicationsData = JSON.parse(s);
+} catch (_) {}
+
 export default function Applications() {
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(() => cachedApplicationsData);
+  const [loading, setLoading] = useState(() => !cachedApplicationsData);
 
   const [filterType, setFilterType] = useState<string>('All');
   const [filterPriority, setFilterPriority] = useState<string>('All');
@@ -46,9 +53,10 @@ export default function Applications() {
   const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
 
   const formatApplication = (a: any) => {
-    const userProfile = a.user?.profile;
-    const formData = (a.formData as any) || {};
-    let docs = (a.documents as any) || [];
+    const raw = a.rawApp || a;
+    const userProfile = raw.user?.profile || a.user?.profile;
+    const formData = (raw.formData as any) || (a.formData as any) || {};
+    let docs = (raw.documents as any) || (a.documents as any) || [];
 
     const cleanedDocs = (Array.isArray(docs) ? docs : [])
       .filter((d: any) => d && typeof d === 'object' && !Array.isArray(d) && (d.fileUrl || d.url || d.uri || d.fileName || d.label))
@@ -59,38 +67,39 @@ export default function Applications() {
         type: d.type || 'Identity Proof',
       }));
 
-    const refNumber = normalizeAppId(a.refNumber, a.id);
-    const citizen = normalizeCitizenName(a);
-    const serviceType = normalizeServiceTitle(a);
-    const feeAmount = normalizeFee(a);
-    const statusObj = normalizeStatus(a.status);
-    const dateObj = formatIndianDate(a.submittedAt || a.createdAt);
+    const mongoId = raw.id || a.rawId || a.dbId || (raw._id ? String(raw._id) : null) || a.id;
+    const refNumber = normalizeAppId(raw.refNumber || a.refNumber, mongoId);
+    const citizen = normalizeCitizenName(raw) || normalizeCitizenName(a);
+    const serviceType = normalizeServiceTitle(raw) || normalizeServiceTitle(a);
+    const feeAmount = normalizeFee(raw) || normalizeFee(a);
+    const statusObj = normalizeStatus(raw.status || a.status);
+    const dateObj = formatIndianDate(raw.submittedAt || a.submittedAt || raw.createdAt);
 
     return {
       id: refNumber,
-      rawId: a.id || refNumber,
+      rawId: mongoId,
       refNumber,
       citizen,
-      citizenEmail: a.user?.email || formData.email || '—',
-      citizenPhone: a.user?.phone || userProfile?.phone || formData.phone || '—',
+      citizenEmail: raw.user?.email || a.user?.email || formData.email || a.citizenEmail || '—',
+      citizenPhone: raw.user?.phone || userProfile?.phone || formData.phone || a.citizenPhone || '—',
       serviceType,
-      serviceCategory: a.service?.category || a.serviceCategory || 'Government',
-      priority: 'Medium',
-      rawStatus: a.status,
+      serviceCategory: raw.service?.category || a.serviceCategory || 'Government',
+      priority: a.priority || 'Medium',
+      rawStatus: raw.status || a.status,
       status: statusObj.label,
-      assigned: a.officialOfficer || 'Principal Verification Officer (SDM)',
+      assigned: raw.officialOfficer || a.assigned || 'Principal Verification Officer (SDM)',
       submitted: dateObj.formatted.split(',')[0],
       submittedAtFull: dateObj.formatted,
       sla: '24h',
       amount: feeAmount,
-      paymentStatus: a.paymentStatus || 'Verified & Settled',
-      razorpayPaymentId: a.razorpayPaymentId || '',
-      razorpayOrderId: a.razorpayOrderId || '',
-      rejectionReason: a.rejectionReason || '',
+      paymentStatus: raw.paymentStatus || a.paymentStatus || 'Verified & Settled',
+      razorpayPaymentId: raw.razorpayPaymentId || a.razorpayPaymentId || '',
+      razorpayOrderId: raw.razorpayOrderId || a.razorpayOrderId || '',
+      rejectionReason: raw.rejectionReason || a.rejectionReason || '',
       formData: {
         fullName: formData.fullName || userProfile?.fullName || citizen,
-        email: formData.email || a.user?.email || '',
-        phone: formData.phone || a.user?.phone || userProfile?.phone || '',
+        email: formData.email || raw.user?.email || '',
+        phone: formData.phone || raw.user?.phone || userProfile?.phone || '',
         dob: formData.dob || userProfile?.dob || '',
         gender: formData.gender || userProfile?.gender || '',
         fatherName: formData.fatherName || '',
@@ -116,7 +125,7 @@ export default function Applications() {
         pinCode: userProfile?.pinCode || formData.pinCode || 'Not Provided',
         address: userProfile?.address || formData.address || 'Not Provided',
       },
-      rawApp: a,
+      rawApp: raw,
     };
   };
 
@@ -137,10 +146,14 @@ export default function Applications() {
             return sub.toDateString() === today.toDateString();
           }).length;
 
-          setData({
+          const freshData = {
             stats: { totalApps, todayApps, pending, processing, completed },
             applications: formatted,
-          });
+          };
+          cachedApplicationsData = freshData;
+          try { sessionStorage.setItem('cybersave_apps_cache', JSON.stringify(freshData)); } catch (_) {}
+          setData(freshData);
+          setLoading(false);
           return formatted;
         }
       }
@@ -155,11 +168,36 @@ export default function Applications() {
   useEffect(() => {
     let debounceTimer: any = null;
 
+    // 1. Always invoke REST immediately for instant load
+    fetchApplicationsRest();
+
+    // 2. Safety timeout ensures loading never hangs
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
+
+    // 3. Real-time WebSocket synchronization
     if (socket && connected) {
       socket.emit('request_applications_data');
 
       const handleSocketData = (resData: any) => {
-        setData(resData);
+        if (!resData) {
+          setLoading(false);
+          return;
+        }
+        const rawList = Array.isArray(resData.applications) ? resData.applications : [];
+        const formatted = rawList.map(formatApplication);
+        const stats = resData.stats || {
+          totalApps: formatted.length,
+          todayApps: formatted.filter(a => new Date(a.rawApp?.submittedAt || Date.now()).toDateString() === new Date().toDateString()).length,
+          pending: formatted.filter(a => a.rawStatus === 'SUBMITTED' || a.rawStatus === 'VERIFYING' || a.rawStatus === 'PENDING').length,
+          processing: formatted.filter(a => a.rawStatus === 'IN_PROGRESS').length,
+          completed: formatted.filter(a => a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length,
+        };
+        const freshData = { stats, applications: formatted };
+        cachedApplicationsData = freshData;
+        try { sessionStorage.setItem('cybersave_apps_cache', JSON.stringify(freshData)); } catch (_) {}
+        setData(freshData);
         setLoading(false);
       };
 
@@ -167,7 +205,8 @@ export default function Applications() {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           socket.emit('request_applications_data');
-        }, 1200);
+          fetchApplicationsRest();
+        }, 800);
       };
 
       const handleStatusChanged = (res: any) => {
@@ -187,7 +226,10 @@ export default function Applications() {
                 rawApp: { ...(app.rawApp || {}), status: res.status, rejectionReason: res.rejectionReason }
               };
             });
-            return { ...prev, applications: updatedApps };
+            const updated = { ...prev, applications: updatedApps };
+            cachedApplicationsData = updated;
+            try { sessionStorage.setItem('cybersave_apps_cache', JSON.stringify(updated)); } catch (_) {}
+            return updated;
           });
         }
         handleRefresh();
@@ -210,6 +252,7 @@ export default function Applications() {
       });
 
       return () => {
+        clearTimeout(safetyTimer);
         if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_applications_data', handleSocketData);
         socket.off('applications_updated', handleRefresh);
@@ -219,7 +262,7 @@ export default function Applications() {
         socket.off('update_application_status_success');
       };
     } else {
-      fetchApplicationsRest();
+      return () => clearTimeout(safetyTimer);
     }
   }, [socket, connected]);
 
