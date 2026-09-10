@@ -254,29 +254,39 @@ export default function AuditLogs() {
   const endIndex = Math.min(startIndex + pageSize, totalItems);
   const currentLogs = filteredLogs.slice(startIndex, endIndex);
 
-  // 1-Click Export CSV
+  // 1-Click Robust Export CSV with UTF-8 BOM
   const handleExportCSV = () => {
-    if (!filteredLogs.length) return;
-    const headers = ['ID', 'Timestamp', 'User', 'Official Email', 'Action', 'Resource Details', 'IP Address', 'Status'];
-    const rows = filteredLogs.map((l) => [
-      `"${l.id || ''}"`,
-      `"${l.timestamp || ''}"`,
+    const exportData = filteredLogs.length > 0 ? filteredLogs : (data?.logs || []);
+    if (!exportData.length) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'No audit log records available to export.' } }));
+      return;
+    }
+    const headers = ['Event ID', 'Timestamp (IST)', 'Authorized Officer / User', 'Official Email', 'Action Code', 'Resource Details', 'Network IP Address', 'Verification Status'];
+    const rows = exportData.map((l) => [
+      `"${(l.id || '').replace(/"/g, '""')}"`,
+      `"${(l.timestamp || '').replace(/"/g, '""')}"`,
       `"${(l.user || '').replace(/"/g, '""')}"`,
-      `"${l.userEmail || ''}"`,
-      `"${l.action || ''}"`,
-      `"${(l.resource || '').replace(/"/g, '""')}"`,
-      `"${l.ipAddress || ''}"`,
-      `"${l.status || ''}"`,
+      `"${(l.userEmail || '').replace(/"/g, '""')}"`,
+      `"${(l.action || '').replace(/"/g, '""')}"`,
+      `"${(l.resource || l.details || '').replace(/"/g, '""')}"`,
+      `"${(l.ipAddress || '').replace(/"/g, '""')}"`,
+      `"${(l.status || '').replace(/"/g, '""')}"`,
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `cybersave_audit_logs_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.href = url;
+    link.download = `cybersave_security_audit_logs_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Successfully exported ${rows.length} security audit log records to CSV!` }
+    }));
   };
 
   const getActionBadgeStyle = (action: string, status: string) => {
