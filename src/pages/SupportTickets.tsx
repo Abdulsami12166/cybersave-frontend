@@ -1,12 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import { HelpCircle, Clock, CheckCircle, Image as ImageIcon } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { HelpCircle, Clock, CheckCircle, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { StatCard } from '../components/Dashboard';
+import { apiFetch } from '../utils/apiConfig';
+
+let cachedSupportData: any = null;
+try {
+  const s = sessionStorage.getItem('cybersave_support_cache');
+  if (s) cachedSupportData = JSON.parse(s);
+} catch (_) {}
 
 export default function SupportTickets() {
   const { socket, connected } = useSocket();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<any>(() => cachedSupportData);
+  const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newCat, setNewCat] = useState('Technical Support');
@@ -18,33 +26,102 @@ export default function SupportTickets() {
   const [priorityFilter, setPriorityFilter] = useState('All Priority');
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
+  const fetchTicketsRest = useCallback(async (showLoader = false) => {
+    if (showLoader) setRefreshing(true);
+    try {
+      const res = await apiFetch('/api/v1/support/tickets').catch(() => null);
+      if (res && res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json && json.tickets) {
+          setData(json);
+          cachedSupportData = json;
+          try { sessionStorage.setItem('cybersave_support_cache', JSON.stringify(json)); } catch (_) {}
+        }
+      }
+    } catch (e) {
+      console.warn('[SupportTickets] REST fetch error:', e);
+    } finally {
+      if (showLoader) setRefreshing(false);
+    }
+  }, []);
+
   useEffect(() => {
+    // 1. Initial REST fetch
+    fetchTicketsRest();
+
+    // 2. Guaranteed 8-second background polling interval for fresh submissions within 10s
+    const pollInterval = setInterval(() => {
+      fetchTicketsRest();
+    }, 8000);
+
+    // 3. Socket real-time events
     if (socket && connected) {
       socket.emit('request_support_tickets');
-      socket.on('response_support_tickets', (resData) => setData(resData));
-      socket.on('new_support_ticket', () => {
+      const handleResponse = (resData: any) => {
+        if (resData && resData.tickets) {
+          setData(resData);
+          cachedSupportData = resData;
+        }
+      };
+      const handleNew = () => {
+        fetchTicketsRest();
         socket.emit('request_support_tickets');
-      });
+      };
+
+      socket.on('response_support_tickets', handleResponse);
+      socket.on('new_support_ticket', handleNew);
+      socket.on('support_tickets_updated', handleNew);
       socket.on('create_support_ticket_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Ticket created successfully!' } }));
         setShowCreateModal(false);
         setNewTitle('');
         setNewDesc('');
+        fetchTicketsRest();
         socket.emit('request_support_tickets');
       });
-    }
-    return () => {
-      if (socket) {
-        socket.off('response_support_tickets');
-        socket.off('new_support_ticket');
-        socket.off('create_support_ticket_success');
-      }
-    };
-  }, [socket, connected]);
 
-  const handleCreateTicket = () => {
-    if (socket && newTitle && newDesc) {
+      return () => {
+        clearInterval(pollInterval);
+        socket.off('response_support_tickets', handleResponse);
+        socket.off('new_support_ticket', handleNew);
+        socket.off('support_tickets_updated', handleNew);
+        socket.off('create_support_ticket_success');
+      };
+    }
+
+    return () => clearInterval(pollInterval);
+  }, [socket, connected, fetchTicketsRest]);
+
+  const handleCreateTicket = async () => {
+    if (!newTitle.trim() || !newDesc.trim()) return;
+
+    // Try socket first
+    if (socket && connected) {
       socket.emit('create_support_ticket', { title: newTitle, category: newCat, priority: newPri, description: newDesc });
+    }
+
+    // Also REST dispatch for 100% guaranteed delivery
+    try {
+      const res = await apiFetch('/api/v1/support/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newTitle,
+          category: newCat,
+          priority: newPri,
+          description: newDesc,
+          reporterName: 'Support Officer (SDM)',
+        }),
+      });
+      if (res && res.ok) {
+        window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Ticket created successfully!' } }));
+        setShowCreateModal(false);
+        setNewTitle('');
+        setNewDesc('');
+        fetchTicketsRest();
+      }
+    } catch (err) {
+      console.warn('Failed REST create ticket:', err);
     }
   };
 
@@ -75,7 +152,17 @@ export default function SupportTickets() {
           <h1>Support Ticket Management</h1>
           <p>Track, manage, and resolve all customer support tickets efficiently.</p>
         </div>
-        <div style={{display: 'flex'}}>
+        <div style={{display: 'flex', gap: 10, alignItems: 'center'}}>
+          <button 
+            className="date-picker-btn"
+            style={{display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: '8px 14px'}}
+            onClick={() => fetchTicketsRest(true)}
+            disabled={refreshing}
+            title="Refresh Live Tickets"
+          >
+            <RefreshCw size={14} style={{animation: refreshing ? 'spin 0.8s linear infinite' : 'none'}} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
           <button className="action-btn" onClick={() => setShowCreateModal(true)}>Create New Ticket</button>
         </div>
       </div>

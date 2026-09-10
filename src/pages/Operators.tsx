@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { UserCheck, ShieldCheck, Clock, UserX, Search, X } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
+import { apiFetch } from '../utils/apiConfig';
 
 export default function Operators() {
   const navigate = useNavigate();
@@ -37,20 +38,26 @@ export default function Operators() {
 
   const fetchOperatorsRest = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      const res = await fetch(`${backendUrl}/api/v1/operators`);
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-        setLoading(false);
+      const res = await apiFetch('/api/v1/operators').catch(() => null);
+      if (res && res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json) {
+          setData(json);
+        }
       }
     } catch (e) {
       console.warn('[Operators] REST fetch note:', e);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchOperatorsRest();
+
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
 
     if (socket && connected) {
       socket.emit('request_operators_data');
@@ -78,6 +85,7 @@ export default function Operators() {
       });
     }
     return () => {
+      clearTimeout(safetyTimer);
       if (socket) {
         socket.off('response_operators_data');
         socket.off('operators_updated');
@@ -96,8 +104,7 @@ export default function Operators() {
     const finalPermissions = Array.from(new Set([...newOpFeats, 'SETTINGS']));
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      await fetch(`${backendUrl}/api/v1/operators`, {
+      await apiFetch('/api/v1/operators', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -135,8 +142,7 @@ export default function Operators() {
     if (!managingOp) return;
     const finalPermissions = Array.from(new Set([...opPermissions, 'SETTINGS']));
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      await fetch(`${backendUrl}/api/v1/operators/${managingOp.id}`, {
+      await apiFetch(`/api/v1/operators/${managingOp.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissions: finalPermissions }),

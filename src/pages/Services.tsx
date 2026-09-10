@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { Grid, CheckCircle, Clock, FileText, Users, ChevronDown, ChevronUp, Eye, Edit3, Plus } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
+import { apiFetch } from '../utils/apiConfig';
 
 export default function Services() {
   const navigate = useNavigate();
@@ -25,7 +26,54 @@ export default function Services() {
     }));
   };
 
+  const fetchServicesRest = async () => {
+    try {
+      const res = await apiFetch('/api/v1/services').catch(() => null);
+      if (res && res.ok) {
+        const raw = await res.json().catch(() => []);
+        if (Array.isArray(raw)) {
+          const totalServices = raw.length;
+          const active = raw.filter((s: any) => s.isActive !== false).length;
+          const groups: Record<string, any> = {};
+          raw.forEach((s: any) => {
+            const cat = s.category || 'Government';
+            if (!groups[cat]) {
+              groups[cat] = {
+                category: cat,
+                department: s.department || 'General Administration',
+                subServices: []
+              };
+            }
+            groups[cat].subServices.push({
+              id: s.id,
+              name: s.title,
+              title: s.title,
+              slug: s.slug,
+              category: s.category,
+              department: s.department,
+              sla: s.processingTime || '5-7 Days',
+              fee: s.fee || 50,
+              description: s.description,
+              status: s.isActive ? 'Active' : 'Inactive',
+              isActive: s.isActive
+            });
+          });
+          setData({
+            stats: { totalServices, active, offline: 0, drafts: 0 },
+            services: Object.values(groups),
+            rawServices: raw
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Services] REST fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    fetchServicesRest();
     if (socket && connected) {
       socket.emit('request_services_data');
       socket.on('response_services_data', (resData) => {
@@ -35,9 +83,11 @@ export default function Services() {
       socket.on('edit_service_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Service updated successfully!' } }));
         socket.emit('request_services_data');
+        fetchServicesRest();
       });
       socket.on('services_updated', () => {
         socket.emit('request_services_data');
+        fetchServicesRest();
       });
     }
     return () => {

@@ -25,8 +25,9 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { showToast } from '../components/Layout';
+import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
 
-const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
+const API_BASE_URL = getApiBaseUrl();
 
 export default function UserManagement() {
   const navigate = useNavigate();
@@ -54,31 +55,39 @@ export default function UserManagement() {
 
   const fetchUsersRest = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/users`);
-      if (res.ok) {
-        const users = await res.json();
+      const res = await apiFetch('/api/v1/users?limit=50').catch(() => null);
+      if (res && res.ok) {
+        const users = await res.json().catch(() => []);
         if (Array.isArray(users)) {
           setLiveUsers(users);
         }
       }
     } catch (err) {
       console.warn('REST users fetch note:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUsersRest();
+    let debounceTimer: any = null;
+
     if (socket && connected) {
       socket.emit('request_users_data');
       
       const handleUsers = (resData: any) => {
         setData(resData);
+        if (Array.isArray(resData?.users) && resData.users.length > 0) {
+          setLiveUsers(resData.users);
+        }
         setLoading(false);
       };
 
       const handleRefresh = () => {
-        socket.emit('request_users_data');
-        fetchUsersRest();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          socket.emit('request_users_data');
+        }, 1200);
       };
 
       const handleStatusChange = (statusData: any) => {
@@ -126,6 +135,7 @@ export default function UserManagement() {
       });
 
       return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_users_data', handleUsers);
         socket.off('user_status_changed', handleStatusChange);
         socket.off('user_activity_updated', handleRefresh);
@@ -135,8 +145,7 @@ export default function UserManagement() {
         socket.off('block_citizen_success');
       };
     } else {
-      const t = setTimeout(() => setLoading(false), 800);
-      return () => clearTimeout(t);
+      fetchUsersRest();
     }
   }, [socket, connected]);
 
@@ -160,7 +169,7 @@ export default function UserManagement() {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/users/${targetId}/notify`, {
+      const res = await apiFetch(`/api/admin/users/${targetId}/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -200,12 +209,12 @@ export default function UserManagement() {
       const formattedName = realName.trim().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
       const refId = u.id && u.id.startsWith('CIT-') ? u.id : `CIT-${(u.dbId || u.id || `${1000 + idx}`).slice(-5).toUpperCase()}`;
-      const phone = u.phone || u.mobile || profile.phone || '+91 98450 12893';
-      const email = u.email || profile.email || 'citizen.helpdesk@cybersave.in';
-      const district = profile.district || u.district || 'Central Delhi, DL';
+      const phone = u.phone || u.mobile || profile.phone || '-';
+      const email = u.email || profile.email || '-';
+      const district = profile.district || u.district || 'Central District';
       const status = u.status === 'BLOCKED' ? 'Blocked' : (u.status === 'Pending' ? 'Pending' : 'Verified');
-      const servicesUsed = typeof u.servicesUsed === 'number' ? u.servicesUsed : (Array.isArray(u.applications) ? u.applications.length : 1);
-      const aadhaar = profile.aadhaarNumber ? `•••• •••• ${profile.aadhaarNumber.slice(-4)}` : `•••• •••• ${8000 + (idx * 37) % 1999}`;
+      const servicesUsed = typeof u.servicesUsed === 'number' ? u.servicesUsed : (Array.isArray(u.applications) ? u.applications.length : 0);
+      const aadhaar = profile.aadhaarNumber ? `•••• •••• ${profile.aadhaarNumber.slice(-4)}` : (u.aadhaar || `•••• •••• ${String(dbId).slice(-4)}`);
 
       result.push({
         id: refId,
@@ -217,7 +226,8 @@ export default function UserManagement() {
         status,
         servicesUsed,
         aadhaar,
-        lastActive: u.lastActive || 'Active recently',
+        isOnline: u.isOnline === true,
+        lastActive: u.isOnline ? 'Active Now' : (u.lastActive || 'Active recently'),
         createdAt: u.createdAt || new Date().toISOString(),
         raw: u,
       });
@@ -250,27 +260,53 @@ export default function UserManagement() {
     return filteredCitizens.slice(start, start + pageSize);
   }, [filteredCitizens, currentPage, pageSize]);
 
-  const handleCreateCitizen = () => {
+  const handleCreateCitizen = async () => {
     if (!newCitizenName.trim()) {
       showToast('Please enter citizen name', 'error');
       return;
     }
-    if (socket) {
+    if (socket && connected) {
       socket.emit('add_citizen', {
-        name: newCitizenName,
-        phone: newCitizenPhone,
-        district: newCitizenDistrict
+        name: newCitizenName.trim(),
+        phone: newCitizenPhone.trim(),
+        district: newCitizenDistrict.trim()
       });
+    }
+    try {
+      await apiFetch('/api/v1/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCitizenName.trim(),
+          phone: newCitizenPhone.trim(),
+          district: newCitizenDistrict.trim(),
+        })
+      });
+      showToast('Citizen enrolled successfully');
+      fetchUsersRest();
+    } catch {
+      // Handled by socket if connected
     }
     setShowAddModal(false);
     setNewCitizenName('');
     setNewCitizenPhone('');
   };
 
-  const handleToggleBlock = (c: any) => {
+  const handleToggleBlock = async (c: any) => {
     const newStatus = c.status === 'Blocked' ? 'Verified' : 'BLOCKED';
-    if (socket) {
+    if (socket && connected) {
       socket.emit('block_citizen', { id: c.dbId || c.id, status: newStatus });
+    }
+    try {
+      await apiFetch(`/api/v1/users/${c.dbId || c.id}/block`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      showToast(`Citizen status changed to ${newStatus === 'BLOCKED' ? 'Blocked' : 'Verified'}`);
+      fetchUsersRest();
+    } catch {
+      // Handled by socket
     }
   };
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { 
@@ -9,7 +9,9 @@ import {
   Eye, 
   Search,
   Users,
-  RefreshCw
+  RefreshCw,
+  Check,
+  X
 } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
@@ -19,8 +21,14 @@ import {
   normalizeServiceTitle, 
   normalizeFee, 
   formatIndianDate, 
-  normalizeStatus 
+  normalizeStatus,
+  extractSupportingDocuments
 } from '../utils/normalize';
+import { apiFetch } from '../utils/apiConfig';
+
+// Clear stale sessionStorage cache on module load so reload always fetches fresh DB data.
+// The old approach of serving cached data caused status reversions after approve/reject.
+try { sessionStorage.removeItem('cybersave_apps_cache'); } catch (_) {}
 
 export default function Applications() {
   const navigate = useNavigate();
@@ -37,52 +45,50 @@ export default function Applications() {
   const [newAppTitle, setNewAppTitle] = useState('');
   const [newAppDesc, setNewAppDesc] = useState('');
 
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectingApp, setRejectingApp] = useState<any>(null);
+  const [rejectionReasonText, setRejectionReasonText] = useState('Documents could not be verified by the administrative officer.');
+  const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
+
   const formatApplication = (a: any) => {
-    const userProfile = a.user?.profile;
-    const formData = (a.formData as any) || {};
-    let docs = (a.documents as any) || [];
+    const raw = a.rawApp || a;
+    const userProfile = raw.user?.profile || a.user?.profile;
+    const formData = (raw.formData as any) || (a.formData as any) || {};
+    const cleanedDocs = extractSupportingDocuments(raw, a);
 
-    const cleanedDocs = (Array.isArray(docs) ? docs : [])
-      .filter((d: any) => d && typeof d === 'object' && !Array.isArray(d) && (d.fileUrl || d.url || d.uri || d.fileName || d.label))
-      .map((d: any, idx: number) => ({
-        label: d.label || `Document Proof #${idx + 1}`,
-        fileName: d.fileName || `proof_${idx + 1}.jpg`,
-        fileUrl: d.fileUrl || d.url || d.uri || '',
-        type: d.type || 'Identity Proof',
-      }));
-
-    const refNumber = normalizeAppId(a.refNumber, a.id);
-    const citizen = normalizeCitizenName(a);
-    const serviceType = normalizeServiceTitle(a);
-    const feeAmount = normalizeFee(a);
-    const statusObj = normalizeStatus(a.status);
-    const dateObj = formatIndianDate(a.submittedAt || a.createdAt);
+    const mongoId = raw.id || a.rawId || a.dbId || (raw._id ? String(raw._id) : null) || a.id;
+    const refNumber = normalizeAppId(raw.refNumber || a.refNumber, mongoId);
+    const citizen = normalizeCitizenName(raw) || normalizeCitizenName(a);
+    const serviceType = normalizeServiceTitle(raw) || normalizeServiceTitle(a);
+    const feeAmount = normalizeFee(raw) || normalizeFee(a);
+    const statusObj = normalizeStatus(raw.status || a.status);
+    const dateObj = formatIndianDate(raw.submittedAt || a.submittedAt || raw.createdAt);
 
     return {
       id: refNumber,
-      rawId: a.id || refNumber,
+      rawId: mongoId,
       refNumber,
       citizen,
-      citizenEmail: a.user?.email || formData.email || '—',
-      citizenPhone: a.user?.phone || userProfile?.phone || formData.phone || '—',
+      citizenEmail: raw.user?.email || a.user?.email || formData.email || a.citizenEmail || '—',
+      citizenPhone: raw.user?.phone || userProfile?.phone || formData.phone || a.citizenPhone || '—',
       serviceType,
-      serviceCategory: a.service?.category || a.serviceCategory || 'Government',
-      priority: 'Medium',
-      rawStatus: a.status,
+      serviceCategory: raw.service?.category || a.serviceCategory || 'Government',
+      priority: a.priority || 'Medium',
+      rawStatus: raw.status || a.status,
       status: statusObj.label,
-      assigned: a.officialOfficer || 'Principal Verification Officer (SDM)',
+      assigned: raw.officialOfficer || a.assigned || 'Principal Verification Officer (SDM)',
       submitted: dateObj.formatted.split(',')[0],
       submittedAtFull: dateObj.formatted,
       sla: '24h',
       amount: feeAmount,
-      paymentStatus: a.paymentStatus || 'Verified & Settled',
-      razorpayPaymentId: a.razorpayPaymentId || '',
-      razorpayOrderId: a.razorpayOrderId || '',
-      rejectionReason: a.rejectionReason || '',
+      paymentStatus: raw.paymentStatus || a.paymentStatus || 'Verified & Settled',
+      razorpayPaymentId: raw.razorpayPaymentId || a.razorpayPaymentId || '',
+      razorpayOrderId: raw.razorpayOrderId || a.razorpayOrderId || '',
+      rejectionReason: raw.rejectionReason || a.rejectionReason || '',
       formData: {
         fullName: formData.fullName || userProfile?.fullName || citizen,
-        email: formData.email || a.user?.email || '',
-        phone: formData.phone || a.user?.phone || userProfile?.phone || '',
+        email: formData.email || raw.user?.email || '',
+        phone: formData.phone || raw.user?.phone || userProfile?.phone || '',
         dob: formData.dob || userProfile?.dob || '',
         gender: formData.gender || userProfile?.gender || '',
         fatherName: formData.fatherName || '',
@@ -108,16 +114,15 @@ export default function Applications() {
         pinCode: userProfile?.pinCode || formData.pinCode || 'Not Provided',
         address: userProfile?.address || formData.address || 'Not Provided',
       },
-      rawApp: a,
+      rawApp: raw,
     };
   };
 
   const fetchApplicationsRest = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-      const res = await fetch(`${backendUrl}/api/v1/applications`);
-      if (res.ok) {
-        const list = await res.json();
+      const res = await apiFetch('/api/v1/applications').catch(() => null);
+      if (res && res.ok) {
+        const list = await res.json().catch(() => []);
         if (Array.isArray(list)) {
           const formatted = list.map(formatApplication);
           const totalApps = formatted.length;
@@ -130,42 +135,126 @@ export default function Applications() {
             return sub.toDateString() === today.toDateString();
           }).length;
 
-          setData({
+          const freshData = {
             stats: { totalApps, todayApps, pending, processing, completed },
             applications: formatted,
-          });
+          };
+          setData(freshData);
           setLoading(false);
           return formatted;
         }
       }
     } catch (e) {
       console.warn('[Applications] REST fetch error:', e);
+    } finally {
+      setLoading(false);
     }
     return null;
   };
 
   useEffect(() => {
-    // Initial fetch via REST to immediately populate data
+    let debounceTimer: any = null;
+
+    // 1. Always invoke REST immediately for instant load
     fetchApplicationsRest();
 
-    // WebSocket real-time subscription
-    if (socket) {
+    // 2. Guaranteed 8-second background polling interval for fresh submissions within 10s
+    const pollInterval = setInterval(() => {
+      fetchApplicationsRest();
+    }, 8000);
+
+    // 3. Safety timeout ensures loading never hangs
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
+
+    // 4. Real-time WebSocket synchronization
+    if (socket && connected) {
       socket.emit('request_applications_data');
 
       const handleSocketData = (resData: any) => {
-        setData(resData);
+        if (!resData) {
+          setLoading(false);
+          return;
+        }
+        const rawList = Array.isArray(resData.applications) ? resData.applications : [];
+        const formatted = rawList.map(formatApplication);
+        const stats = resData.stats || {
+          totalApps: formatted.length,
+          todayApps: formatted.filter(a => new Date(a.rawApp?.submittedAt || Date.now()).toDateString() === new Date().toDateString()).length,
+          pending: formatted.filter(a => a.rawStatus === 'SUBMITTED' || a.rawStatus === 'VERIFYING' || a.rawStatus === 'PENDING').length,
+          processing: formatted.filter(a => a.rawStatus === 'IN_PROGRESS').length,
+          completed: formatted.filter(a => a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length,
+        };
+        const freshData = { stats, applications: formatted };
+        setData(freshData);
         setLoading(false);
       };
 
       const handleRefresh = () => {
-        socket.emit('request_applications_data');
-        fetchApplicationsRest();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          socket.emit('request_applications_data');
+          fetchApplicationsRest();
+        }, 800);
+      };
+
+      const handleStatusChanged = (res: any) => {
+        if (res) {
+          setData((prev: any) => {
+            if (!prev || !prev.applications) return prev;
+            const updatedApps = prev.applications.map((app: any) => {
+              const isMatch = (res.id && (app.rawId === res.id || app.id === res.id)) ||
+                              (res.refNumber && (app.refNumber === res.refNumber || app.id === res.refNumber));
+              if (!isMatch) return app;
+              const norm = normalizeStatus(res.status);
+              return {
+                ...app,
+                status: norm.label,
+                rawStatus: res.status,
+                rejectionReason: res.rejectionReason || app.rejectionReason,
+                rawApp: { ...(app.rawApp || {}), status: res.status, rejectionReason: res.rejectionReason }
+              };
+            });
+            return { ...prev, applications: updatedApps };
+          });
+        }
+        handleRefresh();
+      };
+
+      const handleNewApp = (newApp: any) => {
+        if (newApp && (newApp.id || newApp.refNumber)) {
+          const formatted = formatApplication(newApp);
+          setData((prev: any) => {
+            if (!prev) return prev;
+            const existing = (prev.applications || []).filter((a: any) => (
+              a.rawId !== formatted.rawId &&
+              a.id !== formatted.id &&
+              a.refNumber !== formatted.refNumber
+            ));
+            const updatedApps = [formatted, ...existing];
+            return {
+              ...prev,
+              stats: {
+                ...prev.stats,
+                totalApps: (prev.stats?.totalApps || 0) + 1,
+                todayApps: (prev.stats?.todayApps || 0) + 1,
+                pending: (prev.stats?.pending || 0) + 1,
+              },
+              applications: updatedApps
+            };
+          });
+          window.dispatchEvent(new CustomEvent('cybersave_toast', {
+            detail: { message: `New Application #${formatted.refNumber || formatted.id} received from ${formatted.citizen}!`, type: 'info' }
+          }));
+        }
+        handleRefresh();
       };
 
       socket.on('response_applications_data', handleSocketData);
       socket.on('applications_updated', handleRefresh);
-      socket.on('new_application_submitted', handleRefresh);
-      socket.on('application_status_changed', handleRefresh);
+      socket.on('new_application_submitted', handleNewApp);
+      socket.on('application_status_changed', handleStatusChanged);
       socket.on('create_application_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Application Workflow Created Successfully!' } }));
         setShowCreateModal(false);
@@ -179,21 +268,166 @@ export default function Applications() {
       });
 
       return () => {
+        clearInterval(pollInterval);
+        clearTimeout(safetyTimer);
+        if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_applications_data', handleSocketData);
         socket.off('applications_updated', handleRefresh);
         socket.off('new_application_submitted', handleRefresh);
-        socket.off('application_status_changed', handleRefresh);
+        socket.off('application_status_changed', handleStatusChanged);
         socket.off('create_application_success');
         socket.off('update_application_status_success');
       };
+    } else {
+      return () => {
+        clearInterval(pollInterval);
+        clearTimeout(safetyTimer);
+      };
     }
   }, [socket, connected]);
+
+  const handleQuickApprove = async (app: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const targetId = app.rawId || app.id;
+    const refNum = app.refNumber || app.id;
+    setActionInProgressId(targetId);
+
+    // 1. Optimistic local update
+    setData((prev: any) => {
+      if (!prev || !prev.applications) return prev;
+      const updatedApps = prev.applications.map((a: any) => {
+        if (a.rawId === targetId || a.id === targetId || a.refNumber === refNum) {
+          return {
+            ...a,
+            status: 'Approved',
+            rawStatus: 'APPROVED',
+            rawApp: { ...(a.rawApp || {}), status: 'APPROVED' }
+          };
+        }
+        return a;
+      });
+      return { ...prev, applications: updatedApps };
+    });
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Application #${refNum} approved successfully! ✓` }
+    }));
+
+    // 2. Socket emit for real-time cluster sync
+    if (socket) {
+      socket.emit('update_application_status', {
+        id: targetId,
+        applicationId: targetId,
+        refNumber: refNum,
+        status: 'APPROVED',
+      });
+    }
+
+    // 3. REST API call for persistence
+    try {
+      await apiFetch(`/api/v1/applications/${targetId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'APPROVED' })
+      });
+    } catch (err) {
+      console.warn('Approve REST error:', err);
+    } finally {
+      setActionInProgressId(null);
+    }
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectingApp) return;
+    const app = rejectingApp;
+    const targetId = app.rawId || app.id;
+    const refNum = app.refNumber || app.id;
+    const reason = rejectionReasonText.trim() || 'Documents could not be verified by the administrative officer.';
+    setActionInProgressId(targetId);
+    setShowRejectModal(false);
+
+    // 1. Optimistic local update
+    setData((prev: any) => {
+      if (!prev || !prev.applications) return prev;
+      const updatedApps = prev.applications.map((a: any) => {
+        if (a.rawId === targetId || a.id === targetId || a.refNumber === refNum) {
+          return {
+            ...a,
+            status: 'Rejected',
+            rawStatus: 'REJECTED',
+            rejectionReason: reason,
+            rawApp: { ...(a.rawApp || {}), status: 'REJECTED', rejectionReason: reason }
+          };
+        }
+        return a;
+      });
+      return { ...prev, applications: updatedApps };
+    });
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Application #${refNum} marked as Rejected. ✕` }
+    }));
+
+    // 2. Socket emit for real-time cluster sync
+    if (socket) {
+      socket.emit('update_application_status', {
+        id: targetId,
+        applicationId: targetId,
+        refNumber: refNum,
+        status: 'REJECTED',
+        rejectionReason: reason,
+      });
+    }
+
+    // 3. REST API call
+    try {
+      await apiFetch(`/api/v1/applications/${targetId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'REJECTED', rejectionReason: reason })
+      });
+    } catch (err) {
+      console.warn('Reject REST error:', err);
+    } finally {
+      setActionInProgressId(null);
+      setRejectingApp(null);
+    }
+  };
 
   const handleCreate = () => {
     if (socket && newAppTitle && newAppDesc) {
       socket.emit('create_application', { title: newAppTitle, description: newAppDesc });
     }
   };
+
+  const { stats, applications } = data || {};
+
+  // Compute number of applicants applied for each service/scheme
+  const schemeApplicantCounts = useMemo(() => {
+    return ((applications || []) as any[]).reduce((acc: Record<string, number>, app: any) => {
+      const sType = app.serviceType || 'Government Service';
+      acc[sType] = (acc[sType] || 0) + 1;
+      return acc;
+    }, {});
+  }, [applications]);
+
+  const filteredApplications = useMemo(() => {
+    return ((applications || []) as any[]).filter(app => {
+      if (filterType !== 'All' && !app.serviceType?.toLowerCase().includes(filterType.toLowerCase())) return false;
+      if (filterStatus !== 'All' && app.status !== filterStatus) return false;
+      if (filterPriority !== 'All' && app.priority !== filterPriority) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchId = app.id?.toLowerCase().includes(q) || app.refNumber?.toLowerCase().includes(q);
+        const matchCitizen = app.citizen?.toLowerCase().includes(q);
+        const matchService = app.serviceType?.toLowerCase().includes(q);
+        const matchEmail = app.citizenEmail?.toLowerCase().includes(q);
+        const matchPhone = app.citizenPhone?.includes(q);
+        if (!matchId && !matchCitizen && !matchService && !matchEmail && !matchPhone) return false;
+      }
+      return true;
+    });
+  }, [applications, filterType, filterStatus, filterPriority, searchQuery]);
 
   if (loading && !data) {
     return (
@@ -203,31 +437,6 @@ export default function Applications() {
       </div>
     );
   }
-
-  const { stats, applications } = data || {};
-
-  // Compute number of applicants applied for each service/scheme
-  const schemeApplicantCounts = ((applications || []) as any[]).reduce((acc: Record<string, number>, app: any) => {
-    const sType = app.serviceType || 'Government Service';
-    acc[sType] = (acc[sType] || 0) + 1;
-    return acc;
-  }, {});
-
-  const filteredApplications = ((applications || []) as any[]).filter(app => {
-    if (filterType !== 'All' && !app.serviceType?.toLowerCase().includes(filterType.toLowerCase())) return false;
-    if (filterStatus !== 'All' && app.status !== filterStatus) return false;
-    if (filterPriority !== 'All' && app.priority !== filterPriority) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchId = app.id?.toLowerCase().includes(q) || app.refNumber?.toLowerCase().includes(q);
-      const matchCitizen = app.citizen?.toLowerCase().includes(q);
-      const matchService = app.serviceType?.toLowerCase().includes(q);
-      const matchEmail = app.citizenEmail?.toLowerCase().includes(q);
-      const matchPhone = app.citizenPhone?.includes(q);
-      if (!matchId && !matchCitizen && !matchService && !matchEmail && !matchPhone) return false;
-    }
-    return true;
-  });
 
   return (
     <>
@@ -420,7 +629,25 @@ export default function Applications() {
                       </td>
                       <td style={{fontWeight: 600, color: '#111827', padding: '14px 14px'}}>
                         <div>{app.citizen}</div>
-                        {app.citizenEmail ? <div style={{fontSize: 11, color: '#9ca3af', fontWeight: 400}}>{app.citizenEmail}</div> : null}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                          {app.citizenEmail ? <span style={{fontSize: 11, color: '#9ca3af', fontWeight: 400}}>{app.citizenEmail}</span> : null}
+                          {app.documents && app.documents.length > 0 && (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              backgroundColor: '#eff6ff',
+                              color: '#2563eb',
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              border: '1px solid #dbeafe'
+                            }}>
+                              <FileText size={10} /> {app.documents.length} doc{app.documents.length > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{color: '#4b5563', fontWeight: 500, padding: '14px 14px'}}>{app.serviceType}</td>
                       <td style={{padding: '14px 14px', whiteSpace: 'nowrap'}}>
@@ -453,11 +680,66 @@ export default function Applications() {
                       <td style={{fontWeight: 600, color: '#111827', padding: '14px 14px', whiteSpace: 'nowrap'}}>₹{app.amount}</td>
                       <td style={{color: '#6b7280', fontSize: 13, padding: '14px 14px', whiteSpace: 'nowrap'}}>{app.submitted}</td>
                       <td style={{textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '14px 14px'}}>
-                        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6}}>
+                          {app.rawStatus !== 'APPROVED' && app.status !== 'Approved' && (
+                            <button
+                              style={{
+                                padding: '6px 10px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: '#065f46',
+                                border: '1px solid #a7f3d0',
+                                background: '#d1fae5',
+                                borderRadius: 6,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                cursor: actionInProgressId === (app.rawId || app.id) ? 'not-allowed' : 'pointer',
+                                whiteSpace: 'nowrap',
+                                transition: 'all 0.15s ease',
+                                opacity: actionInProgressId === (app.rawId || app.id) ? 0.6 : 1
+                              }}
+                              onClick={(e) => handleQuickApprove(app, e)}
+                              disabled={actionInProgressId === (app.rawId || app.id)}
+                              title="Quick Approve Application"
+                            >
+                              <Check size={13} /> Approve
+                            </button>
+                          )}
+
+                          {app.rawStatus !== 'REJECTED' && app.status !== 'Rejected' && (
+                            <button
+                              style={{
+                                padding: '6px 10px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: '#991b1b',
+                                border: '1px solid #fecaca',
+                                background: '#fee2e2',
+                                borderRadius: 6,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRejectingApp(app);
+                                setRejectionReasonText('Documents could not be verified by the administrative officer.');
+                                setShowRejectModal(true);
+                              }}
+                              title="Quick Reject Application"
+                            >
+                              <X size={13} /> Reject
+                            </button>
+                          )}
+
                           <button 
                             className="action-view-verify-btn"
                             style={{
-                              padding: '6px 14px',
+                              padding: '6px 12px',
                               fontSize: 12,
                               fontWeight: 600,
                               color: '#2563eb',
@@ -467,7 +749,7 @@ export default function Applications() {
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              gap: 6,
+                              gap: 5,
                               cursor: 'pointer',
                               whiteSpace: 'nowrap'
                             }}
@@ -476,7 +758,7 @@ export default function Applications() {
                               navigate(`/applications/${app.rawId || app.id}`);
                             }}
                           >
-                            <Eye size={13} /> View & Verify
+                            <Eye size={13} /> View
                           </button>
                         </div>
                       </td>
@@ -514,6 +796,98 @@ export default function Applications() {
             <div style={{display: 'flex', gap: 12, justifyContent: 'flex-end'}}>
               <button className="date-picker-btn" onClick={() => setShowCreateModal(false)}>Cancel</button>
               <button className="action-btn" onClick={handleCreate}>Create Flow</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Quick Rejection Reason Modal ─── */}
+      {showRejectModal && rejectingApp && (
+        <div style={{position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, backdropFilter: 'blur(2px)'}}>
+          <div style={{background: 'white', padding: 26, borderRadius: 14, width: 460, maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'}}>
+            <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12}}>
+              <div style={{width: 36, height: 36, borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626'}}>
+                <X size={20} />
+              </div>
+              <div>
+                <h3 style={{margin: 0, fontSize: 17, fontWeight: 700, color: '#111827'}}>Reject Application #{rejectingApp.id}</h3>
+                <p style={{margin: 0, fontSize: 12, color: '#6b7280'}}>Citizen: {rejectingApp.citizen} • {rejectingApp.serviceType}</p>
+              </div>
+            </div>
+
+            <p style={{fontSize: 13, color: '#4b5563', marginBottom: 14, lineHeight: 1.5}}>
+              Specify the official administrative reason for rejecting this application. The citizen will immediately see this reason in their CyberSave mobile app.
+            </p>
+
+            <div style={{marginBottom: 14}}>
+              <label style={{display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6}}>Common Reasons:</label>
+              <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+                {[
+                  'Documents could not be verified by the administrative officer.',
+                  'Aadhaar / Identity document proof mismatch.',
+                  'Uploaded document photo is blurred or illegible.',
+                  'Incomplete supporting documentation submitted.'
+                ].map((reasonOption, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    style={{
+                      textAlign: 'left',
+                      padding: '7px 10px',
+                      borderRadius: 6,
+                      border: rejectionReasonText === reasonOption ? '1.5px solid #ef4444' : '1px solid #e5e7eb',
+                      background: rejectionReasonText === reasonOption ? '#fef2f2' : '#f9fafb',
+                      fontSize: 12,
+                      color: rejectionReasonText === reasonOption ? '#b91c1c' : '#374151',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setRejectionReasonText(reasonOption)}
+                  >
+                    {reasonOption}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{marginBottom: 20}}>
+              <label style={{display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6}}>Custom Reason / Note to Citizen:</label>
+              <textarea
+                value={rejectionReasonText}
+                onChange={(e) => setRejectionReasonText(e.target.value)}
+                style={{width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, minHeight: 70, outline: 'none'}}
+                placeholder="Enter specific instructions or document requirements..."
+              />
+            </div>
+
+            <div style={{display: 'flex', gap: 10, justifyContent: 'flex-end'}}>
+              <button
+                className="date-picker-btn"
+                style={{padding: '8px 16px', fontSize: 13}}
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectingApp(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                style={{
+                  background: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '8px 18px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                onClick={handleConfirmReject}
+              >
+                <X size={15} /> Confirm Rejection
+              </button>
             </div>
           </div>
         </div>

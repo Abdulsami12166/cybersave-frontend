@@ -26,6 +26,7 @@ import {
   FileImage,
   AlertCircle
 } from 'lucide-react';
+import { apiFetch } from '../utils/apiConfig';
 
 export default function OperatorDetail() {
   const { id } = useParams();
@@ -112,9 +113,8 @@ export default function OperatorDetail() {
 
   const fetchOperatorRest = async () => {
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      const res = await fetch(`${backendUrl}/api/v1/operators/${id}`);
-      if (res.ok) {
+      const res = await apiFetch(`/api/v1/operators/${id}`).catch(() => null);
+      if (res && res.ok) {
         const json = await res.json();
         setOperator(json);
         setSelectedPermissions(Array.isArray(json.permissions) ? json.permissions : ['DASHBOARD']);
@@ -195,8 +195,7 @@ export default function OperatorDetail() {
     setActionLoading(true);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-      await fetch(`${backendUrl}/api/v1/operators/${operator.id}/status`, {
+      await apiFetch(`/api/v1/operators/${operator.id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus }),
@@ -223,14 +222,13 @@ export default function OperatorDetail() {
     setActionLoading(true);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      const res = await fetch(`${backendUrl}/api/v1/operators/${operator.id}`, {
+      const res = await apiFetch(`/api/v1/operators/${operator.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm),
       });
 
-      if (res.ok) {
+      if (res && res.ok) {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Operator profile updated successfully!' } }));
         setShowEditModal(false);
         fetchOperatorRest();
@@ -251,8 +249,7 @@ export default function OperatorDetail() {
     setActionLoading(true);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      await fetch(`${backendUrl}/api/v1/operators/${operator.id}/reset-password`, {
+      await apiFetch(`/api/v1/operators/${operator.id}/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: newPassword }),
@@ -278,8 +275,7 @@ export default function OperatorDetail() {
     setSavingPermissions(true);
     const finalPermissions = Array.from(new Set([...selectedPermissions, 'SETTINGS']));
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      await fetch(`${backendUrl}/api/v1/operators/${operator.id}`, {
+      await apiFetch(`/api/v1/operators/${operator.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissions: finalPermissions }),
@@ -372,8 +368,7 @@ export default function OperatorDetail() {
     setRequestingDocUpdate(true);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
-      await fetch(`${backendUrl}/api/v1/operators/${operator.id}/request-document-update`, {
+      await apiFetch(`/api/v1/operators/${operator.id}/request-document-update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -398,13 +393,12 @@ export default function OperatorDetail() {
     formData.append('file', file);
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-      const res = await fetch(`${backendUrl}/api/admin/upload`, {
+      const res = await apiFetch('/api/admin/upload', {
         method: 'POST',
         body: formData,
       });
 
-      if (res.ok) {
+      if (res && res.ok) {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Uploaded ${file.name} successfully!` } }));
         fetchOperatorRest();
       }

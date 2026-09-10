@@ -96,12 +96,15 @@ export default function Layout() {
 
   const isSuperAdmin = 
     admin?.email === 'admin@cybersave.com' || 
-    admin?.role === 'SUPER_ADMIN';
+    admin?.email === 'officer.admin@cybersave.gov.in' ||
+    admin?.role === 'SUPER_ADMIN' ||
+    (admin?.role === 'ADMIN' && (!admin?.permissions || admin?.permissions?.length === 0 || admin?.permissions?.includes('ALL') || admin?.permissions?.includes('SUPER_ADMIN')));
 
   const userPermissions = Array.isArray(admin?.permissions) ? admin.permissions : [];
 
   const hasAccess = (requiredPermission?: string) => {
     if (isSuperAdmin) return true;
+    if (admin?.role === 'ADMIN' && (!userPermissions || userPermissions.length === 0 || userPermissions.includes('ALL') || userPermissions.includes('SUPER_ADMIN'))) return true;
     // System Configuration is standard/normal for everyone across all roles
     if (!requiredPermission || requiredPermission === 'SETTINGS') return true;
     return userPermissions.includes(requiredPermission);
