@@ -227,9 +227,41 @@ export default function Applications() {
         handleRefresh();
       };
 
+      const handleNewApp = (newApp: any) => {
+        if (newApp && (newApp.id || newApp.refNumber)) {
+          const formatted = formatApplication(newApp);
+          setData((prev: any) => {
+            if (!prev) return prev;
+            const existing = (prev.applications || []).filter((a: any) => (
+              a.rawId !== formatted.rawId &&
+              a.id !== formatted.id &&
+              a.refNumber !== formatted.refNumber
+            ));
+            const updatedApps = [formatted, ...existing];
+            const updated = {
+              ...prev,
+              stats: {
+                ...prev.stats,
+                totalApps: (prev.stats?.totalApps || 0) + 1,
+                todayApps: (prev.stats?.todayApps || 0) + 1,
+                pending: (prev.stats?.pending || 0) + 1,
+              },
+              applications: updatedApps
+            };
+            cachedApplicationsData = updated;
+            try { sessionStorage.setItem('cybersave_apps_cache', JSON.stringify(updated)); } catch (_) {}
+            return updated;
+          });
+          window.dispatchEvent(new CustomEvent('cybersave_toast', {
+            detail: { message: `New Application #${formatted.refNumber || formatted.id} received from ${formatted.citizen}!`, type: 'info' }
+          }));
+        }
+        handleRefresh();
+      };
+
       socket.on('response_applications_data', handleSocketData);
       socket.on('applications_updated', handleRefresh);
-      socket.on('new_application_submitted', handleRefresh);
+      socket.on('new_application_submitted', handleNewApp);
       socket.on('application_status_changed', handleStatusChanged);
       socket.on('create_application_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Application Workflow Created Successfully!' } }));
