@@ -12,7 +12,8 @@ import {
   Filter,
   X,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
@@ -26,6 +27,7 @@ export default function Transactions() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMethod, setFilterMethod] = useState<'ALL' | 'RAZORPAY' | 'PORTAL' | 'REFUNDED'>('ALL');
   const [selectedDate, setSelectedDate] = useState<string>('ALL');
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchTransactionsRest = async () => {
     try {
@@ -307,6 +309,15 @@ export default function Transactions() {
     return transactions.filter((t: any) => t.status === 'REFUNDED' || t.isRefunded).length;
   }, [transactions]);
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    if (socket && connected) {
+      socket.emit('request_transactions_data');
+    }
+    await fetchTransactionsRest();
+    setTimeout(() => setRefreshing(false), 500);
+  };
+
   if (loading) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
@@ -328,6 +339,15 @@ export default function Transactions() {
           <p>Inspect genuine daily revenue realization, platform net realized inflows, and day-by-day transaction ledgers</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
+          <button 
+            className="date-picker-btn" 
+            onClick={handleRefresh}
+            disabled={refreshing}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+          >
+            <RefreshCw size={14} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} /> 
+            {refreshing ? 'Synchronizing...' : 'Refresh Ledger'}
+          </button>
           <button className="date-picker-btn" onClick={handleExportCSV} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Download size={15} /> Export CSV ({filteredTransactions.length})
           </button>
