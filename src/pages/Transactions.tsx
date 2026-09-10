@@ -281,27 +281,45 @@ export default function Transactions() {
   }, [transactions, selectedDate, searchQuery, filterMethod]);
 
   const handleExportCSV = () => {
-    if (!filteredTransactions || filteredTransactions.length === 0) return;
-    const headers = ['Transaction ID', 'Reference Number', 'Date & Time (IST)', 'Customer', 'Service', 'Payment Method', 'Amount (INR)', 'Status', 'Refund Ref'];
-    const rows = filteredTransactions.map((t: any) => [
-      `"${t.id || ''}"`,
-      `"${t.refNumber || ''}"`,
-      `"${t.dateFormatted}"`,
-      `"${t.customer || ''}"`,
-      `"${t.service || ''}"`,
-      `"${t.paymentMethod || 'Govt Portal'}"`,
-      t.amount || 50,
-      `"${t.status || 'SUCCESS'}"`,
-      `"${t.refundRef || ''}"`,
+    const listToExport = filteredTransactions && filteredTransactions.length > 0 ? filteredTransactions : (transactions || []);
+    if (!listToExport.length) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'No transactions found to export.' } }));
+      return;
+    }
+    const safeStr = (v: any) => {
+      if (!v) return '';
+      if (typeof v === 'object') return String(v.name || v.title || v.id || '').replace(/"/g, '""');
+      return String(v).replace(/"/g, '""');
+    };
+    const headers = ['Transaction ID', 'Reference Number', 'Date & Time (IST)', 'Customer', 'Service Scheme', 'Payment Method', 'Gross Amount (INR)', 'Platform Fee (INR)', 'Net Realized (INR)', 'Status', 'Refund Ref'];
+    const rows = listToExport.map((t: any) => [
+      `"${safeStr(t.id)}"`,
+      `"${safeStr(t.refNumber)}"`,
+      `"${safeStr(t.dateFormatted || t.date || 'Recent')}"`,
+      `"${safeStr(t.customer || t.citizen || 'Citizen User')}"`,
+      `"${safeStr(t.service || t.scheme || 'Government Service')}"`,
+      `"${safeStr(t.paymentMethod || 'Govt Portal Online')}"`,
+      `"${safeStr(t.amount || '₹50.00')}"`,
+      `"${safeStr(t.fee || '₹0.00')}"`,
+      `"${safeStr(t.net || t.amount || '₹50.00')}"`,
+      `"${safeStr(t.status || 'Settled')}"`,
+      `"${safeStr(t.refundRef || '-')}"`,
     ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `cybersave_settlement_${selectedDate === 'ALL' ? 'all' : selectedDate}_${Date.now()}.csv`);
+    link.href = url;
+    link.download = `cybersave_settlement_${selectedDate === 'ALL' ? 'all' : selectedDate}_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Exported ${rows.length} transactions settlement records to CSV!` }
+    }));
   };
 
   const refundedCount = useMemo(() => {
