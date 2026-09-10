@@ -26,18 +26,15 @@ import {
 } from '../utils/normalize';
 import { apiFetch } from '../utils/apiConfig';
 
-// Instant module-level cache for zero-latency page renders
-let cachedApplicationsData: any = null;
-try {
-  const s = sessionStorage.getItem('cybersave_apps_cache');
-  if (s) cachedApplicationsData = JSON.parse(s);
-} catch (_) {}
+// Clear stale sessionStorage cache on module load so reload always fetches fresh DB data.
+// The old approach of serving cached data caused status reversions after approve/reject.
+try { sessionStorage.removeItem('cybersave_apps_cache'); } catch (_) {}
 
 export default function Applications() {
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
-  const [data, setData] = useState<any>(() => cachedApplicationsData);
-  const [loading, setLoading] = useState(() => !cachedApplicationsData);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   const [filterType, setFilterType] = useState<string>('All');
   const [filterPriority, setFilterPriority] = useState<string>('All');
@@ -142,8 +139,6 @@ export default function Applications() {
             stats: { totalApps, todayApps, pending, processing, completed },
             applications: formatted,
           };
-          cachedApplicationsData = freshData;
-          try { sessionStorage.setItem('cybersave_apps_cache', JSON.stringify(freshData)); } catch (_) {}
           setData(freshData);
           setLoading(false);
           return formatted;
@@ -163,12 +158,17 @@ export default function Applications() {
     // 1. Always invoke REST immediately for instant load
     fetchApplicationsRest();
 
-    // 2. Safety timeout ensures loading never hangs
+    // 2. Guaranteed 8-second background polling interval for fresh submissions within 10s
+    const pollInterval = setInterval(() => {
+      fetchApplicationsRest();
+    }, 8000);
+
+    // 3. Safety timeout ensures loading never hangs
     const safetyTimer = setTimeout(() => {
       setLoading(false);
     }, 1500);
 
-    // 3. Real-time WebSocket synchronization
+    // 4. Real-time WebSocket synchronization
     if (socket && connected) {
       socket.emit('request_applications_data');
 
@@ -187,8 +187,6 @@ export default function Applications() {
           completed: formatted.filter(a => a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length,
         };
         const freshData = { stats, applications: formatted };
-        cachedApplicationsData = freshData;
-        try { sessionStorage.setItem('cybersave_apps_cache', JSON.stringify(freshData)); } catch (_) {}
         setData(freshData);
         setLoading(false);
       };
@@ -218,10 +216,7 @@ export default function Applications() {
                 rawApp: { ...(app.rawApp || {}), status: res.status, rejectionReason: res.rejectionReason }
               };
             });
-            const updated = { ...prev, applications: updatedApps };
-            cachedApplicationsData = updated;
-            try { sessionStorage.setItem('cybersave_apps_cache', JSON.stringify(updated)); } catch (_) {}
-            return updated;
+            return { ...prev, applications: updatedApps };
           });
         }
         handleRefresh();
@@ -238,7 +233,7 @@ export default function Applications() {
               a.refNumber !== formatted.refNumber
             ));
             const updatedApps = [formatted, ...existing];
-            const updated = {
+            return {
               ...prev,
               stats: {
                 ...prev.stats,
@@ -248,9 +243,6 @@ export default function Applications() {
               },
               applications: updatedApps
             };
-            cachedApplicationsData = updated;
-            try { sessionStorage.setItem('cybersave_apps_cache', JSON.stringify(updated)); } catch (_) {}
-            return updated;
           });
           window.dispatchEvent(new CustomEvent('cybersave_toast', {
             detail: { message: `New Application #${formatted.refNumber || formatted.id} received from ${formatted.citizen}!`, type: 'info' }
@@ -276,6 +268,7 @@ export default function Applications() {
       });
 
       return () => {
+        clearInterval(pollInterval);
         clearTimeout(safetyTimer);
         if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_applications_data', handleSocketData);
@@ -286,7 +279,10 @@ export default function Applications() {
         socket.off('update_application_status_success');
       };
     } else {
-      return () => clearTimeout(safetyTimer);
+      return () => {
+        clearInterval(pollInterval);
+        clearTimeout(safetyTimer);
+      };
     }
   }, [socket, connected]);
 

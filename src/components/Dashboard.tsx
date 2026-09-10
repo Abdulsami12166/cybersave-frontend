@@ -138,6 +138,13 @@ export default function Dashboard() {
   useEffect(() => {
     let debounceTimer: any = null;
 
+    fetchLiveApplications();
+
+    // Guaranteed 8-second background polling interval for fresh submissions within 10s
+    const pollInterval = setInterval(() => {
+      fetchLiveApplications();
+    }, 8000);
+
     if (socket && connected) {
       socket.emit('request_dashboard_data');
       socket.emit('request_transactions_data');
@@ -164,6 +171,7 @@ export default function Dashboard() {
         debounceTimer = setTimeout(() => {
           socket.emit('request_dashboard_data');
           socket.emit('request_transactions_data');
+          fetchLiveApplications();
         }, 1200);
       };
 
@@ -178,6 +186,7 @@ export default function Dashboard() {
       socket.on('transactions_updated', handleAppUpdate);
 
       return () => {
+        clearInterval(pollInterval);
         if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_dashboard_data', handleDash);
         socket.off('response_transactions_data', handleTransactionsData);
@@ -190,7 +199,7 @@ export default function Dashboard() {
         socket.off('transactions_updated', handleAppUpdate);
       };
     } else {
-      fetchLiveApplications();
+      return () => clearInterval(pollInterval);
     }
   }, [socket, connected, fetchLiveApplications]);
 
