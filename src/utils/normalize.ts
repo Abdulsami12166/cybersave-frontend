@@ -268,34 +268,35 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
   const user = app.user || fallbackApp?.user;
   const profile = user?.profile;
   const list: SupportingDocumentItem[] = [];
-  const seenNames = new Set<string>();
+  const seenKeys = new Set<string>();
 
   const addDoc = (label: string, fileName: string, fileUrl: string, type: string, size: string = '1.4 MB', uploadedAt?: string) => {
-    const key = (fileName || label || '').toLowerCase().trim();
-    if (!key || seenNames.has(key)) return;
-    seenNames.add(key);
+    const key = `${label || ''}_${fileName || ''}`.toLowerCase().trim() || (fileUrl || '').toLowerCase().trim();
+    if (!key || seenKeys.has(key)) return;
+    seenKeys.add(key);
     list.push({
       id: `doc-${list.length + 1}-${Math.random().toString(36).substring(2, 6)}`,
       label: label || fileName || `Document Proof #${list.length + 1}`,
       fileName: fileName || label || `document_${list.length + 1}.pdf`,
-      fileUrl: fileUrl || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800&auto=format&fit=crop&q=60',
-      type: type || 'Government Verification Proof',
+      fileUrl: fileUrl || '',
+      type: type || 'Supporting Document',
       size,
       verified: true,
       uploadedAt: uploadedAt || app.submittedAt || new Date().toISOString(),
     });
   };
 
-  // 1. Check direct raw.documents array or object
+  // 1. Direct app.documents array (from application submission)
   const rawDocs = Array.isArray(app.documents) ? app.documents : (Array.isArray(fallbackApp.documents) ? fallbackApp.documents : []);
   for (let i = 0; i < rawDocs.length; i++) {
     const d = rawDocs[i];
     if (!d) continue;
     if (typeof d === 'string') {
-      addDoc(`Supporting Proof #${i + 1}`, `document_${i + 1}.jpg`, d, 'Identity Proof');
+      const isUrl = d.startsWith('http') || d.startsWith('data:');
+      addDoc(`Document Proof #${i + 1}`, `document_${i + 1}.jpg`, isUrl ? d : '', 'Identity Proof');
     } else if (typeof d === 'object') {
       const url = d.fileUrl || d.url || d.uri || d.path || d.documentUrl || d.secure_url || '';
-      const name = d.fileName || d.label || d.name || `Supporting Proof #${i + 1}`;
+      const name = d.fileName || d.label || d.name || `Document Proof #${i + 1}`;
       const label = d.label || d.name || name;
       const type = d.type || d.fileType || 'Identity Proof';
       const size = d.fileSize ? `${Math.round(d.fileSize / 1024)} KB` : (d.size || '1.2 MB');
@@ -303,7 +304,7 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
     }
   }
 
-  // 2. Check documentUploads relation
+  // 2. Direct documentUploads relation from DB
   const uploads = Array.isArray(app.documentUploads) ? app.documentUploads : (Array.isArray(fallbackApp.documentUploads) ? fallbackApp.documentUploads : []);
   for (let i = 0; i < uploads.length; i++) {
     const u = uploads[i];
@@ -315,13 +316,14 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
     addDoc(name, name, url, type, size, u.uploadedAt);
   }
 
-  // 3. Check formData nested documents
+  // 3. Nested formData documents
   const formDocs = Array.isArray(formData.documents) ? formData.documents : (Array.isArray(formData.supportingDocuments) ? formData.supportingDocuments : []);
   for (let i = 0; i < formDocs.length; i++) {
     const fd = formDocs[i];
     if (!fd) continue;
     if (typeof fd === 'string') {
-      addDoc(`Uploaded Document #${i + 1}`, `proof_${i + 1}.pdf`, fd, 'Supporting Document');
+      const isUrl = fd.startsWith('http') || fd.startsWith('data:');
+      addDoc(`Uploaded Document #${i + 1}`, `proof_${i + 1}.pdf`, isUrl ? fd : '', 'Supporting Document');
     } else if (typeof fd === 'object') {
       const url = fd.fileUrl || fd.url || fd.uri || '';
       const name = fd.fileName || fd.label || fd.name || `Supporting Proof #${i + 1}`;
@@ -329,15 +331,15 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
     }
   }
 
-  // 4. Check user Aadhaar e-KYC documents & user vault documents
+  // 4. User Aadhaar e-KYC documents & user vault documents (only if user actually has them)
   const aadhaarDocs = Array.isArray(user?.aadhaarDocs) ? user.aadhaarDocs : [];
   for (let i = 0; i < aadhaarDocs.length; i++) {
     const ad = aadhaarDocs[i];
-    if (!ad) continue;
+    if (!ad || !ad.fileStorageKey) continue;
     addDoc(
       'UIDAI Aadhaar e-KYC Identity Certificate',
       `aadhaar_ekyc_${(profile?.aadhaarNumber || 'vault').slice(-4)}.xml`,
-      ad.fileStorageKey || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60',
+      ad.fileStorageKey,
       'Aadhaar e-KYC XML (UIDAI Verified)',
       '512 KB',
       ad.uploadedAt
@@ -347,38 +349,8 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
   const userDocs = Array.isArray(user?.documents) ? user.documents : [];
   for (let i = 0; i < userDocs.length; i++) {
     const ud = userDocs[i];
-    if (!ud) continue;
+    if (!ud || !ud.fileUrl) continue;
     addDoc(ud.fileName || `vault_document_${i + 1}.pdf`, ud.fileName || `vault_doc_${i + 1}.pdf`, ud.fileUrl, ud.fileType || 'Vault Document', '1.5 MB', ud.uploadedAt);
-  }
-
-  // 5. If no uploaded files attached in DB, supply the 3 canonical verified service compliance proofs
-  if (list.length === 0) {
-    const citizenName = profile?.fullName || formData.fullName || (user?.email ? user.email.split('@')[0] : 'Citizen');
-    const serviceTitle = app.serviceTitle || app.service?.title || 'Government Service';
-
-    addDoc(
-      'Aadhaar Card Copy (Front & Back Proof)',
-      `Aadhaar_${citizenName.replace(/\s+/g, '_')}_Verified.pdf`,
-      'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60',
-      'UIDAI Identity & Address Proof',
-      '1.4 MB'
-    );
-
-    addDoc(
-      'Residential Address / Utility Bill Proof',
-      `Address_Proof_${formData.district || 'Official'}.pdf`,
-      'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=800&auto=format&fit=crop&q=60',
-      'Address Verification Proof',
-      '2.1 MB'
-    );
-
-    addDoc(
-      `${serviceTitle} Official Application Form & Declaration`,
-      `${(app.refNumber || 'CSB2026').toUpperCase()}_Signed_Undertaking.pdf`,
-      'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=800&auto=format&fit=crop&q=60',
-      'Official Self-Declaration Proof',
-      '840 KB'
-    );
   }
 
   return list;
