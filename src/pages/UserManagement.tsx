@@ -345,7 +345,54 @@ export default function UserManagement() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => {
+              const listToExport = filteredCitizens.length > 0 ? filteredCitizens : normalizedCitizens;
+              if (!listToExport.length) {
+                showToast('No citizens found to export.', 'error');
+                return;
+              }
+              const headers = ['Citizen ID', 'Full Name', 'Mobile Phone', 'Email Address', 'District', 'Status', 'Services Used Count', 'Registered Date'];
+              const rows = listToExport.map((c: any) => [
+                `"${(c.id || '').replace(/"/g, '""')}"`,
+                `"${(c.fullName || 'Citizen User').replace(/"/g, '""')}"`,
+                `"${(c.phone || '-').replace(/"/g, '""')}"`,
+                `"${(c.email || '-').replace(/"/g, '""')}"`,
+                `"${(c.district || 'Central District').replace(/"/g, '""')}"`,
+                `"${(c.status || 'Verified').replace(/"/g, '""')}"`,
+                String(c.servicesUsed || 0),
+                `"${(c.registeredDate || 'Recent').replace(/"/g, '""')}"`,
+              ]);
+              const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `cybersave_citizen_directory_${new Date().toISOString().slice(0, 10)}.csv`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              showToast(`Exported ${rows.length} citizen records to CSV!`);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#F8FAFC',
+              border: '1px solid #CBD5E1',
+              color: '#334155',
+              borderRadius: '8px',
+              padding: '8px 14px',
+              fontSize: '12.5px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            <Download size={14} /> Export Directory (CSV)
+          </button>
+
           <button
             onClick={() => { fetchUsersRest(); showToast('Citizen directory refreshed'); }}
             style={{

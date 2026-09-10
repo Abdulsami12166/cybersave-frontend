@@ -11,7 +11,8 @@ import {
   Users,
   RefreshCw,
   Check,
-  X
+  X,
+  Download
 } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 
@@ -429,6 +430,41 @@ export default function Applications() {
     });
   }, [applications, filterType, filterStatus, filterPriority, searchQuery]);
 
+  const handleExportCSV = () => {
+    const listToExport = filteredApplications.length > 0 ? filteredApplications : ((applications || []) as any[]);
+    if (!listToExport.length) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'No applications found to export.' } }));
+      return;
+    }
+    const headers = ['Application ID', 'Citizen Name', 'Contact Phone', 'Contact Email', 'Service Scheme', 'Fee (INR)', 'Status', 'Submission Date', 'Assigned Officer'];
+    const rows = listToExport.map((a: any) => [
+      `"${(a.id || a.refNumber || '').replace(/"/g, '""')}"`,
+      `"${(a.citizen || a.citizenName || 'Citizen User').replace(/"/g, '""')}"`,
+      `"${(a.citizenPhone || '-').replace(/"/g, '""')}"`,
+      `"${(a.citizenEmail || '-').replace(/"/g, '""')}"`,
+      `"${(a.serviceType || a.service || 'Government Service').replace(/"/g, '""')}"`,
+      String(a.feeAmount || a.amount || 50),
+      `"${(a.status || 'In Review').replace(/"/g, '""')}"`,
+      `"${(a.submitted || 'Recent').replace(/"/g, '""')}"`,
+      `"${(a.assigned || 'Principal Verification Officer').replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cybersave_applications_ledger_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Exported ${rows.length} applications records to CSV successfully!` }
+    }));
+  };
+
   if (loading && !data) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
@@ -447,6 +483,9 @@ export default function Applications() {
           <p>Inspect applicant data, verify uploaded proofs with instant click-to-download, and manage scheme pipelines</p>
         </div>
         <div style={{display: 'flex', gap: 12}}>
+          <button className="date-picker-btn" onClick={handleExportCSV} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Download size={14} /> Export Ledger (CSV)
+          </button>
           <button className="date-picker-btn" onClick={() => fetchApplicationsRest()}>
             <RefreshCw size={14} style={{ marginRight: 6 }} /> Refresh
           </button>

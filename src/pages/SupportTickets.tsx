@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { HelpCircle, Clock, CheckCircle, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { HelpCircle, Clock, CheckCircle, Image as ImageIcon, RefreshCw, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { StatCard } from '../components/Dashboard';
@@ -247,7 +247,44 @@ export default function SupportTickets() {
           </div>
           <div style={{display: 'flex', gap: 16, alignItems: 'center'}}>
             <span style={{fontSize: 13, color: '#6b7280'}}>Showing {filteredTickets.length} of {stats?.totalTickets || 0}</span>
-            <button className="date-picker-btn" style={{border: 'none', fontWeight: 600}}>Export Report</button>
+            <button 
+              className="date-picker-btn" 
+              onClick={() => {
+                const listToExport = filteredTickets.length > 0 ? filteredTickets : (tickets || []);
+                if (!listToExport.length) {
+                  window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'No tickets available to export.' } }));
+                  return;
+                }
+                const headers = ['Ticket ID', 'Title', 'Category', 'Priority', 'Status', 'Reporter', 'Assigned Officer', 'Created Date', 'Last Updated'];
+                const rows = listToExport.map((t: any) => [
+                  `"${(t.id || t.refNumber || '').replace(/"/g, '""')}"`,
+                  `"${(t.title || '').replace(/"/g, '""')}"`,
+                  `"${(t.category || 'General Support').replace(/"/g, '""')}"`,
+                  `"${(t.priority || 'Medium').replace(/"/g, '""')}"`,
+                  `"${(t.status || 'OPEN').replace(/"/g, '""')}"`,
+                  `"${(typeof t.reporter === 'object' ? (t.reporter?.name || t.reporter?.email || 'Citizen') : (t.reporter || 'Citizen')).replace(/"/g, '""')}"`,
+                  `"${(typeof t.assignedTo === 'object' ? (t.assignedTo?.name || 'Support Desk') : (t.assignedTo || 'Support Desk')).replace(/"/g, '""')}"`,
+                  `"${(t.createdOn || 'Recent').replace(/"/g, '""')}"`,
+                  `"${(t.lastUpdated || 'Today').replace(/"/g, '""')}"`,
+                ]);
+                const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `cybersave_support_tickets_ledger_${new Date().toISOString().slice(0, 10)}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                window.dispatchEvent(new CustomEvent('cybersave_toast', {
+                  detail: { message: `Exported ${rows.length} support tickets to CSV successfully!` }
+                }));
+              }}
+              style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Download size={13} /> Export Report (CSV)
+            </button>
           </div>
         </div>
 
