@@ -15,6 +15,16 @@ export default function Transactions() {
 
   const fetchTransactionsRest = async () => {
     try {
+      const txRes = await apiFetch('/api/admin/transactions').catch(() => null);
+      if (txRes?.ok) {
+        const rawData = await txRes.json().catch(() => null);
+        if (rawData && Array.isArray(rawData.transactions)) {
+          setData(rawData);
+          setLoading(false);
+          return;
+        }
+      }
+
       const [appsRes, refundsRes] = await Promise.all([
         apiFetch('/api/v1/applications').catch(() => null),
         apiFetch('/api/v1/refunds').catch(() => null),
