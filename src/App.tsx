@@ -93,6 +93,7 @@ function App() {
                 <Route path="transactions" element={<Transactions />} />
                 <Route path="refunds" element={<Refunds />} />
                 <Route path="audit" element={<AuditLogs />} />
+                <Route path="audit-logs" element={<Navigate to="/audit" replace />} />
                 <Route path="settings" element={<Settings />} />
               </Route>
             </Routes>
