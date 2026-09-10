@@ -265,8 +265,6 @@ export const normalizeApplication = (app: any): NormalizedApplication => {
 export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): SupportingDocumentItem[] => {
   const app = raw || fallbackApp || {};
   const formData = (app.formData as any) || (fallbackApp?.formData as any) || {};
-  const user = app.user || fallbackApp?.user;
-  const profile = user?.profile;
   const list: SupportingDocumentItem[] = [];
   const seenKeys = new Set<string>();
 
@@ -286,7 +284,7 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
     });
   };
 
-  // 1. Direct app.documents array (from application submission)
+  // 1. Direct app.documents array (uploaded specifically for this service application)
   const rawDocs = Array.isArray(app.documents) ? app.documents : (Array.isArray(fallbackApp.documents) ? fallbackApp.documents : []);
   for (let i = 0; i < rawDocs.length; i++) {
     const d = rawDocs[i];
@@ -304,11 +302,12 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
     }
   }
 
-  // 2. Direct documentUploads relation from DB
+  // 2. Direct documentUploads relation linked specifically to this application
   const uploads = Array.isArray(app.documentUploads) ? app.documentUploads : (Array.isArray(fallbackApp.documentUploads) ? fallbackApp.documentUploads : []);
   for (let i = 0; i < uploads.length; i++) {
     const u = uploads[i];
     if (!u) continue;
+    if (u.applicationId && app.id && u.applicationId !== app.id) continue;
     const url = u.fileUrl || u.url || '';
     const name = u.fileName || `uploaded_doc_${i + 1}.pdf`;
     const type = u.fileType || 'Government Verification Proof';
@@ -316,7 +315,7 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
     addDoc(name, name, url, type, size, u.uploadedAt);
   }
 
-  // 3. Nested formData documents
+  // 3. Form-specific documents (attached in application formData payload for this service)
   const formDocs = Array.isArray(formData.documents) ? formData.documents : (Array.isArray(formData.supportingDocuments) ? formData.supportingDocuments : []);
   for (let i = 0; i < formDocs.length; i++) {
     const fd = formDocs[i];
@@ -329,28 +328,6 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
       const name = fd.fileName || fd.label || fd.name || `Supporting Proof #${i + 1}`;
       addDoc(fd.label || name, name, url, fd.type || 'Identity Proof', '2.1 MB');
     }
-  }
-
-  // 4. User Aadhaar e-KYC documents & user vault documents (only if user actually has them)
-  const aadhaarDocs = Array.isArray(user?.aadhaarDocs) ? user.aadhaarDocs : [];
-  for (let i = 0; i < aadhaarDocs.length; i++) {
-    const ad = aadhaarDocs[i];
-    if (!ad || !ad.fileStorageKey) continue;
-    addDoc(
-      'UIDAI Aadhaar e-KYC Identity Certificate',
-      `aadhaar_ekyc_${(profile?.aadhaarNumber || 'vault').slice(-4)}.xml`,
-      ad.fileStorageKey,
-      'Aadhaar e-KYC XML (UIDAI Verified)',
-      '512 KB',
-      ad.uploadedAt
-    );
-  }
-
-  const userDocs = Array.isArray(user?.documents) ? user.documents : [];
-  for (let i = 0; i < userDocs.length; i++) {
-    const ud = userDocs[i];
-    if (!ud || !ud.fileUrl) continue;
-    addDoc(ud.fileName || `vault_document_${i + 1}.pdf`, ud.fileName || `vault_doc_${i + 1}.pdf`, ud.fileUrl, ud.fileType || 'Vault Document', '1.5 MB', ud.uploadedAt);
   }
 
   return list;
