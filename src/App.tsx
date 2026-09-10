@@ -66,41 +66,45 @@ const PageLoader = () => (
   </div>
 );
 
+import ErrorBoundary from './components/ErrorBoundary';
+
 function App() {
   return (
-    <AuthProvider>
-      <SocketProvider>
-        <BrowserRouter>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              
-              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route index element={<Dashboard />} />
-                <Route path="users" element={<UserManagement />} />
-                <Route path="users/:id" element={<UserManagementDetail />} />
-                <Route path="applications" element={<Applications />} />
-                <Route path="applications/:id" element={<ApplicationDetail />} />
-                <Route path="services" element={<Services />} />
-                <Route path="services/create" element={<ServiceWizard />} />
-                <Route path="operators" element={<Operators />} />
-                <Route path="operators/:id" element={<OperatorDetail />} />
-                <Route path="notifications" element={<Notifications />} />
-                <Route path="support" element={<SupportTickets />} />
-                <Route path="support/:id" element={<SupportTicketDetail />} />
-                <Route path="support/:id/resolve" element={<SupportTicketResolve />} />
-                <Route path="analytics" element={<Analytics />} />
-                <Route path="transactions" element={<Transactions />} />
-                <Route path="refunds" element={<Refunds />} />
-                <Route path="audit" element={<AuditLogs />} />
-                <Route path="audit-logs" element={<Navigate to="/audit" replace />} />
-                <Route path="settings" element={<Settings />} />
-              </Route>
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </SocketProvider>
-    </AuthProvider>
+    <ErrorBoundary fallbackTitle="CyberSave Admin Console Error">
+      <AuthProvider>
+        <SocketProvider>
+          <BrowserRouter>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                
+                <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="users" element={<UserManagement />} />
+                  <Route path="users/:id" element={<UserManagementDetail />} />
+                  <Route path="applications" element={<Applications />} />
+                  <Route path="applications/:id" element={<ApplicationDetail />} />
+                  <Route path="services" element={<Services />} />
+                  <Route path="services/create" element={<ServiceWizard />} />
+                  <Route path="operators" element={<Operators />} />
+                  <Route path="operators/:id" element={<OperatorDetail />} />
+                  <Route path="notifications" element={<Notifications />} />
+                  <Route path="support" element={<SupportTickets />} />
+                  <Route path="support/:id" element={<SupportTicketDetail />} />
+                  <Route path="support/:id/resolve" element={<SupportTicketResolve />} />
+                  <Route path="analytics" element={<Analytics />} />
+                  <Route path="transactions" element={<Transactions />} />
+                  <Route path="refunds" element={<Refunds />} />
+                  <Route path="audit" element={<AuditLogs />} />
+                  <Route path="audit-logs" element={<Navigate to="/audit" replace />} />
+                  <Route path="settings" element={<Settings />} />
+                </Route>
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+        </SocketProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

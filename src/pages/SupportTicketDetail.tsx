@@ -14,17 +14,38 @@ export default function SupportTicketDetail() {
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolvingInline, setResolvingInline] = useState(false);
+  const [inlineSummary, setInlineSummary] = useState('Grievance verification completed. Issue marked as resolved.');
+  const [inlineCategory, setInlineCategory] = useState('Configuration Fix');
 
   const fetchTicketData = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await apiFetch(`/api/v1/support/tickets/${id}`).catch(() => null);
+      const res = await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(id)}`).catch(() => null);
       if (res && res.ok) {
         const json = await res.json().catch(() => null);
         if (json && (json.id || json.refNumber || json.title)) {
           setTicket(json);
           setLoading(false);
           return;
+        }
+      }
+
+      // Fallback: search in all tickets
+      const listRes = await apiFetch('/api/v1/support/tickets').catch(() => null);
+      if (listRes && listRes.ok) {
+        const listJson = await listRes.json().catch(() => null);
+        const tickets = Array.isArray(listJson?.tickets) ? listJson.tickets : (Array.isArray(listJson) ? listJson : []);
+        const match = tickets.find((t: any) =>
+          String(t.id).toLowerCase() === id.toLowerCase() ||
+          String(t.refNumber).toLowerCase() === id.toLowerCase() ||
+          String(t.rawId).toLowerCase() === id.toLowerCase() ||
+          String(t.id).includes(id)
+        );
+        if (match) {
+          setTicket(match);
+          setLoading(false);
         }
       }
     } catch (e) {
@@ -45,7 +66,7 @@ export default function SupportTicketDetail() {
       socket.emit('request_ticket_detail', { id });
 
       const handleThread = (data: any) => {
-        if (isMounted && data) {
+        if (isMounted && data && (data.id || data.refNumber)) {
           setTicket(data);
           setLoading(false);
         }
@@ -53,6 +74,11 @@ export default function SupportTicketDetail() {
 
       socket.on('response_ticket_thread', handleThread);
       socket.on('response_ticket_detail', handleThread);
+      socket.on('resolve_ticket_success', (data: any) => {
+        if (isMounted && data) {
+          setTicket(data);
+        }
+      });
       socket.on('support_tickets_updated', () => {
         socket.emit('request_ticket_thread', { id });
         fetchTicketData();
@@ -73,6 +99,50 @@ export default function SupportTicketDetail() {
       };
     }
   }, [socket, connected, id, fetchTicketData]);
+
+  const handleInlineResolve = async () => {
+    if (resolvingInline || !id) return;
+    setResolvingInline(true);
+
+    const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
+    const adminId = currentAdminUser.id || '';
+    const adminName = currentAdminUser.name || 'Support Desk Officer';
+
+    const payload = {
+      id: ticket?.id || id,
+      resolutionSummary: inlineSummary.trim(),
+      resolutionCategory: inlineCategory,
+      rootCause: 'Administrative Resolution',
+      adminId,
+      adminName,
+    };
+
+    if (socket && connected) {
+      socket.emit('resolve_support_ticket', payload);
+    }
+
+    try {
+      await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(ticket?.id || id)}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      setTicket((prev: any) => prev ? { ...prev, status: 'RESOLVED' } : null);
+      setShowResolveModal(false);
+
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: `Grievance ticket #${ticket?.refNumber || ticket?.id || id} resolved successfully! Notification dispatched to citizen.` }
+      }));
+    } catch (e) {
+      console.warn('REST support resolve error:', e);
+      setTicket((prev: any) => prev ? { ...prev, status: 'RESOLVED' } : null);
+      setShowResolveModal(false);
+    } finally {
+      setResolvingInline(false);
+      fetchTicketData();
+    }
+  };
 
   const sendReply = async () => {
     if (!replyText.trim() || sending) return;
@@ -428,10 +498,10 @@ export default function SupportTicketDetail() {
               {ticket.status !== 'RESOLVED' && (
                 <button 
                   className="action-btn" 
-                  style={{ background: '#10B981', width: '100%', justifyContent: 'center' }} 
-                  onClick={() => navigate(`/support/${ticket.id || id}/resolve`)}
+                  style={{ background: '#10B981', width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6 }} 
+                  onClick={() => setShowResolveModal(true)}
                 >
-                  Mark as Resolved
+                  <CheckCircle size={15} /> Mark as Resolved
                 </button>
               )}
               <Link to="/support" className="date-picker-btn" style={{ width: '100%', justifyContent: 'center', textDecoration: 'none', textAlign: 'center', boxSizing: 'border-box' }}>
@@ -441,6 +511,140 @@ export default function SupportTicketDetail() {
           </div>
         </div>
       </div>
+
+      {/* Quick Resolve Modal */}
+      {showResolveModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '16px'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '540px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            overflow: 'hidden',
+            border: '1px solid #E2E8F0'
+          }}>
+            <div style={{ padding: '24px 28px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CheckCircle size={20} color="#10B981" />
+                  Mark Ticket #{ticket.refNumber || ticket.id || id} as Resolved
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#64748B' }}>
+                  Citizen ({reporterName}) will immediately receive an official push notification.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ padding: '24px 28px' }}>
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#334155' }}>
+                  Resolution Summary / Corrective Action *
+                </label>
+                <textarea
+                  rows={3}
+                  value={inlineSummary}
+                  onChange={(e) => setInlineSummary(e.target.value)}
+                  placeholder="Summarize the action taken to resolve this citizen grievance..."
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: 8,
+                    outline: 'none',
+                    resize: 'none',
+                    fontSize: 13,
+                    boxSizing: 'border-box',
+                    fontFamily: 'inherit'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#334155' }}>
+                  Resolution Category
+                </label>
+                <select
+                  value={inlineCategory}
+                  onChange={(e) => setInlineCategory(e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px', border: '1px solid #CBD5E1', borderRadius: 8, outline: 'none', fontSize: 13, background: '#FFFFFF' }}
+                >
+                  <option>Configuration Fix</option>
+                  <option>Application Verification Correction</option>
+                  <option>Payment / Fee Reconciliation</option>
+                  <option>Supporting Document Re-Upload Approved</option>
+                  <option>Advisory Guidance Provided</option>
+                </select>
+              </div>
+
+              <div style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: 8,
+                padding: '12px 16px',
+                marginBottom: 24,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                fontSize: 12.5,
+                color: '#475569'
+              }}>
+                <ShieldCheck size={18} color="#10B981" />
+                <span>Sends instant push alert to citizen status bar and writes audit log.</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <Link
+                  to={`/support/${ticket.refNumber || ticket.id || id}/resolve`}
+                  style={{ fontSize: 12.5, color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}
+                >
+                  Open Full Resolution Form &rarr;
+                </Link>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    className="date-picker-btn"
+                    onClick={() => setShowResolveModal(false)}
+                    disabled={resolvingInline}
+                    style={{ padding: '10px 18px', fontSize: 13 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="action-btn"
+                    onClick={handleInlineResolve}
+                    disabled={resolvingInline || !inlineSummary.trim()}
+                    style={{
+                      background: '#10B981',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '10px 20px',
+                      fontSize: 13,
+                      opacity: resolvingInline || !inlineSummary.trim() ? 0.6 : 1
+                    }}
+                  >
+                    <CheckCircle size={15} />
+                    {resolvingInline ? 'Resolving...' : 'Confirm Resolution'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
