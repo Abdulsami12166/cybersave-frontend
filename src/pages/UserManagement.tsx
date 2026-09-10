@@ -169,7 +169,7 @@ export default function UserManagement() {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/users/${targetId}/notify`, {
+      const res = await apiFetch(`/api/admin/users/${targetId}/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -209,12 +209,12 @@ export default function UserManagement() {
       const formattedName = realName.trim().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
       const refId = u.id && u.id.startsWith('CIT-') ? u.id : `CIT-${(u.dbId || u.id || `${1000 + idx}`).slice(-5).toUpperCase()}`;
-      const phone = u.phone || u.mobile || profile.phone || '+91 98450 12893';
-      const email = u.email || profile.email || 'citizen.helpdesk@cybersave.in';
-      const district = profile.district || u.district || 'Central Delhi, DL';
+      const phone = u.phone || u.mobile || profile.phone || '-';
+      const email = u.email || profile.email || '-';
+      const district = profile.district || u.district || 'Central District';
       const status = u.status === 'BLOCKED' ? 'Blocked' : (u.status === 'Pending' ? 'Pending' : 'Verified');
-      const servicesUsed = typeof u.servicesUsed === 'number' ? u.servicesUsed : (Array.isArray(u.applications) ? u.applications.length : 1);
-      const aadhaar = profile.aadhaarNumber ? `•••• •••• ${profile.aadhaarNumber.slice(-4)}` : `•••• •••• ${8000 + (idx * 37) % 1999}`;
+      const servicesUsed = typeof u.servicesUsed === 'number' ? u.servicesUsed : (Array.isArray(u.applications) ? u.applications.length : 0);
+      const aadhaar = profile.aadhaarNumber ? `•••• •••• ${profile.aadhaarNumber.slice(-4)}` : (u.aadhaar || `•••• •••• ${String(dbId).slice(-4)}`);
 
       result.push({
         id: refId,
@@ -226,7 +226,8 @@ export default function UserManagement() {
         status,
         servicesUsed,
         aadhaar,
-        lastActive: u.lastActive || 'Active recently',
+        isOnline: u.isOnline === true,
+        lastActive: u.isOnline ? 'Active Now' : (u.lastActive || 'Active recently'),
         createdAt: u.createdAt || new Date().toISOString(),
         raw: u,
       });
@@ -259,27 +260,53 @@ export default function UserManagement() {
     return filteredCitizens.slice(start, start + pageSize);
   }, [filteredCitizens, currentPage, pageSize]);
 
-  const handleCreateCitizen = () => {
+  const handleCreateCitizen = async () => {
     if (!newCitizenName.trim()) {
       showToast('Please enter citizen name', 'error');
       return;
     }
-    if (socket) {
+    if (socket && connected) {
       socket.emit('add_citizen', {
-        name: newCitizenName,
-        phone: newCitizenPhone,
-        district: newCitizenDistrict
+        name: newCitizenName.trim(),
+        phone: newCitizenPhone.trim(),
+        district: newCitizenDistrict.trim()
       });
+    }
+    try {
+      await apiFetch('/api/v1/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCitizenName.trim(),
+          phone: newCitizenPhone.trim(),
+          district: newCitizenDistrict.trim(),
+        })
+      });
+      showToast('Citizen enrolled successfully');
+      fetchUsersRest();
+    } catch {
+      // Handled by socket if connected
     }
     setShowAddModal(false);
     setNewCitizenName('');
     setNewCitizenPhone('');
   };
 
-  const handleToggleBlock = (c: any) => {
+  const handleToggleBlock = async (c: any) => {
     const newStatus = c.status === 'Blocked' ? 'Verified' : 'BLOCKED';
-    if (socket) {
+    if (socket && connected) {
       socket.emit('block_citizen', { id: c.dbId || c.id, status: newStatus });
+    }
+    try {
+      await apiFetch(`/api/v1/users/${c.dbId || c.id}/block`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      showToast(`Citizen status changed to ${newStatus === 'BLOCKED' ? 'Blocked' : 'Verified'}`);
+      fetchUsersRest();
+    } catch {
+      // Handled by socket
     }
   };
 

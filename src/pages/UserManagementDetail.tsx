@@ -28,8 +28,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { showToast } from '../components/Layout';
-
-const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
+import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
 
 export default function UserManagementDetail() {
   const { id } = useParams<{ id: string }>();
@@ -158,19 +157,34 @@ export default function UserManagementDetail() {
     assignedOperator: '',
   });
 
-  // REST fallback fetch
+  // REST primary & fallback fetch
   const fetchUserRest = async () => {
     if (!id) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/users/${id}`);
+      const res = await apiFetch(`/api/v1/users/${id}`);
       if (res.ok) {
         const data = await res.json();
-        setUser(data);
-        populateEditForm(data);
-        setLoading(false);
+        if (data && !data.error) {
+          setUser(data);
+          populateEditForm(data);
+          setLoading(false);
+          return;
+        }
+      }
+      // Fallback endpoint
+      const fallbackRes = await apiFetch(`/api/admin/users/${id}`);
+      if (fallbackRes.ok) {
+        const data = await fallbackRes.json();
+        if (data && !data.error) {
+          setUser(data);
+          populateEditForm(data);
+          setLoading(false);
+        }
       }
     } catch (err) {
       console.warn('REST user detail fetch note:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -353,46 +367,51 @@ export default function UserManagementDetail() {
         socket.off('block_citizen_success', handleBlockSuccess);
         socket.off('update_citizen_success', handleUpdateSuccess);
       };
-    } else {
-      const timer = setTimeout(() => setLoading(false), 800);
-      return () => clearTimeout(timer);
     }
   }, [id, socket, connected]);
 
-  const handleToggleBlock = () => {
+  const handleToggleBlock = async () => {
     if (!user) return;
     const targetStatus = user.status === 'Blocked' ? 'Verified' : 'BLOCKED';
     if (socket && connected) {
       socket.emit('block_citizen', { id: user.dbId || user.id, status: targetStatus });
-    } else {
-      fetch(`${API_BASE_URL}/api/admin/users/${user.dbId || user.id}/block`, {
+    }
+    try {
+      const res = await apiFetch(`/api/v1/users/${user.dbId || user.id}/block`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus })
-      }).then(() => {
+      });
+      if (res.ok) {
         showToast(`Citizen status changed to ${targetStatus === 'BLOCKED' ? 'Blocked' : 'Verified'}`);
         fetchUserRest();
-      });
+      }
+    } catch {
+      // Socket will handle it if connected
     }
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!user) return;
     if (socket && connected) {
       socket.emit('update_citizen_profile', {
         id: user.dbId || user.id,
         ...editForm,
       });
-    } else {
-      fetch(`${API_BASE_URL}/api/admin/users/${user.dbId || user.id}`, {
+    }
+    try {
+      const res = await apiFetch(`/api/v1/users/${user.dbId || user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm)
-      }).then(() => {
+      });
+      if (res.ok) {
         showToast('Profile updated successfully');
         setEditModalOpen(false);
         fetchUserRest();
-      });
+      }
+    } catch {
+      // Socket fallback
     }
   };
 
@@ -413,7 +432,7 @@ export default function UserManagementDetail() {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/users/${targetUserId}/notify`, {
+      const res = await apiFetch(`/api/admin/users/${targetUserId}/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -428,6 +447,8 @@ export default function UserManagementDetail() {
         showToast(`Push notification dispatched to ${user?.fullName || 'Citizen'}`);
         setNotifSubject('');
         setNotifBody('');
+      } else {
+        setSendingNotif(false);
       }
     } catch {
       setSendingNotif(false);
