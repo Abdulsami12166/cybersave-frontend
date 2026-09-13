@@ -21,9 +21,13 @@ export function getCandidateBackendUrls(): string[] {
 
   if (isLocalhost) {
     list.push('http://localhost:3001');
+    list.push('http://localhost:3000');
     if (envUrl) list.push(envUrl);
     list.push('http://127.0.0.1:3001');
   } else {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      list.push(window.location.origin);
+    }
     if (envUrl) list.push(envUrl);
     list.push('https://cybersave-6tfo.onrender.com');
   }
