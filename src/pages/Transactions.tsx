@@ -109,6 +109,19 @@ export default function Transactions() {
   useEffect(() => {
     let debounceTimer: any = null;
 
+    // 1. Always invoke REST fetch immediately for instant paint
+    fetchTransactionsRest();
+
+    // 2. Poll every 8s to guarantee real-time data within 10s
+    const pollInterval = setInterval(() => {
+      fetchTransactionsRest();
+    }, 8000);
+
+    // 3. Safety timer
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
+
     if (socket && connected) {
       socket.emit('request_transactions_data');
       
@@ -121,6 +134,7 @@ export default function Transactions() {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           socket.emit('request_transactions_data');
+          fetchTransactionsRest();
         }, 1200);
       };
 
@@ -130,12 +144,17 @@ export default function Transactions() {
 
       return () => {
         if (debounceTimer) clearTimeout(debounceTimer);
+        clearInterval(pollInterval);
+        clearTimeout(safetyTimer);
         socket.off('response_transactions_data', handleData);
         socket.off('transactions_updated', handleRefresh);
         socket.off('refund_approved', handleRefresh);
       };
     } else {
-      fetchTransactionsRest();
+      return () => {
+        clearInterval(pollInterval);
+        clearTimeout(safetyTimer);
+      };
     }
   }, [socket, connected]);
 

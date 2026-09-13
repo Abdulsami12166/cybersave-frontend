@@ -1,9 +1,9 @@
 /**
  * Centralized API & WebSocket Configuration for Cybersave Admin Portal
  * Implements intelligent multi-tier backend discovery and fallback:
- * 1. If running on localhost / dev -> connects to local admin backend (http://localhost:3001, http://localhost:3000)
- * 2. If configured via VITE_BACKEND_URL -> uses configured environment variable
- * 3. Fallback to production Render URL (https://cybersave-6tfo.onrender.com)
+ * 1. Primary Live Backend: https://cybersave-nine.vercel.app
+ * 2. Localhost Dev Backend: http://localhost:3001, http://127.0.0.1:3001
+ * 3. Configured VITE_BACKEND_URL
  */
 
 const isLocalhost = 
@@ -19,24 +19,30 @@ export function getCandidateBackendUrls(): string[] {
     list.push(cached);
   }
 
+  // Always include primary live Vercel backend first
+  list.push('https://cybersave-nine.vercel.app');
+
   if (isLocalhost) {
     list.push('http://localhost:3001');
-    list.push('http://localhost:3000');
-    if (envUrl) list.push(envUrl);
     list.push('http://127.0.0.1:3001');
+    list.push('http://localhost:3000');
   } else {
     if (typeof window !== 'undefined' && window.location?.origin) {
       list.push(window.location.origin);
     }
-    if (envUrl) list.push(envUrl);
-    list.push('https://cybersave-6tfo.onrender.com');
+  }
+
+  if (envUrl) {
+    list.push(envUrl);
   }
 
   // Deduplicate and filter empty
   return Array.from(new Set(list.filter(Boolean)));
 }
 
-let activeBaseUrl: string = getCandidateBackendUrls()[0] || (isLocalhost ? 'http://localhost:3001' : 'https://cybersave-6tfo.onrender.com');
+let activeBaseUrl: string = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('cybersave_active_backend')
+  ? sessionStorage.getItem('cybersave_active_backend')!
+  : 'https://cybersave-nine.vercel.app';
 
 export function getApiBaseUrl(): string {
   return activeBaseUrl;
@@ -54,7 +60,7 @@ export function getSocketUrl(): string {
 }
 
 /**
- * Fast & robust fetch with intelligent caching & reduced timeout
+ * Fast & robust fetch with intelligent caching & sub-second timeout
  */
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
@@ -72,7 +78,7 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     try {
       const url = `${base}${cleanPath}`;
       const controller = new AbortController();
-      // Reduced timeout: 4s for GET is plenty, prevents 16-24s probe delays
+      // Fast timeout: 4s for GET, 8s for POST/PUT
       const timeoutMs = options.method && options.method !== 'GET' ? 8000 : 4000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 

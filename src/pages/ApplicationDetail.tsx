@@ -161,8 +161,8 @@ export default function ApplicationDetail() {
       };
 
       let res = await axios.post(`${base}/api/v1/refunds/${refundInfo.id}/approve`, payload, { headers }).catch(() => null);
-      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
-        res = await axios.post(`https://cybersave-6tfo.onrender.com/api/v1/refunds/${refundInfo.id}/approve`, payload, { headers }).catch(() => null);
+      if ((!res || !res.data) && base !== 'https://cybersave-nine.vercel.app') {
+        res = await axios.post(`https://cybersave-nine.vercel.app/api/v1/refunds/${refundInfo.id}/approve`, payload, { headers }).catch(() => null);
       }
       if (!res || !res.data) {
         res = await axios.post(`/api/v1/refunds/${refundInfo.id}/approve`, payload, { headers }).catch(() => null);
@@ -204,8 +204,8 @@ export default function ApplicationDetail() {
       };
 
       let res = await axios.post(`${base}/api/v1/refunds/${refundInfo.id}/reject`, payload, { headers }).catch(() => null);
-      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
-        res = await axios.post(`https://cybersave-6tfo.onrender.com/api/v1/refunds/${refundInfo.id}/reject`, payload, { headers }).catch(() => null);
+      if ((!res || !res.data) && base !== 'https://cybersave-nine.vercel.app') {
+        res = await axios.post(`https://cybersave-nine.vercel.app/api/v1/refunds/${refundInfo.id}/reject`, payload, { headers }).catch(() => null);
       }
       if (!res || !res.data) {
         res = await axios.post(`/api/v1/refunds/${refundInfo.id}/reject`, payload, { headers }).catch(() => null);

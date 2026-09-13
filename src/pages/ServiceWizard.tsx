@@ -26,6 +26,7 @@ import {
   Users
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
+import { getApiBaseUrl } from '../utils/apiConfig';
 import axios from 'axios';
 
 interface SubServiceItem {
@@ -210,7 +211,7 @@ export default function ServiceWizard() {
     }
 
     // Also try REST API fallback
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || getApiBaseUrl();
     axios.get(`${backendUrl}/api/v1/services/${serviceIdParam}`)
       .then(res => {
         if (res.data) {
@@ -357,10 +358,11 @@ export default function ServiceWizard() {
 
     try {
       let uploadedUrl = '';
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const endpoints = isLocalhost
-        ? ['http://localhost:3000/api/admin/upload', `${import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com'}/api/admin/upload`]
-        : [`${import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com'}/api/admin/upload`, 'http://localhost:3000/api/admin/upload'];
+      const endpoints = [
+        `${getApiBaseUrl()}/api/admin/upload`,
+        'http://localhost:3001/api/admin/upload',
+        'http://localhost:3000/api/admin/upload',
+      ];
 
       const formData = new FormData();
       formData.append('file', file);
@@ -466,7 +468,7 @@ export default function ServiceWizard() {
       }
 
       // 2. Also POST to backend REST endpoint for guaranteed persistence & curl testing
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://cybersave-6tfo.onrender.com';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || getApiBaseUrl();
       await axios.post(`${backendUrl}/api/v1/services`, payload).catch(() => {
         return axios.post(`${backendUrl}/api/services`, payload);
       }).catch(() => null);

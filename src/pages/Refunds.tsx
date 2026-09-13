@@ -81,6 +81,19 @@ export default function Refunds() {
 
   useEffect(() => {
     fetchRefunds();
+
+    const pollInterval = setInterval(() => {
+      fetchRefunds();
+    }, 8000);
+
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
+
+    return () => {
+      clearInterval(pollInterval);
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
   // Real-time WebSocket Listeners
@@ -148,8 +161,8 @@ export default function Refunds() {
       };
 
       let res = await axios.post(`${base}/api/v1/refunds/${approveTarget.id}/approve`, payload, { headers }).catch(() => null);
-      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
-        res = await axios.post(`https://cybersave-6tfo.onrender.com/api/v1/refunds/${approveTarget.id}/approve`, payload, { headers }).catch(() => null);
+      if ((!res || !res.data) && base !== 'https://cybersave-nine.vercel.app') {
+        res = await axios.post(`https://cybersave-nine.vercel.app/api/v1/refunds/${approveTarget.id}/approve`, payload, { headers }).catch(() => null);
       }
       if (!res || !res.data) {
         res = await axios.post(`/api/v1/refunds/${approveTarget.id}/approve`, payload, { headers }).catch(() => null);
@@ -199,8 +212,8 @@ export default function Refunds() {
       };
 
       let res = await axios.post(`${base}/api/v1/refunds/${rejectTarget.id}/reject`, payload, { headers }).catch(() => null);
-      if ((!res || !res.data) && base !== 'https://cybersave-6tfo.onrender.com') {
-        res = await axios.post(`https://cybersave-6tfo.onrender.com/api/v1/refunds/${rejectTarget.id}/reject`, payload, { headers }).catch(() => null);
+      if ((!res || !res.data) && base !== 'https://cybersave-nine.vercel.app') {
+        res = await axios.post(`https://cybersave-nine.vercel.app/api/v1/refunds/${rejectTarget.id}/reject`, payload, { headers }).catch(() => null);
       }
       if (!res || !res.data) {
         res = await axios.post(`/api/v1/refunds/${rejectTarget.id}/reject`, payload, { headers }).catch(() => null);

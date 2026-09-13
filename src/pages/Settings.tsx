@@ -21,8 +21,9 @@ import {
   Check, 
   AlertCircle 
 } from 'lucide-react';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
-const API_BASE_URL = 'https://cybersave-6tfo.onrender.com';
+const API_BASE_URL = getApiBaseUrl();
 const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || API_BASE_URL;
 
 const getCachedProfile = (isSuper: boolean, currentAdmin: any) => {

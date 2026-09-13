@@ -57,9 +57,12 @@ export default function UserManagement() {
     try {
       const res = await apiFetch('/api/v1/users?limit=50').catch(() => null);
       if (res && res.ok) {
-        const users = await res.json().catch(() => []);
-        if (Array.isArray(users)) {
-          setLiveUsers(users);
+        const raw = await res.json().catch(() => []);
+        if (Array.isArray(raw)) {
+          setLiveUsers(raw);
+        } else if (raw && Array.isArray(raw.users)) {
+          setLiveUsers(raw.users);
+          if (raw.stats) setData(raw);
         }
       }
     } catch (err) {
@@ -71,6 +74,19 @@ export default function UserManagement() {
 
   useEffect(() => {
     let debounceTimer: any = null;
+
+    // 1. Always invoke REST immediately for instant data paint
+    fetchUsersRest();
+
+    // 2. Poll every 8 seconds to ensure fresh data within 10s
+    const pollInterval = setInterval(() => {
+      fetchUsersRest();
+    }, 8000);
+
+    // 3. Safety timer to dismiss loading spinner
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
 
     if (socket && connected) {
       socket.emit('request_users_data');
@@ -87,6 +103,7 @@ export default function UserManagement() {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           socket.emit('request_users_data');
+          fetchUsersRest();
         }, 1200);
       };
 
@@ -136,6 +153,8 @@ export default function UserManagement() {
 
       return () => {
         if (debounceTimer) clearTimeout(debounceTimer);
+        clearInterval(pollInterval);
+        clearTimeout(safetyTimer);
         socket.off('response_users_data', handleUsers);
         socket.off('user_status_changed', handleStatusChange);
         socket.off('user_activity_updated', handleRefresh);
@@ -146,6 +165,10 @@ export default function UserManagement() {
       };
     } else {
       fetchUsersRest();
+      return () => {
+        clearInterval(pollInterval);
+        clearTimeout(safetyTimer);
+      };
     }
   }, [socket, connected]);
 
