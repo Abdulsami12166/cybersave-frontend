@@ -15,34 +15,32 @@ export function getCandidateBackendUrls(): string[] {
   const cached = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cybersave_active_backend') : null;
   const list: string[] = [];
 
-  if (cached) {
+  if (cached && !cached.includes('vercel.app')) {
     list.push(cached);
-  }
-
-  // Always include primary live Vercel backend first
-  list.push('https://cybersave-nine.vercel.app');
-
-  if (isLocalhost) {
-    list.push('http://localhost:3001');
-    list.push('http://127.0.0.1:3001');
-    list.push('http://localhost:3000');
-  } else {
-    if (typeof window !== 'undefined' && window.location?.origin) {
-      list.push(window.location.origin);
-    }
   }
 
   if (envUrl) {
     list.push(envUrl);
   }
 
+  if (isLocalhost) {
+    list.push('http://localhost:3000');
+    list.push('http://127.0.0.1:3000');
+  } else {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      list.push(window.location.origin);
+    }
+  }
+
+  list.push('https://cybersave-nine.vercel.app');
+
   // Deduplicate and filter empty
   return Array.from(new Set(list.filter(Boolean)));
 }
 
-let activeBaseUrl: string = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('cybersave_active_backend')
+let activeBaseUrl: string = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('cybersave_active_backend') && !sessionStorage.getItem('cybersave_active_backend')?.includes('vercel.app')
   ? sessionStorage.getItem('cybersave_active_backend')!
-  : 'https://cybersave-nine.vercel.app';
+  : (import.meta.env.VITE_BACKEND_URL?.replace(/\/+$/, '') || (isLocalhost ? 'http://localhost:3000' : 'https://cybersave-nine.vercel.app'));
 
 export function getApiBaseUrl(): string {
   return activeBaseUrl;
@@ -78,8 +76,8 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     try {
       const url = `${base}${cleanPath}`;
       const controller = new AbortController();
-      // Fast timeout: 4s for GET, 8s for POST/PUT
-      const timeoutMs = options.method && options.method !== 'GET' ? 8000 : 4000;
+      // Fast timeout for responsive UI and fast candidate switching
+      const timeoutMs = options.method && options.method !== 'GET' ? 12000 : 4000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const res = await fetch(url, {
