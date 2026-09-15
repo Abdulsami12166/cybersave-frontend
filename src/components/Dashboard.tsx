@@ -230,7 +230,7 @@ export default function Dashboard() {
   // Exact synchronization with Settlement Journal: ₹236.00 today!
   const displayRevenueToday = (data?.stats?.revenueToday !== undefined && data?.stats?.revenueToday !== null)
     ? Number(data.stats.revenueToday)
-    : 236;
+    : 0;
 
   const displayTotalRevenue = (data?.stats?.totalRevenue !== undefined && data?.stats?.totalRevenue !== null)
     ? Number(data.stats.totalRevenue)

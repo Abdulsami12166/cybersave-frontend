@@ -269,64 +269,74 @@ export const extractSupportingDocuments = (raw: any, fallbackApp: any = {}): Sup
   const seenKeys = new Set<string>();
 
   const addDoc = (label: string, fileName: string, fileUrl: string, type: string, size: string = '1.4 MB', uploadedAt?: string) => {
-    const key = `${label || ''}_${fileName || ''}`.toLowerCase().trim() || (fileUrl || '').toLowerCase().trim();
-    if (!key || seenKeys.has(key)) return;
+    const cleanUrl = (fileUrl || '').trim();
+    const cleanName = (fileName || label || 'Document').trim();
+    const key = cleanUrl ? cleanUrl.toLowerCase() : cleanName.toLowerCase();
+    if (seenKeys.has(key)) return;
     seenKeys.add(key);
+
     list.push({
       id: `doc-${list.length + 1}-${Math.random().toString(36).substring(2, 6)}`,
       label: label || fileName || `Document Proof #${list.length + 1}`,
-      fileName: fileName || label || `document_${list.length + 1}.pdf`,
-      fileUrl: fileUrl || '',
-      type: type || 'Supporting Document',
+      fileName: fileName || label || `document_${list.length + 1}.jpg`,
+      fileUrl: cleanUrl,
+      type: type || 'Identity & Address Proof',
       size,
       verified: true,
       uploadedAt: uploadedAt || app.submittedAt || new Date().toISOString(),
     });
   };
 
-  // 1. Direct app.documents array (uploaded specifically for this service application)
+  // 1. Direct app.documents array (uploaded specifically by citizen for this application)
   const rawDocs = Array.isArray(app.documents) ? app.documents : (Array.isArray(fallbackApp.documents) ? fallbackApp.documents : []);
-  for (let i = 0; i < rawDocs.length; i++) {
-    const d = rawDocs[i];
-    if (!d) continue;
-    if (typeof d === 'string') {
-      const isUrl = d.startsWith('http') || d.startsWith('data:');
-      addDoc(`Document Proof #${i + 1}`, `document_${i + 1}.jpg`, isUrl ? d : '', 'Identity Proof');
-    } else if (typeof d === 'object') {
-      const url = d.fileUrl || d.url || d.uri || d.path || d.documentUrl || d.secure_url || '';
-      const name = d.fileName || d.label || d.name || `Document Proof #${i + 1}`;
-      const label = d.label || d.name || name;
-      const type = d.type || d.fileType || 'Identity Proof';
-      const size = d.fileSize ? `${Math.round(d.fileSize / 1024)} KB` : (d.size || '1.2 MB');
-      addDoc(label, name, url, type, size, d.uploadedAt);
+  if (rawDocs.length > 0) {
+    for (let i = 0; i < rawDocs.length; i++) {
+      const d = rawDocs[i];
+      if (!d) continue;
+      if (typeof d === 'string') {
+        const isUrl = d.startsWith('http') || d.startsWith('data:');
+        addDoc(`Supporting Proof #${i + 1}`, `proof_${i + 1}.jpg`, isUrl ? d : '', 'Identity & Address Proof', '1.4 MB', app.submittedAt);
+      } else if (typeof d === 'object') {
+        const url = d.fileUrl || d.url || d.uri || d.path || d.documentUrl || d.secure_url || '';
+        const name = d.fileName || d.label || d.name || `proof_${i + 1}.jpg`;
+        const label = d.label || d.name || name;
+        const type = d.type || d.fileType || 'Identity & Address Proof';
+        const size = d.fileSize ? `${Math.round(d.fileSize / 1024)} KB` : (d.size || '1.2 MB');
+        addDoc(label, name, url, type, size, d.uploadedAt || app.submittedAt);
+      }
     }
+    return list; // Return exact documents uploaded for this specific application
   }
 
-  // 2. Direct documentUploads relation linked specifically to this application
+  // 2. Direct documentUploads relation linked strictly to this specific application ID
+  const targetId = app.id || app.rawId || fallbackApp?.id || fallbackApp?.rawId;
   const uploads = Array.isArray(app.documentUploads) ? app.documentUploads : (Array.isArray(fallbackApp.documentUploads) ? fallbackApp.documentUploads : []);
   for (let i = 0; i < uploads.length; i++) {
     const u = uploads[i];
     if (!u) continue;
-    if (u.applicationId && app.id && u.applicationId !== app.id) continue;
+    // Strict isolation: only include if attached to this specific application
+    if (targetId && u.applicationId && u.applicationId !== targetId) continue;
     const url = u.fileUrl || u.url || '';
-    const name = u.fileName || `uploaded_doc_${i + 1}.pdf`;
+    const name = u.fileName || `proof_${i + 1}.pdf`;
     const type = u.fileType || 'Government Verification Proof';
     const size = u.fileSize ? `${Math.round(u.fileSize / 1024)} KB` : '1.8 MB';
-    addDoc(name, name, url, type, size, u.uploadedAt);
+    addDoc(name, name, url, type, size, u.uploadedAt || app.submittedAt);
   }
 
-  // 3. Form-specific documents (attached in application formData payload for this service)
+  if (list.length > 0) return list;
+
+  // 3. Form-specific documents from this specific application's formData payload
   const formDocs = Array.isArray(formData.documents) ? formData.documents : (Array.isArray(formData.supportingDocuments) ? formData.supportingDocuments : []);
   for (let i = 0; i < formDocs.length; i++) {
     const fd = formDocs[i];
     if (!fd) continue;
     if (typeof fd === 'string') {
       const isUrl = fd.startsWith('http') || fd.startsWith('data:');
-      addDoc(`Uploaded Document #${i + 1}`, `proof_${i + 1}.pdf`, isUrl ? fd : '', 'Supporting Document');
+      addDoc(`Uploaded Document #${i + 1}`, `proof_${i + 1}.pdf`, isUrl ? fd : '', 'Supporting Document', '2.1 MB', app.submittedAt);
     } else if (typeof fd === 'object') {
       const url = fd.fileUrl || fd.url || fd.uri || '';
       const name = fd.fileName || fd.label || fd.name || `Supporting Proof #${i + 1}`;
-      addDoc(fd.label || name, name, url, fd.type || 'Identity Proof', '2.1 MB');
+      addDoc(fd.label || name, name, url, fd.type || 'Identity & Address Proof', '2.1 MB', app.submittedAt);
     }
   }
 

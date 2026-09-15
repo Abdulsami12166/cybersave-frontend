@@ -629,11 +629,19 @@ export default function UserManagement() {
                       backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#FCFDFE',
                     }}
                   >
-                    <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2563EB', fontFamily: 'monospace', fontSize: '12px' }}>
+                    <td 
+                      onClick={() => navigate(`/users/${c.dbId || c.id}`)}
+                      style={{ padding: '12px 14px', fontWeight: 700, color: '#2563EB', fontFamily: 'monospace', fontSize: '12px', cursor: 'pointer' }}
+                      title="View citizen profile"
+                    >
                       {c.id}
                     </td>
 
-                    <td style={{ padding: '12px 14px' }}>
+                    <td 
+                      onClick={() => navigate(`/users/${c.dbId || c.id}`)}
+                      style={{ padding: '12px 14px', cursor: 'pointer' }}
+                      title="View citizen profile"
+                    >
                       <div style={{ fontWeight: 600, color: '#0F172A' }}>{c.fullName}</div>
                       <div style={{ fontSize: '11px', color: '#94A3B8' }}>{c.email}</div>
                     </td>

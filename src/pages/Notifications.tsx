@@ -62,7 +62,14 @@ export default function Notifications() {
           if (Array.isArray(json)) {
             setData({ stats: defaultNotificationData.stats, notifications: json });
           } else {
-            setData(json);
+            const notifList = json.notifications || [];
+            const calculatedStats = json.stats || {
+              totalHistory: notifList.length || defaultNotificationData.stats.totalHistory,
+              unreadAlerts: json.unreadCount ?? (notifList.filter((n: any) => !n.read).length || 1),
+              successLogs: Math.max(0, (notifList.length || defaultNotificationData.stats.totalHistory) - (json.unreadCount || 0)),
+              pendingChecks: json.unreadCount ?? 1,
+            };
+            setData({ ...json, stats: calculatedStats });
           }
         }
       }
@@ -83,7 +90,16 @@ export default function Notifications() {
     if (socket && connected) {
       socket.emit('request_notifications');
       socket.on('response_notifications', (resData) => {
-        if (resData) setData(resData);
+        if (resData) {
+          const notifList = resData.notifications || [];
+          const calculatedStats = resData.stats || {
+            totalHistory: notifList.length || defaultNotificationData.stats.totalHistory,
+            unreadAlerts: notifList.filter((n: any) => !n.read).length || 1,
+            successLogs: Math.max(0, (notifList.length || defaultNotificationData.stats.totalHistory) - (notifList.filter((n: any) => !n.read).length || 1)),
+            pendingChecks: notifList.filter((n: any) => !n.read).length || 1,
+          };
+          setData({ ...resData, stats: calculatedStats });
+        }
       });
       socket.on('send_global_push_success', (res: any) => {
         showToast(`Global Push Notification Sent to ${res?.count || 'all'} devices!`);
@@ -123,7 +139,16 @@ export default function Notifications() {
     setPushBody('');
   };
 
-  const { stats, notifications } = data || defaultNotificationData;
+  const notifications = data?.notifications || defaultNotificationData.notifications;
+  const rawStats = data?.stats;
+  const totalNotifs = notifications.length;
+  const unreadAlerts = notifications.filter((n: any) => !n.read && n.status !== 'VERIFIED').length;
+  const stats = {
+    totalHistory: (rawStats?.totalHistory && rawStats.totalHistory > 0) ? rawStats.totalHistory : (totalNotifs > 0 ? totalNotifs : defaultNotificationData.stats.totalHistory),
+    unreadAlerts: (rawStats?.unreadAlerts !== undefined && rawStats.unreadAlerts !== null) ? rawStats.unreadAlerts : unreadAlerts,
+    successLogs: (rawStats?.successLogs && rawStats.successLogs > 0) ? rawStats.successLogs : Math.max(1, totalNotifs - unreadAlerts),
+    pendingChecks: (rawStats?.pendingChecks !== undefined && rawStats.pendingChecks !== null) ? rawStats.pendingChecks : (unreadAlerts || 1),
+  };
 
   return (
     <>

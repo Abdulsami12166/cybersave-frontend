@@ -105,12 +105,15 @@ export default function ApplicationDetail() {
   const [assigning, setAssigning] = useState(false);
   const [previewingDoc, setPreviewingDoc] = useState<SupportingDocumentItem | null>(null);
   const [checklist, setChecklist] = useState([
-    { label: 'Identity verified against Aadhaar database', checked: true },
-    { label: 'Current address matches official records', checked: true },
-    { label: 'Address proof document is valid and recent (< 3 months)', checked: true },
-    { label: 'New address geo-verification completed', checked: false },
-    { label: 'Operator physical verification done', checked: false },
+    { id: 'aadhaar-check', label: 'Identity verified against Aadhaar database', checked: true },
+    { id: 'address-check', label: 'Current address matches official records', checked: true },
+    { id: 'doc-validity', label: 'Address proof document is valid and recent (< 3 months)', checked: true },
+    { id: 'geo-verify', label: 'New address geo-verification completed', checked: false },
+    { id: 'operator-verify', label: 'Operator physical verification done', checked: false },
   ]);
+  const [internalNotes, setInternalNotes] = useState<any[]>([]);
+  const [submittingNote, setSubmittingNote] = useState(false);
+  const [savingChecklist, setSavingChecklist] = useState(false);
 
   const [refundInfo, setRefundInfo] = useState<any>(null);
   const [refundActionLoading, setRefundActionLoading] = useState(false);
@@ -286,6 +289,7 @@ export default function ApplicationDetail() {
       id: refNum,
       rawId: mongoId,
       refNumber: refNum,
+      service: raw.service || a.service || null,
       status: raw.status || a.status,
       serviceName: raw.serviceTitle || raw.service?.title || a.serviceName || a.serviceTitle || 'Government Service',
       serviceCategory: raw.service?.category || a.serviceCategory || 'Government',
@@ -313,12 +317,23 @@ export default function ApplicationDetail() {
         state: profile?.state || formData.stateName || formData.state || a.applicant?.state || '',
         district: profile?.district || formData.district || a.applicant?.district || '',
         pinCode: profile?.pinCode || formData.pinCode || a.applicant?.pinCode || '',
-        citizenId: raw.userId || a.userId || '',
+        citizenId: raw.userId || a.userId || raw.user?.id || a.user?.id || raw.user?.dbId || a.user?.dbId || '',
       },
       formData,
       documents: docs,
+      checklist: raw.checklist || a.checklist,
+      internalNotes: raw.internalNotes || a.internalNotes || [],
       rawApp: raw,
     };
+
+    if (raw.checklist && Array.isArray(raw.checklist) && raw.checklist.length > 0) {
+      setChecklist(raw.checklist);
+    }
+    if (Array.isArray(raw.internalNotes) && raw.internalNotes.length > 0) {
+      setInternalNotes(raw.internalNotes);
+    } else if (Array.isArray(a.internalNotes) && a.internalNotes.length > 0) {
+      setInternalNotes(a.internalNotes);
+    }
 
     if (id) {
       detailCache.set(id, formatted);
@@ -377,9 +392,29 @@ export default function ApplicationDetail() {
 
       socket.on('response_application_detail', handleDetail);
       socket.on('applications_updated', handleUpdate);
+      const handleChecklistUpdate = (data: any) => {
+        if (data && (data.id === id || data.rawId === id || data.refNumber === id || (app && (data.id === app.rawId || data.refNumber === app.id)))) {
+          if (Array.isArray(data.checklist)) {
+            setChecklist(data.checklist);
+          }
+        }
+      };
+
+      const handleNoteAdded = (data: any) => {
+        if (data && (data.id === id || data.rawId === id || data.refNumber === id || (app && (data.id === app.rawId || data.refNumber === app.id)))) {
+          if (Array.isArray(data.internalNotes)) {
+            setInternalNotes(data.internalNotes);
+          } else if (data.note) {
+            setInternalNotes(prev => [...prev, data.note]);
+          }
+        }
+      };
+
       socket.on('application_status_changed', handleUpdate);
       socket.on('update_application_status_success', handleUpdate);
       socket.on('application_assigned', handleUpdate);
+      socket.on('application_checklist_updated', handleChecklistUpdate);
+      socket.on('application_note_added', handleNoteAdded);
       socket.on('refunds_updated', handleRefundUpdate);
       socket.on('new_refund_requested', handleRefundUpdate);
 
@@ -391,6 +426,8 @@ export default function ApplicationDetail() {
         socket.off('application_status_changed', handleUpdate);
         socket.off('update_application_status_success', handleUpdate);
         socket.off('application_assigned', handleUpdate);
+        socket.off('application_checklist_updated', handleChecklistUpdate);
+        socket.off('application_note_added', handleNoteAdded);
         socket.off('refunds_updated', handleRefundUpdate);
         socket.off('new_refund_requested', handleRefundUpdate);
       };
@@ -502,8 +539,135 @@ export default function ApplicationDetail() {
     }
   };
 
-  const toggleCheck = (idx: number) => {
-    setChecklist(prev => prev.map((c, i) => i === idx ? { ...c, checked: !c.checked } : c));
+  const saveChecklistToServer = async (items: any[]) => {
+    if (!app) return;
+    const targetId = app.rawId || app.id;
+    const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
+    const adminName = currentAdminUser.name || (currentAdminUser.email ? currentAdminUser.email.split('@')[0] : 'Officer Sharma (SDM)');
+    const adminEmail = currentAdminUser.email || '';
+    const adminId = currentAdminUser.id || '';
+    const adminRole = currentAdminUser.role || (adminEmail === 'admin@cybersave.com' ? 'Super Administrator' : 'Verification Officer');
+
+    setSavingChecklist(true);
+
+    // 1. Emit Socket for instant real-time sync across web and mobile
+    if (socket) {
+      socket.emit('update_application_checklist', {
+        id: targetId,
+        applicationId: targetId,
+        refNumber: app.id || app.refNumber,
+        checklist: items,
+        adminId,
+        adminName,
+        adminEmail,
+        adminRole,
+      });
+    }
+
+    // 2. REST Call for persistence
+    try {
+      await apiFetch(`/api/v1/applications/${targetId}/checklist`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          checklist: items,
+          adminId,
+          adminName,
+          adminEmail,
+          adminRole,
+        }),
+      });
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: 'Verification checklist saved & synchronized to mobile app!', type: 'success' }
+      }));
+    } catch (e) {
+      console.warn('Checklist sync error:', e);
+    } finally {
+      setSavingChecklist(false);
+    }
+  };
+
+  const toggleCheck = async (idx: number) => {
+    const updated = checklist.map((c, i) => i === idx ? { ...c, checked: !c.checked } : c);
+    setChecklist(updated);
+    await saveChecklistToServer(updated);
+  };
+
+  const handleVerifyAll = async () => {
+    const updated = checklist.map(c => ({ ...c, checked: true }));
+    setChecklist(updated);
+    await saveChecklistToServer(updated);
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: 'All checklist items verified & synced with mobile app!', type: 'success' }
+    }));
+  };
+
+  const handleAddNote = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!noteText.trim() || submittingNote || !app) return;
+    const text = noteText.trim();
+    setNoteText('');
+    setSubmittingNote(true);
+
+    const targetId = app.rawId || app.id;
+    const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
+    const adminName = currentAdminUser.name || (currentAdminUser.email ? currentAdminUser.email.split('@')[0] : 'Officer Sharma (SDM)');
+    const adminEmail = currentAdminUser.email || '';
+    const adminId = currentAdminUser.id || '';
+    const adminRole = currentAdminUser.role || (adminEmail === 'admin@cybersave.com' ? 'Super Administrator' : 'Operator / Officer');
+
+    const optimisticNote = {
+      id: `note-${Date.now()}`,
+      author: adminName,
+      authorRole: adminRole,
+      authorEmail: adminEmail,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+
+    setInternalNotes(prev => [...prev, optimisticNote]);
+
+    // 1. Socket emit
+    if (socket) {
+      socket.emit('add_application_note', {
+        id: targetId,
+        applicationId: targetId,
+        refNumber: app.id || app.refNumber,
+        text,
+        adminId,
+        adminName,
+        adminEmail,
+        adminRole,
+      });
+    }
+
+    // 2. REST Call
+    try {
+      const res = await apiFetch(`/api/v1/applications/${targetId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          adminId,
+          adminName,
+          adminEmail,
+          adminRole,
+        }),
+      });
+      if (res.ok) {
+        const resData = await res.json();
+        if (Array.isArray(resData.internalNotes)) {
+          setInternalNotes(resData.internalNotes);
+        }
+        window.dispatchEvent(new CustomEvent('cybersave_toast', {
+          detail: { message: 'Internal note saved securely.', type: 'success' }
+        }));
+      }
+    } catch (err) {
+      console.warn('Note save error:', err);
+    } finally {
+      setSubmittingNote(false);
+    }
   };
 
   const checkedCount = checklist.filter(c => c.checked).length;
@@ -520,6 +684,57 @@ export default function ApplicationDetail() {
 
   const applicant = app.applicant || {};
   const formData = app.formData || {};
+
+  // Dynamic Application & Job Form Fields (Schema fields + Submitted form data with keys & values)
+  const dynamicFormFields = useMemo(() => {
+    const rawSchema = app?.service?.formDataSchema || app?.service?.formElements || app?.rawApp?.service?.formDataSchema || app?.rawApp?.service?.formElements;
+    const schemaList: any[] = Array.isArray(rawSchema) ? rawSchema : [];
+    const fieldsMap = new Map<string, { key: string; label: string; value: any; required?: boolean; type?: string }>();
+
+    // 1. Seed from configured service/job schema
+    schemaList.forEach((field: any, idx: number) => {
+      const fieldKey = field.id || field.name || `field_${idx}_${(field.label || 'input').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      const label = field.label || field.name || `Field ${idx + 1}`;
+      fieldsMap.set(fieldKey, {
+        key: fieldKey,
+        label,
+        value: formData[fieldKey] !== undefined ? formData[fieldKey] : (formData[label] !== undefined ? formData[label] : ''),
+        required: field.required !== false,
+        type: field.type || 'text',
+      });
+    });
+
+    // 2. Add any additional fields submitted in formData
+    const ignoreKeys = new Set([
+      'id', '_id', 'userId', 'serviceId', 'feePaid', 'amount', 'documents', 'paymentStatus',
+      'razorpayOrderId', 'razorpayPaymentId', 'razorpaySignature', 'status', 'submittedAt', 'createdAt', 'updatedAt'
+    ]);
+
+    Object.entries(formData).forEach(([k, v]) => {
+      if (ignoreKeys.has(k)) return;
+      if (!fieldsMap.has(k)) {
+        let label = k;
+        if (k.startsWith('field_')) {
+          label = k.replace(/^field_\d+_/, '').replace(/_/g, ' ');
+        } else if (k.startsWith('custom_')) {
+          label = k.replace(/^custom_\d+_/, '').replace(/_/g, ' ');
+        } else {
+          label = k.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ');
+        }
+        label = label.trim().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+        fieldsMap.set(k, {
+          key: k,
+          label,
+          value: v,
+          required: false,
+          type: 'text',
+        });
+      }
+    });
+
+    return Array.from(fieldsMap.values());
+  }, [app, formData]);
   const statusUpper = (app.status || '').toUpperCase();
   const isApproved = statusUpper === 'APPROVED' || statusUpper === 'COMPLETED';
   const isRejected = statusUpper === 'REJECTED';
@@ -866,7 +1081,7 @@ export default function ApplicationDetail() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Applicant Details</h3>
               <Link
-                to={applicant.citizenId ? `/users/${applicant.citizenId}` : '#'}
+                to={applicant.citizenId ? `/users/${applicant.citizenId}` : '/users'}
                 style={{ color: '#2563eb', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
               >
                 View Profile <ArrowRight size={14} />
@@ -928,6 +1143,110 @@ export default function ApplicationDetail() {
             </div>
           </div>
 
+          {/* ─── Application & Job Form Submission Fields ─── */}
+          <div className="table-card" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#111827' }}>
+                  Application Form & Submitted Data
+                </h3>
+                <span style={{
+                  background: '#eff6ff', color: '#2563eb', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 700, border: '1px solid #dbeafe'
+                }}>
+                  {dynamicFormFields.length} {dynamicFormFields.length === 1 ? 'Field' : 'Fields'}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>
+                Service: <strong style={{ color: '#1f2937' }}>{app.serviceName || 'Custom Service'}</strong>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 13, color: '#64748b', marginTop: 0, marginBottom: 20 }}>
+              All job-specific form fields and custom entries submitted by the applicant via CyberSave Mobile. Fields not provided by the citizen are displayed with keys and values marked as empty.
+            </p>
+
+            {dynamicFormFields.length === 0 ? (
+              <div style={{
+                padding: '24px 20px',
+                background: '#f8fafc',
+                borderRadius: 12,
+                border: '1px dashed #cbd5e1',
+                textAlign: 'center',
+                color: '#64748b',
+                fontSize: 13,
+              }}>
+                No dynamic form fields configured for this service. Default profile credentials used.
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: 16,
+              }}>
+                {dynamicFormFields.map((field) => {
+                  const rawVal = field.value;
+                  const isEmpty = rawVal === undefined || rawVal === null || String(rawVal).trim() === '';
+                  const displayVal = isEmpty
+                    ? '(Empty / Not Provided)'
+                    : typeof rawVal === 'boolean'
+                      ? (rawVal ? '✓ Yes / Confirmed' : '✕ No')
+                      : typeof rawVal === 'object'
+                        ? JSON.stringify(rawVal)
+                        : String(rawVal);
+
+                  return (
+                    <div
+                      key={field.key}
+                      style={{
+                        padding: '14px 16px',
+                        borderRadius: 12,
+                        background: isEmpty ? '#f8fafc' : '#ffffff',
+                        border: `1.5px solid ${isEmpty ? '#e2e8f0' : '#e0e7ff'}`,
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+                        <div style={{
+                          fontSize: 11,
+                          color: '#4b5563',
+                          textTransform: 'uppercase',
+                          fontWeight: 700,
+                          letterSpacing: '0.04em',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}>
+                          <span>{field.label}</span>
+                          {field.required && <span style={{ color: '#ef4444', fontWeight: 800 }}>*</span>}
+                        </div>
+                        <span style={{
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                          background: '#f1f5f9',
+                          color: '#64748b',
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                        }}>
+                          {field.key}
+                        </span>
+                      </div>
+                      <div style={{
+                        fontSize: 14,
+                        fontWeight: isEmpty ? 500 : 700,
+                        color: isEmpty ? '#94a3b8' : '#0f172a',
+                        fontStyle: isEmpty ? 'italic' : 'normal',
+                        lineHeight: 1.4,
+                        wordBreak: 'break-word',
+                      }}>
+                        {displayVal}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* ─── Supporting Documents ─── */}
           <div className="table-card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -940,15 +1259,11 @@ export default function ApplicationDetail() {
                 </span>
               </div>
               <button 
-                onClick={() => {
-                  setChecklist(prev => prev.map(item => ({ ...item, checked: true })));
-                  window.dispatchEvent(new CustomEvent('cybersave_toast', {
-                    detail: { message: 'All documents verified and checks acknowledged.', type: 'success' }
-                  }));
-                }}
+                onClick={handleVerifyAll}
+                disabled={savingChecklist}
                 style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
               >
-                <ShieldCheck size={14} /> Verify All
+                <ShieldCheck size={14} /> {savingChecklist ? 'Syncing...' : 'Verify All'}
               </button>
             </div>
 
@@ -1189,38 +1504,73 @@ export default function ApplicationDetail() {
           {/* ─── Internal Notes ─── */}
           <div className="table-card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Internal Notes (2)</h3>
-              <span style={{ color: '#2563eb', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>View History</span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Internal Notes ({internalNotes.length})</h3>
+              <span style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#6b7280',
+                background: '#f1f5f9',
+                padding: '2px 8px',
+                borderRadius: 6,
+              }}>
+                Admin & Officer Only
+              </span>
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
-                  {(app.assignedTo || 'Vikram Tiwari').split('(')[0].trim()} (Operator)
-                </span>
-                <span style={{ fontSize: 11, color: '#6b7280' }}>{app.submitted?.split(',')[0] || ''}, 10:20 AM</span>
-              </div>
-              <p style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.5, margin: 0 }}>
-                Address proof verified. Employment letter needs HR stamp verification. Scheduling field visit for new address verification.
-              </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20, maxHeight: 300, overflowY: 'auto' }}>
+              {internalNotes.length > 0 ? (
+                internalNotes.map((note: any, idx: number) => {
+                  const noteDate = note.createdAt
+                    ? new Date(note.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })
+                    : 'Recent';
+                  const isBot = (note.authorRole || '').toLowerCase().includes('system') || (note.author || '').toLowerCase().includes('bot');
+
+                  return (
+                    <div key={note.id || idx} style={{
+                      padding: '12px 14px',
+                      background: isBot ? '#F8FAFC' : '#EFF6FF',
+                      border: `1px solid ${isBot ? '#E2E8F0' : '#BFDBFE'}`,
+                      borderRadius: 10,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: isBot ? '#475569' : '#1E40AF' }}>
+                            {note.author || 'Operator'}
+                          </span>
+                          <span style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: isBot ? '#64748B' : '#2563EB',
+                            background: isBot ? '#E2E8F0' : '#DBEAFE',
+                            padding: '1px 6px',
+                            borderRadius: 4,
+                            textTransform: 'uppercase',
+                          }}>
+                            {note.authorRole || (isBot ? 'SYSTEM' : 'OFFICER')}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 11, color: '#64748B' }}>{noteDate}</span>
+                      </div>
+                      <p style={{ fontSize: 12.5, color: '#334155', lineHeight: 1.5, margin: 0, wordBreak: 'break-word' }}>
+                        {note.text}
+                      </p>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ padding: '20px 12px', textAlign: 'center', color: '#94A3B8', fontSize: 12.5, border: '1px dashed #E2E8F0', borderRadius: 8 }}>
+                  No internal notes recorded yet. Add notes for audit compliance and field verification remarks.
+                </div>
+              )}
             </div>
 
-            <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f3f4f6' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#9ca3af' }}>System Bot</span>
-                <span style={{ fontSize: 11, color: '#6b7280' }}>{app.submitted?.split(',')[0] || ''}, 09:15 AM</span>
-              </div>
-              <p style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.5, margin: 0 }}>
-                Auto-assignment based on operator availability and center proximity algorithms.
-              </p>
-            </div>
-
-            <div style={{ position: 'relative' }}>
+            <form onSubmit={handleAddNote} style={{ position: 'relative' }}>
               <input
                 type="text"
-                placeholder="Write a note..."
+                placeholder="Write an internal remark or verification note..."
                 value={noteText}
                 onChange={(e) => setNoteText(e.target.value)}
+                disabled={submittingNote}
                 style={{
                   width: '100%', padding: '12px 48px 12px 16px', border: '1px solid #e5e7eb',
                   borderRadius: 10, outline: 'none', fontSize: 13, background: '#fafafa',
@@ -1229,15 +1579,20 @@ export default function ApplicationDetail() {
                 onFocus={(e) => (e.target.style.borderColor = '#2563eb')}
                 onBlur={(e) => (e.target.style.borderColor = '#e5e7eb')}
               />
-              <button style={{
-                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                background: '#2563eb', border: 'none', borderRadius: 8, color: 'white',
-                width: 32, height: 32, display: 'flex', justifyContent: 'center', alignItems: 'center',
-                cursor: 'pointer', transition: 'background 0.15s',
-              }}>
+              <button
+                type="submit"
+                disabled={!noteText.trim() || submittingNote}
+                style={{
+                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                  background: noteText.trim() ? '#2563eb' : '#94A3B8', border: 'none', borderRadius: 8, color: 'white',
+                  width: 32, height: 32, display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  cursor: noteText.trim() ? 'pointer' : 'default', transition: 'background 0.15s',
+                }}
+                title="Add internal note"
+              >
                 <ArrowRight size={16} />
               </button>
-            </div>
+            </form>
           </div>
         </div>
       </div>

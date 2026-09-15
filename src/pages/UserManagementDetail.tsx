@@ -212,6 +212,10 @@ export default function UserManagementDetail() {
     if (!id) return;
     fetchUserRest();
 
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 8000);
+
     if (socket && connected) {
       socket.emit('request_user_detail', { id });
 

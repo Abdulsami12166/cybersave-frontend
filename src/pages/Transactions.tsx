@@ -346,6 +346,24 @@ export default function Transactions() {
     return transactions.filter((t: any) => t.status === 'REFUNDED' || t.isRefunded).length;
   }, [transactions]);
 
+  // Computed accurate financial totals
+  const totalCalculations = useMemo(() => {
+    const txnList: any[] = transactions || [];
+    const calculatedGross = txnList.filter((t: any) => t.status !== 'FAILED').reduce((acc: number, t: any) => acc + (Number(t.amount) || 0), 0);
+    const calculatedRefunds = txnList.filter((t: any) => t.status === 'REFUNDED' || t.isRefunded).reduce((acc: number, t: any) => acc + (Number(t.amount) || 0), 0);
+    
+    const grossInflow = stats?.grossInflow ?? stats?.grossAmount ?? calculatedGross;
+    const refundedAmount = stats?.refundedAmount ?? calculatedRefunds;
+    const totalNet = Math.max(0, grossInflow - refundedAmount);
+
+    return {
+      grossInflow,
+      refundedAmount,
+      totalNet,
+      totalCount: txnList.length,
+    };
+  }, [transactions, stats]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     if (socket && connected) {
@@ -358,44 +376,52 @@ export default function Transactions() {
   if (loading) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
-        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Loading Settlement Journal...</div>
-        <p style={{ fontSize: 13 }}>Reconciling live payments, Razorpay settlements, and approved refunds...</p>
+        <div style={{ width: 28, height: 28, border: '3px solid #e5e7eb', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+        Loading Settlements & Financial Ledger...
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
     <>
-      <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: 8 }}>
-        Dashboard &rarr; <span style={{ color: '#2563eb' }}>Settlement Journal & Transactions</span>
-      </div>
-
-      <div className="dashboard-title-row" style={{ marginBottom: 20 }}>
-        <div className="dashboard-title">
-          <h1>Settlement Journal & Realized Revenue</h1>
-          <p>Inspect genuine daily revenue realization, platform net realized inflows, and day-by-day transaction ledgers</p>
+      {/* Top Header Row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: '#111827' }}>
+            Transactions & Settlements
+          </h1>
+          <p style={{ color: '#6b7280', fontSize: 13, marginTop: 4, marginBottom: 0 }}>
+            Real-time daily settlement journal, digital fee collections, and approved wallet refunds.
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 12 }}>
+
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button 
             className="date-picker-btn" 
-            onClick={handleRefresh}
+            onClick={handleRefresh} 
             disabled={refreshing}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            title="Refresh Settlements Data"
           >
-            <RefreshCw size={14} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} /> 
-            {refreshing ? 'Synchronizing...' : 'Refresh Ledger'}
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
-          <button className="date-picker-btn" onClick={handleExportCSV} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Download size={15} /> Export CSV ({filteredTransactions.length})
+          <button 
+            className="date-picker-btn" 
+            onClick={handleExportCSV}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Download size={14} /> Export CSV
           </button>
         </div>
       </div>
 
-      {/* Primary KPI Metrics */}
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 20 }}>
+      {/* KPI Stats Grid */}
+      <div className="stats-grid" style={{ marginBottom: 24 }}>
         {/* Card 1: Daily Realized Revenue */}
         <StatCard 
-          icon={<DollarSign color="#10b981" />} 
+          icon={<DollarSign color="#059669" />} 
           iconBg="#d1fae5"
           title={selectedDate === 'ALL' ? "Daily Realized Revenue (Today)" : `Daily Realized Revenue (${selectedDayStats.label})`} 
           value={`₹${selectedDayStats.net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
@@ -411,12 +437,16 @@ export default function Transactions() {
         <StatCard 
           icon={<TrendingUp color="#2563eb" />} 
           iconBg="#eff6ff"
-          title="Total Realized (Net)" 
-          value={`₹${(stats?.totalAmount ?? 1529).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
+          title={selectedDate === 'ALL' ? "Total Realized (Net)" : `Realized Net (${selectedDayStats.label})`} 
+          value={
+            selectedDate === 'ALL'
+              ? `₹${totalCalculations.totalNet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+              : `₹${selectedDayStats.net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+          } 
           trend={
             selectedDate === 'ALL'
-              ? `Gross ₹${(stats?.grossInflow ?? 1756).toLocaleString('en-IN')} after ₹${(stats?.refundedAmount ?? 227).toLocaleString('en-IN')} refunds`
-              : `Platform Lifetime Net (Selected Day: ₹${selectedDayStats.net.toLocaleString('en-IN')})`
+              ? `Gross ₹${totalCalculations.grossInflow.toLocaleString('en-IN')} after ₹${totalCalculations.refundedAmount.toLocaleString('en-IN')} refunds`
+              : `Platform Lifetime Net: ₹${totalCalculations.totalNet.toLocaleString('en-IN')}`
           } 
           trendType="positive" 
         />
@@ -428,15 +458,15 @@ export default function Transactions() {
           title={selectedDate === 'ALL' ? "Approved Refunds" : `Approved Refunds (${selectedDayStats.label})`} 
           value={
             selectedDate === 'ALL'
-              ? `₹${(stats?.refundedAmount ?? 227).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+              ? `₹${totalCalculations.refundedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
               : `₹${selectedDayStats.refunds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
           } 
           trend={
             selectedDate === 'ALL'
-              ? `${refundedCount} application refunded (REF-2026196910)`
+              ? `${refundedCount} application${refundedCount === 1 ? '' : 's'} refunded to wallet`
               : (selectedDayStats.refunds > 0 ? `₹${selectedDayStats.refunds} refunded to wallet` : "0 refunds on this day")
           } 
-          trendType={selectedDayStats.refunds > 0 ? "neutral" : "positive"} 
+          trendType={selectedDayStats.refunds > 0 || (selectedDate === 'ALL' && totalCalculations.refundedAmount > 0) ? "neutral" : "positive"} 
         />
 
         {/* Card 4: Ledger Entries */}
@@ -444,7 +474,7 @@ export default function Transactions() {
           icon={<ArrowLeftRight color="#6366f1" />} 
           iconBg="#eef2ff"
           title={selectedDate === 'ALL' ? "Total Ledger Entries" : `Day's Ledger Entries`} 
-          value={(selectedDate === 'ALL' ? (stats?.totalCount || transactions?.length || 14) : selectedDayStats.count).toLocaleString()} 
+          value={(selectedDate === 'ALL' ? (stats?.totalCount || transactions?.length || totalCalculations.totalCount) : selectedDayStats.count).toLocaleString()} 
           trend={selectedDate === 'ALL' ? `Across ${availableDates.length} distinct settlement dates` : `Showing all ${selectedDayStats.count} txns for this day`} 
           trendType="neutral" 
         />
