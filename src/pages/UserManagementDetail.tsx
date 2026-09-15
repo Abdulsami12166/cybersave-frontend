@@ -266,13 +266,17 @@ export default function UserManagementDetail() {
         if (!statusData?.userId) return;
         setUser((prev: any) => {
           if (!prev) return prev;
-          const targetId = statusData.userId;
+          const targetId = String(statusData.userId).toLowerCase();
+          const pDbId = String(prev.dbId || prev._id || '').toLowerCase();
+          const pId = String(prev.id || '').toLowerCase();
+          const routeId = String(id || '').toLowerCase();
+
           const matches =
-            prev.dbId === targetId ||
-            prev.id === targetId ||
-            id === targetId ||
-            (prev.id && typeof prev.id === 'string' && prev.id.toUpperCase().includes(targetId.substring(0, 5).toUpperCase())) ||
-            (id && typeof id === 'string' && id.toUpperCase().includes(targetId.substring(0, 5).toUpperCase()));
+            pDbId === targetId ||
+            pId === targetId ||
+            routeId === targetId ||
+            (targetId.length >= 5 && (pDbId.includes(targetId) || pId.includes(targetId.slice(-5)) || routeId.includes(targetId.slice(-5)))) ||
+            (pDbId.length >= 5 && (targetId.includes(pDbId.slice(-5)) || routeId.includes(pDbId.slice(-5))));
 
           if (!matches) return prev;
 
@@ -342,9 +346,52 @@ export default function UserManagementDetail() {
         });
       };
 
+      const handleSessionHistoryUpdated = (payload: any) => {
+        if (!payload?.userId) return;
+        const targetId = String(payload.userId).toLowerCase();
+        setUser((prev: any) => {
+          if (!prev) return prev;
+          const pDbId = String(prev.dbId || prev._id || '').toLowerCase();
+          const pId = String(prev.id || '').toLowerCase();
+          const routeId = String(id || '').toLowerCase();
+
+          const matches =
+            pDbId === targetId ||
+            pId === targetId ||
+            routeId === targetId ||
+            (targetId.length >= 5 && (pDbId.includes(targetId) || pId.includes(targetId.slice(-5)) || routeId.includes(targetId.slice(-5)))) ||
+            (pDbId.length >= 5 && (targetId.includes(pDbId.slice(-5)) || routeId.includes(pDbId.slice(-5))));
+
+          if (!matches) return prev;
+
+          const isOnline = payload.isOnline === true;
+          let sessions = [...(prev.sessionHistory || [])];
+          if (payload.session) {
+            sessions = sessions.filter((s: any) => s.id !== payload.session.id);
+            if (!isOnline) {
+              sessions = sessions.filter((s: any) => s.id !== 'sess_active_now');
+            }
+            sessions.unshift(payload.session);
+          }
+
+          return {
+            ...prev,
+            isOnline,
+            lastActive: isOnline ? 'Active Now' : 'Just now',
+            lastSeenAt: new Date().toISOString(),
+            quickStats: {
+              ...prev.quickStats,
+              lastActive: isOnline ? 'Active Now' : 'Just now',
+            },
+            sessionHistory: sessions,
+          };
+        });
+      };
+
       socket.on('response_user_detail', handleUserDetail);
       socket.on('user_detail_updated', handleUserDetail);
       socket.on('user_status_changed', handleStatusChanged);
+      socket.on('session_history_updated', handleSessionHistoryUpdated);
       socket.on('new_user_feedback', handleFeedbackEvent);
       socket.on('feedback_submitted', handleRefresh);
       socket.on('user_activity_updated', handleRefresh);
@@ -360,6 +407,7 @@ export default function UserManagementDetail() {
         socket.off('response_user_detail', handleUserDetail);
         socket.off('user_detail_updated', handleUserDetail);
         socket.off('user_status_changed', handleStatusChanged);
+        socket.off('session_history_updated', handleSessionHistoryUpdated);
         socket.off('new_user_feedback', handleFeedbackEvent);
         socket.off('feedback_submitted', handleRefresh);
         socket.off('user_activity_updated', handleRefresh);
@@ -694,6 +742,33 @@ export default function UserManagementDetail() {
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => {
+                if (socket && connected) {
+                  socket.emit('request_user_detail', { id });
+                }
+                fetchUserRest();
+                showToast('Refreshing citizen real-time presence & session history...');
+              }}
+              style={{
+                background: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                borderRadius: '8px',
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#15803D',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+              }}
+              title="Query active status and latest session logs"
+            >
+              <RefreshCw size={14} color="#16A34A" /> Refresh Status
+            </button>
+
             <button
               onClick={() => {
                 populateEditForm(user || safeData);

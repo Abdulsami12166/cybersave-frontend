@@ -109,14 +109,24 @@ export default function UserManagement() {
 
       const handleStatusChange = (statusData: any) => {
         if (statusData?.userId) {
+          const target = String(statusData.userId).toLowerCase();
           setLiveUsers((prev) =>
             prev.map((u) => {
-              if (u.id === statusData.userId || u.dbId === statusData.userId) {
+              const uDbId = String(u.dbId || u._id || '').toLowerCase();
+              const uId = String(u.id || '').toLowerCase();
+              const isMatch =
+                uDbId === target ||
+                uId === target ||
+                (target.length >= 5 && (uId.includes(target.slice(-5)) || uDbId.includes(target.slice(-5)))) ||
+                (uDbId.length >= 5 && target.includes(uDbId.slice(-5)));
+
+              if (isMatch) {
+                const isOnline = statusData.isOnline === true;
                 return {
                   ...u,
-                  isOnline: statusData.isOnline,
-                  lastActive: statusData.isOnline ? 'Active Now' : 'Just now',
-                  lastSeenAt: statusData.lastSeenAt,
+                  isOnline,
+                  lastActive: isOnline ? 'Active Now' : 'Just now',
+                  lastSeenAt: statusData.lastSeenAt || new Date().toISOString(),
                 };
               }
               return u;
