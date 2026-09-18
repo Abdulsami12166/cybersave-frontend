@@ -216,6 +216,11 @@ export default function UserManagementDetail() {
       setLoading(false);
     }, 8000);
 
+    // Smart real-time presence & session polling
+    const pollInterval = setInterval(() => {
+      fetchUserRest();
+    }, 3500);
+
     if (socket && connected) {
       socket.emit('request_user_detail', { id });
 
@@ -416,10 +421,17 @@ export default function UserManagementDetail() {
         socket.off('new_application_submitted', handleRefresh);
         socket.off('application_status_changed', handleRefresh);
         socket.off('response_push_sent', handlePushSent);
+        clearInterval(pollInterval);
+        clearTimeout(safetyTimer);
         socket.off('block_citizen_success', handleBlockSuccess);
         socket.off('update_citizen_success', handleUpdateSuccess);
       };
     }
+
+    return () => {
+      clearInterval(pollInterval);
+      clearTimeout(safetyTimer);
+    };
   }, [id, socket, connected]);
 
   const handleToggleBlock = async () => {
@@ -868,7 +880,10 @@ export default function UserManagementDetail() {
             return (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => {
+                  setActiveTab(tab);
+                  fetchUserRest();
+                }}
                 style={{
                   background: 'none',
                   border: 'none',

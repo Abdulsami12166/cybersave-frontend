@@ -94,6 +94,11 @@ export default function AuditLogs() {
     // Immediate REST fetch on mount for sub-second audit log rendering
     fetchRestAuditLogs();
 
+    // Auto-refresh polling to stream audit logs in real-time even on serverless deployments
+    const pollInterval = setInterval(() => {
+      fetchRestAuditLogs();
+    }, 4000);
+
     if (socket && connected) {
       socket.emit('request_audit_logs');
 
@@ -141,6 +146,7 @@ export default function AuditLogs() {
       return () => {
         isMounted = false;
         if (debounceTimer) clearTimeout(debounceTimer);
+        clearInterval(pollInterval);
         socket.off('response_audit_logs', handleLogs);
         socket.off('audit_logs_updated', handleRefresh);
         socket.off('audit_log_added', handleLogAdded);
@@ -150,6 +156,7 @@ export default function AuditLogs() {
     return () => {
       isMounted = false;
       if (debounceTimer) clearTimeout(debounceTimer);
+      clearInterval(pollInterval);
     };
   }, [socket, connected]);
 
