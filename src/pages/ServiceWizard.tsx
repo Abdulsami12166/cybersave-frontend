@@ -360,8 +360,10 @@ export default function ServiceWizard() {
       let uploadedUrl = '';
       const endpoints = [
         `${getApiBaseUrl()}/api/admin/upload`,
-        'http://localhost:3001/api/admin/upload',
-        'http://localhost:3000/api/admin/upload',
+        'https://cybersave-nine.vercel.app/api/admin/upload',
+        ...(typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+          ? ['http://localhost:3000/api/admin/upload', 'http://localhost:3001/api/admin/upload']
+          : []),
       ];
 
       const formData = new FormData();

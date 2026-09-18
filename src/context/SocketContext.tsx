@@ -30,16 +30,30 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
 
-      const targetUrl = candidates[index];
+      let targetUrl = candidates[index];
+      const isLocalhost = typeof window !== 'undefined' && 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '0.0.0.0');
+
+      // In production, never attempt WebSockets to localhost or to static frontend host
+      if (!isLocalhost && (targetUrl.includes('localhost') || targetUrl.includes('127.0.0.1') || targetUrl.includes('cybersave-frontend.vercel.app'))) {
+        if (currentIdx + 1 < candidates.length) {
+          currentIdx++;
+          tryConnect(currentIdx);
+          return;
+        } else {
+          targetUrl = 'https://cybersave-nine.vercel.app';
+        }
+      }
+
       if (newSocket) {
         newSocket.removeAllListeners();
         newSocket.close();
       }
 
       newSocket = io(targetUrl, {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
         reconnectionAttempts: 3,
-        timeout: 4000,
+        timeout: 5000,
       });
 
       newSocket.on('connect', () => {
