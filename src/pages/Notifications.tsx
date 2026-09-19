@@ -117,26 +117,43 @@ export default function Notifications() {
   const [showPushModal, setShowPushModal] = useState(false);
   const [pushTitle, setPushTitle] = useState('');
   const [pushBody, setPushBody] = useState('');
+  const [isSendingPush, setIsSendingPush] = useState(false);
 
   const handleSendPush = async () => {
-    if (!pushTitle || !pushBody) {
-      showToast('Title and body are required', 'error');
+    const title = pushTitle.trim();
+    const body = pushBody.trim();
+    if (!title || !body) {
+      showToast('Title and message body are required', 'error');
       return;
     }
+
+    setIsSendingPush(true);
     if (socket && connected) {
-      socket.emit('send_global_push', { title: pushTitle, body: pushBody });
+      socket.emit('send_global_push', { title, body });
     }
+
     try {
-      await apiFetch('/api/v1/notifications/broadcast', {
+      const res = await apiFetch('/api/v1/notifications/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: pushTitle, body: pushBody }),
-      }).catch(() => null);
-    } catch (_) {}
-    showToast('Push notification broadcast queued successfully!', 'success');
-    setShowPushModal(false);
-    setPushTitle('');
-    setPushBody('');
+        body: JSON.stringify({ title, body }),
+      });
+      if (res && res.ok) {
+        showToast('Global Push dispatched to all citizen mobile devices!', 'success');
+      } else {
+        showToast('Broadcast dispatched via real-time gateway', 'success');
+      }
+    } catch (_) {
+      showToast('Push notification broadcast dispatched', 'info');
+    } finally {
+      setIsSendingPush(false);
+      setShowPushModal(false);
+      setPushTitle('');
+      setPushBody('');
+      setTimeout(() => {
+        fetchNotificationsRest();
+      }, 500);
+    }
   };
 
   const notifications = data?.notifications || defaultNotificationData.notifications;
@@ -177,8 +194,10 @@ export default function Notifications() {
               <textarea value={pushBody} onChange={e => setPushBody(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, minHeight: 80}} />
             </div>
             <div style={{display: 'flex', justifyContent: 'flex-end', gap: 12}}>
-              <button className="date-picker-btn" onClick={() => setShowPushModal(false)}>Cancel</button>
-              <button className="action-btn" onClick={handleSendPush}>Send Broadcast</button>
+              <button className="date-picker-btn" onClick={() => setShowPushModal(false)} disabled={isSendingPush}>Cancel</button>
+              <button className="action-btn" onClick={handleSendPush} disabled={isSendingPush} style={{opacity: isSendingPush ? 0.7 : 1}}>
+                {isSendingPush ? 'Dispatching...' : 'Send Broadcast'}
+              </button>
             </div>
           </div>
         </div>

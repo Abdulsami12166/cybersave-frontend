@@ -17,20 +17,20 @@ export function getCandidateBackendUrls(): string[] {
   const cached = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cybersave_active_backend') : null;
   const list: string[] = [];
 
-  // 1. Valid cached backend
+  // 1. Localhost endpoints if in local dev mode (Top priority for local testing)
+  if (isLocalhost) {
+    list.push('http://localhost:3000');
+    list.push('http://127.0.0.1:3000');
+  }
+
+  // 2. Valid cached backend
   if (cached && (isLocalhost || (!cached.includes('localhost') && !cached.includes('cybersave-frontend.vercel.app')))) {
     list.push(cached);
   }
 
-  // 2. Production env URL if provided and not localhost on production
+  // 3. Production env URL if provided and not localhost on production
   if (envUrl) {
     list.push(envUrl);
-  }
-
-  // 3. Localhost endpoints if in local dev mode
-  if (isLocalhost) {
-    list.push('http://localhost:3000');
-    list.push('http://127.0.0.1:3000');
   }
 
   // 4. Primary live production backend
