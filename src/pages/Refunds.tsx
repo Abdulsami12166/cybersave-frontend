@@ -19,6 +19,7 @@ import {
   X,
   Copy,
   Calendar,
+  ListChecks,
 } from 'lucide-react';
 
 interface TabItem {
@@ -47,6 +48,113 @@ export default function Refunds() {
   const [rejectTarget, setRejectTarget] = useState<any | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [selectedQuickDecline, setSelectedQuickDecline] = useState('');
+
+  // Refund Journey Checklist Modal State
+  const [journeyTarget, setJourneyTarget] = useState<any | null>(null);
+  const [journeySteps, setJourneySteps] = useState<Array<{
+    title: string;
+    description: string;
+    time: string;
+    status: 'completed' | 'active' | 'pending';
+  }>>([]);
+  const [destAccount, setDestAccount] = useState<{
+    bankName: string;
+    accountNumber: string;
+    referenceNumber: string;
+    expectedDate: string;
+  }>({
+    bankName: 'State Bank of India',
+    accountNumber: '************1204',
+    referenceNumber: '',
+    expectedDate: 'Expected: 15 May',
+  });
+  const [savingJourney, setSavingJourney] = useState(false);
+
+  const openJourneyModal = (r: any) => {
+    setJourneyTarget(r);
+    const isApproved = (r.status || '').toUpperCase() === 'APPROVED';
+
+    if (Array.isArray(r.journey) && r.journey.length > 0) {
+      setJourneySteps(r.journey);
+    } else {
+      const createdDateStr = new Date(r.createdAt || Date.now()).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      setJourneySteps([
+        {
+          title: 'Refund Initiated',
+          description: 'Merchant accepted refund request',
+          time: createdDateStr,
+          status: 'completed',
+        },
+        {
+          title: 'Processing by Bank',
+          description: 'Awaiting clearance from partner bank',
+          time: isApproved ? 'Cleared' : 'In Progress',
+          status: isApproved ? 'completed' : 'active',
+        },
+        {
+          title: 'Credited to Wallet',
+          description: 'Funds will reflect in available balance',
+          time: isApproved ? 'Completed' : 'Expected: 15 May',
+          status: isApproved ? 'completed' : 'pending',
+        },
+      ]);
+    }
+
+    if (r.destinationAccount && typeof r.destinationAccount === 'object') {
+      setDestAccount({
+        bankName: r.destinationAccount.bankName || 'State Bank of India',
+        accountNumber: r.destinationAccount.accountNumber || '************1204',
+        referenceNumber: r.destinationAccount.referenceNumber || `REV-REF-${r.refNumber ? r.refNumber.replace(/[^0-9]/g, '') : '39482910'}`,
+        expectedDate: r.destinationAccount.expectedDate || 'Expected: 15 May',
+      });
+    } else {
+      setDestAccount({
+        bankName: 'State Bank of India',
+        accountNumber: '************1204',
+        referenceNumber: `REV-REF-${r.refNumber ? r.refNumber.replace(/[^0-9]/g, '') : '39482910'}`,
+        expectedDate: 'Expected: 15 May',
+      });
+    }
+  };
+
+  const handleSaveJourney = async () => {
+    if (!journeyTarget) return;
+    try {
+      setSavingJourney(true);
+      const base = getApiBase();
+      const token = localStorage.getItem('adminToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const payload = {
+        journey: journeySteps,
+        destinationAccount: destAccount,
+        adminName: admin?.name || admin?.email || 'Admin Authority',
+      };
+
+      const res = await axios.post(`${base}/api/v1/refunds/${journeyTarget.id}/journey`, payload, { headers });
+      if (res.data?.success) {
+        showToast(`Refund Journey checklist updated for #${journeyTarget.refNumber}!`, 'success');
+        setRefunds((prev) =>
+          prev.map((r) =>
+            r.id === journeyTarget.id
+              ? { ...r, journey: journeySteps, destinationAccount: destAccount }
+              : r
+          )
+        );
+        setJourneyTarget(null);
+      } else {
+        showToast('Failed to update refund journey', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Error updating refund journey', 'error');
+    } finally {
+      setSavingJourney(false);
+    }
+  };
 
   const getApiBase = () => {
     return getApiBaseUrl();
@@ -951,6 +1059,31 @@ export default function Refunds() {
                             )}
                           </div>
                         )}
+
+                        <div style={{ marginTop: 8 }}>
+                          <button
+                            onClick={() => openJourneyModal(r)}
+                            style={{
+                              border: '1px solid #DBEAFE',
+                              cursor: 'pointer',
+                              background: '#EFF6FF',
+                              color: '#1D4ED8',
+                              padding: '4px 9px',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                            }}
+                            title="Update 3-Step Journey Checklist & Destination Bank"
+                          >
+                            <ListChecks size={13} color="#2563EB" />
+                            <span>
+                              Journey Checklist ({Array.isArray(r.journey) ? r.journey.filter((s: any) => s.status === 'completed').length : (isApproved ? 3 : 1)}/3)
+                            </span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1441,6 +1574,409 @@ export default function Refunds() {
                 borderRadius: 8,
               }}
             />
+          </div>
+        </div>
+      )}
+      {/* ─── 9. Refund Journey Checklist & Destination Account Modal ─── */}
+      {journeyTarget && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 110,
+            background: 'rgba(15, 23, 42, 0.7)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 620,
+              maxHeight: '92vh',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              overflowY: 'auto',
+              border: '1px solid #E2E8F0',
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid #E2E8F0',
+                background: '#F8FAFC',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    background: '#EFF6FF',
+                    color: '#2563EB',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <ListChecks size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                    Refund Journey Checklist & Destination Bank
+                  </h3>
+                  <p style={{ fontSize: 12, color: '#64748B', margin: '2px 0 0' }}>
+                    Citizen: {journeyTarget.user?.profile?.fullName || journeyTarget.user?.email || 'Citizen'} • Ref: #{journeyTarget.refNumber}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setJourneyTarget(null)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: '#94A3B8',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '20px 24px' }}>
+              {/* Yellow Summary Banner (matching Screenshot #3) */}
+              <div
+                style={{
+                  background: '#FEF3C7',
+                  border: '1px solid #FDE68A',
+                  borderRadius: 12,
+                  padding: '16px 18px',
+                  marginBottom: 20,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: '#B45309',
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    REFUND IN PROGRESS
+                  </span>
+                  <div style={{ fontSize: 11, color: '#78350F', marginTop: 3 }}>
+                    Estimated Credit Amount
+                  </div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#0F172A', marginTop: 2 }}>
+                    ₹{Number(journeyTarget.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>
+                    Ref: {journeyTarget.refNumber}
+                  </span>
+                  <div style={{ fontSize: 11, color: '#A16207', marginTop: 4 }}>
+                    {journeyTarget.serviceTitle}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3-Step Journey Checklist */}
+              <div style={{ marginBottom: 22 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                    Citizen Refund Journey (Checklist)
+                  </h4>
+                  <span style={{ fontSize: 11, color: '#64748B' }}>
+                    Ticking a step marks it active or completed for mobile live view
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {journeySteps.map((step, idx) => {
+                    const isDone = step.status === 'completed';
+                    const isActive = step.status === 'active';
+
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          background: isDone ? '#F0FDF4' : isActive ? '#FFFBEB' : '#F8FAFC',
+                          border: `1px solid ${isDone ? '#BBF7D0' : isActive ? '#FDE68A' : '#E2E8F0'}`,
+                          borderRadius: 10,
+                          padding: '12px 14px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <input
+                              type="checkbox"
+                              checked={isDone}
+                              onChange={(e) => {
+                                const newSteps = [...journeySteps];
+                                newSteps[idx].status = e.target.checked ? 'completed' : 'active';
+                                if (e.target.checked && !newSteps[idx].time) {
+                                  newSteps[idx].time = new Date().toLocaleDateString('en-IN', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  });
+                                }
+                                setJourneySteps(newSteps);
+                              }}
+                              style={{ width: 17, height: 17, cursor: 'pointer', accentColor: '#16A34A' }}
+                            />
+                            <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>
+                              Step {idx + 1}: {step.title}
+                            </span>
+                          </div>
+
+                          {/* Status Badge Selector */}
+                          <select
+                            value={step.status}
+                            onChange={(e) => {
+                              const newSteps = [...journeySteps];
+                              newSteps[idx].status = e.target.value as any;
+                              setJourneySteps(newSteps);
+                            }}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              border: '1px solid #CBD5E1',
+                              background: '#FFFFFF',
+                              color: isDone ? '#15803D' : isActive ? '#B45309' : '#64748B',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <option value="completed">✓ Completed</option>
+                            <option value="active">● In Progress</option>
+                            <option value="pending">○ Pending</option>
+                          </select>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 8 }}>
+                          <input
+                            type="text"
+                            value={step.description}
+                            onChange={(e) => {
+                              const newSteps = [...journeySteps];
+                              newSteps[idx].description = e.target.value;
+                              setJourneySteps(newSteps);
+                            }}
+                            placeholder="Subtitle / Note (e.g. Merchant accepted refund request)"
+                            style={{
+                              fontSize: 12,
+                              padding: '6px 10px',
+                              border: '1px solid #CBD5E1',
+                              borderRadius: 6,
+                              outline: 'none',
+                              background: '#FFFFFF',
+                            }}
+                          />
+                          <input
+                            type="text"
+                            value={step.time}
+                            onChange={(e) => {
+                              const newSteps = [...journeySteps];
+                              newSteps[idx].time = e.target.value;
+                              setJourneySteps(newSteps);
+                            }}
+                            placeholder="Timestamp / Date (e.g. 12 May, 04:00 PM)"
+                            style={{
+                              fontSize: 12,
+                              padding: '6px 10px',
+                              border: '1px solid #CBD5E1',
+                              borderRadius: 6,
+                              outline: 'none',
+                              background: '#FFFFFF',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Destination Account Card Form (matching Screenshot #3) */}
+              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 18px', marginBottom: 20 }}>
+                <h4 style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', margin: '0 0 12px' }}>
+                  Destination Bank Account Details
+                </h4>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>
+                      Bank Name
+                    </label>
+                    <input
+                      type="text"
+                      value={destAccount.bankName}
+                      onChange={(e) => setDestAccount({ ...destAccount, bankName: e.target.value })}
+                      placeholder="e.g. State Bank of India"
+                      style={{
+                        width: '100%',
+                        fontSize: 12.5,
+                        padding: '7px 10px',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 6,
+                        outline: 'none',
+                        background: '#FFFFFF',
+                        color: '#0F172A',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>
+                      Account Number (Masked)
+                    </label>
+                    <input
+                      type="text"
+                      value={destAccount.accountNumber}
+                      onChange={(e) => setDestAccount({ ...destAccount, accountNumber: e.target.value })}
+                      placeholder="e.g. ************1204"
+                      style={{
+                        width: '100%',
+                        fontSize: 12.5,
+                        padding: '7px 10px',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 6,
+                        outline: 'none',
+                        background: '#FFFFFF',
+                        color: '#0F172A',
+                        fontFamily: 'monospace',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>
+                      Bank Settlement Ref Number
+                    </label>
+                    <input
+                      type="text"
+                      value={destAccount.referenceNumber}
+                      onChange={(e) => setDestAccount({ ...destAccount, referenceNumber: e.target.value })}
+                      placeholder="e.g. REV-REF-39482910"
+                      style={{
+                        width: '100%',
+                        fontSize: 12.5,
+                        padding: '7px 10px',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 6,
+                        outline: 'none',
+                        background: '#FFFFFF',
+                        color: '#0F172A',
+                        fontFamily: 'monospace',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>
+                      Expected Credit Date / Notice
+                    </label>
+                    <input
+                      type="text"
+                      value={destAccount.expectedDate}
+                      onChange={(e) => setDestAccount({ ...destAccount, expectedDate: e.target.value })}
+                      placeholder="e.g. Expected: 15 May"
+                      style={{
+                        width: '100%',
+                        fontSize: 12.5,
+                        padding: '7px 10px',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 6,
+                        outline: 'none',
+                        background: '#FFFFFF',
+                        color: '#0F172A',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: '1px solid #E2E8F0',
+                background: '#F8FAFC',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 12,
+              }}
+            >
+              <button
+                onClick={() => setJourneyTarget(null)}
+                style={{
+                  border: '1px solid #CBD5E1',
+                  background: '#FFFFFF',
+                  color: '#475569',
+                  padding: '8px 18px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+              <button
+                onClick={handleSaveJourney}
+                disabled={savingJourney}
+                style={{
+                  border: 'none',
+                  background: '#2563EB',
+                  color: '#FFFFFF',
+                  padding: '8px 22px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  boxShadow: '0 2px 4px rgba(37,99,235,0.3)',
+                }}
+              >
+                {savingJourney ? (
+                  <>
+                    <RotateCcw size={14} className="animate-spin" />
+                    <span>Broadcasting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    <span>Save & Broadcast Journey</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

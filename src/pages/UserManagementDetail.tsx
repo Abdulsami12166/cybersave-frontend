@@ -407,6 +407,8 @@ export default function UserManagementDetail() {
       socket.on('response_push_sent', handlePushSent);
       socket.on('block_citizen_success', handleBlockSuccess);
       socket.on('update_citizen_success', handleUpdateSuccess);
+      socket.on('user_updated', handleRefresh);
+      socket.on('users_updated', handleRefresh);
 
       return () => {
         socket.off('response_user_detail', handleUserDetail);
@@ -425,6 +427,8 @@ export default function UserManagementDetail() {
         clearTimeout(safetyTimer);
         socket.off('block_citizen_success', handleBlockSuccess);
         socket.off('update_citizen_success', handleUpdateSuccess);
+        socket.off('user_updated', handleRefresh);
+        socket.off('users_updated', handleRefresh);
       };
     }
 
@@ -619,7 +623,10 @@ export default function UserManagementDetail() {
       : [],
     feedbacks: (user?.feedbacks && user.feedbacks.length > 0)
       ? user.feedbacks
-      : []
+      : [],
+    addresses: Array.isArray(user?.addresses)
+      ? user.addresses
+      : (Array.isArray(user?.profile?.addresses) ? user.profile.addresses : [])
   };
 
   const isBlocked = safeData.status === 'Blocked';
@@ -1040,9 +1047,17 @@ export default function UserManagementDetail() {
                   </div>
                 </div>
 
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Address</div>
+                <div style={{ gridColumn: '1 / -1', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Default Communication / Residential Address</div>
+                    <span style={{ fontSize: '11px', fontWeight: 700, backgroundColor: '#EFF6FF', color: '#2563EB', padding: '2px 8px', borderRadius: '4px', border: '1px solid #BFDBFE' }}>
+                      ✓ Default Address
+                    </span>
+                  </div>
                   <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A', lineHeight: 1.4 }}>{safeData.address}</div>
+                  <div style={{ fontSize: '12px', color: '#475569', marginTop: 4, fontWeight: 500 }}>
+                    {safeData.district !== '-' ? `${safeData.district}, ` : ''}{safeData.state !== '-' ? `${safeData.state} ` : ''}{safeData.pinCode !== '-' ? ` - ${safeData.pinCode}` : ''}
+                  </div>
                 </div>
 
                 <div>
@@ -1059,6 +1074,32 @@ export default function UserManagementDetail() {
                   <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px', fontWeight: 500 }}>Pin Code</div>
                   <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{safeData.pinCode}</div>
                 </div>
+
+                {safeData.addresses && safeData.addresses.length > 0 && (
+                  <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+                    <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, marginBottom: '8px' }}>
+                      Saved Addresses on File ({safeData.addresses.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {safeData.addresses.map((addr: any, aIdx: number) => (
+                        <div key={addr.id || aIdx} style={{ background: addr.isDefault ? '#F0FDF4' : '#FFFFFF', border: `1px solid ${addr.isDefault ? '#BBF7D0' : '#E2E8F0'}`, borderRadius: '6px', padding: '10px 12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>{addr.tag || 'Saved Address'}</span>
+                            {addr.isDefault && (
+                              <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#15803D', backgroundColor: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>
+                                ✓ Default
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '12.5px', color: '#334155', marginTop: 3 }}>{addr.address || addr.fullAddress}</div>
+                          <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: 2 }}>
+                            {addr.district ? `${addr.district}, ` : ''}{addr.state ? `${addr.state} ` : ''}{addr.pinCode ? `- ${addr.pinCode}` : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
