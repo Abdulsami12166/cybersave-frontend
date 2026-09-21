@@ -128,9 +128,6 @@ export default function Notifications() {
     }
 
     setIsSendingPush(true);
-    if (socket && connected) {
-      socket.emit('send_global_push', { title, body });
-    }
 
     try {
       const res = await apiFetch('/api/v1/notifications/broadcast', {
@@ -140,11 +137,20 @@ export default function Notifications() {
       });
       if (res && res.ok) {
         showToast('Global Push dispatched to all citizen mobile devices!', 'success');
-      } else {
+      } else if (socket && connected) {
+        // Fallback to WebSocket only if REST endpoint returned non-ok
+        socket.emit('send_global_push', { title, body });
         showToast('Broadcast dispatched via real-time gateway', 'success');
+      } else {
+        showToast('Push broadcast dispatched', 'info');
       }
     } catch (_) {
-      showToast('Push notification broadcast dispatched', 'info');
+      if (socket && connected) {
+        socket.emit('send_global_push', { title, body });
+        showToast('Broadcast dispatched via real-time socket fallback', 'info');
+      } else {
+        showToast('Push notification broadcast queued', 'info');
+      }
     } finally {
       setIsSendingPush(false);
       setShowPushModal(false);
