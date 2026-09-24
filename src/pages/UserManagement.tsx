@@ -54,7 +54,7 @@ export default function UserManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCitizenName, setNewCitizenName] = useState('');
   const [newCitizenPhone, setNewCitizenPhone] = useState('');
-  const [newCitizenDistrict, setNewCitizenDistrict] = useState('Central Delhi, DL');
+  const [newCitizenDistrict, setNewCitizenDistrict] = useState('');
 
   // Targeted Notification Modal for Specific Citizen
   const [selectedNotifCitizen, setSelectedNotifCitizen] = useState<any | null>(null);

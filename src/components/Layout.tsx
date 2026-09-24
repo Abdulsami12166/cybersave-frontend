@@ -17,84 +17,72 @@ export const showToast = (message: string, type: 'success' | 'error' = 'success'
 
 const TRANSLATIONS: Record<string, Record<string, string>> = {
   EN: {
-    operations: 'OPERATIONS',
-    governance: 'GOVERNANCE & REGISTRY',
-    compliance: 'AUDIT & COMPLIANCE',
-    dashboard: 'Command Center',
-    applications: 'Applications Queue',
-    refunds: 'Refund Dispatches',
-    transactions: 'Settlement Journal',
-    services: 'Service Schemes',
-    users: 'Citizen Directory',
-    operators: 'Seva Kendra Operators',
-    support: 'Citizen Grievances',
-    analytics: 'SLA Analytics',
-    audit: 'Security Audit Logs',
-    notifications: 'Broadcast Dispatches',
-    settings: 'System Configuration',
+    dashboard: 'Dashboard',
+    users: 'User Management',
+    applications: 'Applications',
+    services: 'Services',
+    operators: 'Operators',
+    transactions: 'Transactions',
+    notifications: 'Notifications',
+    support: 'Support Tickets',
+    analytics: 'Analytics',
+    audit: 'Audit Logs',
+    settings: 'Settings',
+    collapseMenu: 'Collapse Menu',
     quickActions: 'Quick Actions',
     searchPlaceholder: 'Search applications, citizens, operators...',
-    logout: 'End Officer Session',
+    logout: 'Logout',
   },
   HI: {
-    operations: 'संचालन (Operations)',
-    governance: 'शासन एवं नागरिक रजिस्ट्री',
-    compliance: 'ऑडिट एवं अनुपालन',
-    dashboard: 'कमांड सेंटर (Dashboard)',
-    applications: 'आवेदन कतार (Applications)',
-    refunds: 'रिफंड प्रेषण (Refunds)',
-    transactions: 'निपटान पत्रिका (Transactions)',
-    services: 'सेवा योजनाएं (Services)',
-    users: 'नागरिक निर्देशिका (Citizens)',
-    operators: 'सेवा केंद्र संचालक (Operators)',
-    support: 'नागरिक शिकायतें (Grievances)',
-    analytics: 'एसएलए विश्लेषण (Analytics)',
-    audit: 'सुरक्षा ऑडिट लॉग (Audit Logs)',
-    notifications: 'प्रसारण प्रेषण (Broadcasts)',
-    settings: 'सिस्टम कॉन्फ़िगरेशन (Settings)',
+    dashboard: 'डैशबोर्ड (Dashboard)',
+    users: 'उपयोगकर्ता प्रबंधन (User Management)',
+    applications: 'आवेदन (Applications)',
+    services: 'सेवाएं (Services)',
+    operators: 'ऑपरेटर्स (Operators)',
+    transactions: 'लेनदेन (Transactions)',
+    notifications: 'सूचनाएं (Notifications)',
+    support: 'सपोर्ट टिकट्स (Support Tickets)',
+    analytics: 'एनालिटिक्स (Analytics)',
+    audit: 'ऑडिट लॉग्स (Audit Logs)',
+    settings: 'सेटिंग्स (Settings)',
+    collapseMenu: 'मेनू संक्षिप्त करें',
     quickActions: 'त्वरित कार्रवाई',
     searchPlaceholder: 'आवेदन, नागरिक, संचालक खोजें...',
-    logout: 'सत्र समाप्त करें (Logout)',
+    logout: 'लॉगआउट',
   },
   GU: {
-    operations: 'કામગીરી (Operations)',
-    governance: 'શાસન અને નાગરિક નોંધણી',
-    compliance: 'ઓડિટ અને પાલન',
-    dashboard: 'કમાન્ડ સેન્ટર (Dashboard)',
-    applications: 'અરજી કતાર (Applications)',
-    refunds: 'રીફંડ ચૂકવણી (Refunds)',
-    transactions: 'પતાવટ પત્રિકા (Transactions)',
-    services: 'સેવા યોજનાઓ (Services)',
-    users: 'નાગરિક નિર્દેશિકા (Citizens)',
-    operators: 'સેવા કેન્દ્ર સંચાલકો (Operators)',
-    support: 'નાગરિક ફરિયાદો (Grievances)',
-    analytics: 'એસએલએ વિશ્લેષણ (Analytics)',
-    audit: 'સુરક્ષા ઓડિટ લૉગ્સ (Audit Logs)',
-    notifications: 'પ્રસારણ સંદેશાઓ (Broadcasts)',
-    settings: 'સિસ્ટમ રૂપરેખાંકન (Settings)',
+    dashboard: 'ડેશબોર્ડ (Dashboard)',
+    users: 'વપરાશકર્તા વ્યવસ્થાપન (User Management)',
+    applications: 'અરજીઓ (Applications)',
+    services: 'સેવાઓ (Services)',
+    operators: 'ઓપરેટર્સ (Operators)',
+    transactions: 'વ્યવહારો (Transactions)',
+    notifications: 'સૂચનાઓ (Notifications)',
+    support: 'સપોર્ટ ટિકિટો (Support Tickets)',
+    analytics: 'એનાલિટિક્સ (Analytics)',
+    audit: 'ઓડિટ લૉગ્સ (Audit Logs)',
+    settings: 'સેટિંગ્સ (Settings)',
+    collapseMenu: 'મેનુ સંકોચો',
     quickActions: 'ઝડપી ક્રિયાઓ',
     searchPlaceholder: 'અરજીઓ, નાગરિકો, સંચાલકો શોધો...',
-    logout: 'સત્ર સમાપ્ત કરો (Logout)',
+    logout: 'લૉગઆઉટ',
   },
   MR: {
-    operations: 'कार्यान्वयन (Operations)',
-    governance: 'शासन व नागरिक नोंदवही',
-    compliance: 'ऑडिट व अनुपालन',
-    dashboard: 'कमांड सेंटर (Dashboard)',
-    applications: 'अर्ज रांग (Applications)',
-    refunds: 'परतावा वितरण (Refunds)',
-    transactions: 'व्यवहार नोंदवही (Transactions)',
-    services: 'सेवा योजना (Services)',
-    users: 'नागरिक निर्देशिका (Citizens)',
-    operators: 'सेवा केंद्र चालक (Operators)',
-    support: 'नागरिक तक्रारी (Grievances)',
-    analytics: 'कामगिरी विश्लेषण (Analytics)',
-    audit: 'सुरक्षा ऑडिट नोंदी (Audit Logs)',
-    notifications: 'सूचना प्रसारण (Broadcasts)',
-    settings: 'प्रणाली संरचना (Settings)',
+    dashboard: 'डॅशबोर्ड (Dashboard)',
+    users: 'वापरकर्ता व्यवस्थापन (User Management)',
+    applications: 'अर्ज (Applications)',
+    services: 'सेवा (Services)',
+    operators: 'ऑपरेटर्स (Operators)',
+    transactions: 'व्यवहार (Transactions)',
+    notifications: 'सूचना (Notifications)',
+    support: 'सपोर्ट तिकीट (Support Tickets)',
+    analytics: 'अॅनालिटिक्स (Analytics)',
+    audit: 'ऑडिट नोंदी (Audit Logs)',
+    settings: 'सेटिंग्ज (Settings)',
+    collapseMenu: 'मेनू संकुचित करा',
     quickActions: 'त्वरित कृती',
     searchPlaceholder: 'अर्ज, नागरिक, चालक शोधा...',
-    logout: 'सत्र समाप्त करा (Logout)',
+    logout: 'लॉगआउट',
   }
 };
 
@@ -104,10 +92,18 @@ export default function Layout() {
   const [toast, setToast] = useState<{message: string, type: string} | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentLang, setCurrentLang] = useState<string>(() => localStorage.getItem('cybersave_admin_lang') || 'EN');
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [notifCount, setNotifCount] = useState(12);
+  const [notificationList, setNotificationList] = useState<any[]>([
+    { id: 'n1', title: 'New PAN Application CS-2026-9024', desc: 'Priya Sharma submitted application from CyberSave Mobile', time: '5 mins ago', read: false },
+    { id: 'n2', title: 'Operator Registered', desc: 'Centre #4812 (Bhopal) Activated', time: '12 mins ago', read: false },
+    { id: 'n3', title: 'Aadhaar Correction Dispatch', desc: 'Centre #1024 uploaded verification documents', time: '18 mins ago', read: false },
+    { id: 'n4', title: 'Refund Claim Approved', desc: 'Claim #REF-9024 processed for ₹50.00', time: '35 mins ago', read: false },
+    { id: 'n5', title: 'Security Audit Log Generated', desc: 'Operator access credentials updated', time: '1 hour ago', read: false },
+  ]);
   const { admin, logout, updateAdmin } = useAuth();
   const { socket } = useSocket();
 
@@ -218,34 +214,18 @@ export default function Layout() {
     }
   }, [socket, admin?.id, logout, navigate, updateAdmin]);
 
-  const navSections = [
-    {
-      title: currentTranslations.operations,
-      items: [
-        { icon: <LayoutDashboard size={18} />, label: currentTranslations.dashboard, path: '/', requiredPermission: 'DASHBOARD' },
-        { icon: <FileText size={18} />, label: currentTranslations.applications, path: '/applications', requiredPermission: 'APPLICATIONS' },
-        { icon: <RotateCcw size={18} />, label: currentTranslations.refunds, path: '/refunds', requiredPermission: 'REFUNDS' },
-        { icon: <ArrowLeftRight size={18} />, label: currentTranslations.transactions, path: '/transactions', requiredPermission: 'TRANSACTIONS' },
-      ]
-    },
-    {
-      title: currentTranslations.governance,
-      items: [
-        { icon: <Grid size={18} />, label: currentTranslations.services, path: '/services', requiredPermission: 'SERVICES' },
-        { icon: <Users size={18} />, label: currentTranslations.users, path: '/users', requiredPermission: 'USERS' },
-        { icon: <UserSquare2 size={18} />, label: currentTranslations.operators, path: '/operators', requiredPermission: 'OPERATORS' },
-      ]
-    },
-    {
-      title: currentTranslations.compliance,
-      items: [
-        { icon: <HelpCircle size={18} />, label: currentTranslations.support, path: '/support', requiredPermission: 'SUPPORT' },
-        { icon: <BarChart3 size={18} />, label: currentTranslations.analytics, path: '/analytics', requiredPermission: 'ANALYTICS' },
-        { icon: <ShieldCheck size={18} />, label: currentTranslations.audit, path: '/audit', requiredPermission: 'AUDIT' },
-        { icon: <Bell size={18} />, label: currentTranslations.notifications, path: '/notifications', requiredPermission: 'NOTIFICATIONS' },
-        { icon: <Settings size={18} />, label: currentTranslations.settings, path: '/settings', requiredPermission: 'SETTINGS' },
-      ]
-    }
+  const navItems = [
+    { icon: <LayoutDashboard size={18} />, label: currentTranslations.dashboard, path: '/', requiredPermission: 'DASHBOARD' },
+    { icon: <Users size={18} />, label: currentTranslations.users, path: '/users', requiredPermission: 'USERS' },
+    { icon: <FileText size={18} />, label: currentTranslations.applications, path: '/applications', requiredPermission: 'APPLICATIONS' },
+    { icon: <Grid size={18} />, label: currentTranslations.services, path: '/services', requiredPermission: 'SERVICES' },
+    { icon: <UserSquare2 size={18} />, label: currentTranslations.operators, path: '/operators', requiredPermission: 'OPERATORS' },
+    { icon: <ArrowLeftRight size={18} />, label: currentTranslations.transactions, path: '/transactions', requiredPermission: 'TRANSACTIONS' },
+    { icon: <Bell size={18} />, label: currentTranslations.notifications, path: '/notifications', requiredPermission: 'NOTIFICATIONS' },
+    { icon: <HelpCircle size={18} />, label: currentTranslations.support, path: '/support', requiredPermission: 'SUPPORT' },
+    { icon: <BarChart3 size={18} />, label: currentTranslations.analytics, path: '/analytics', requiredPermission: 'ANALYTICS' },
+    { icon: <ShieldCheck size={18} />, label: currentTranslations.audit, path: '/audit', requiredPermission: 'AUDIT' },
+    { icon: <Settings size={18} />, label: currentTranslations.settings, path: '/settings', requiredPermission: 'SETTINGS' },
   ];
 
   const isSuperAdmin = 
@@ -257,23 +237,18 @@ export default function Layout() {
   const userPermissions = Array.isArray(admin?.permissions) ? admin.permissions : [];
 
   const hasAccess = (requiredPermission?: string) => {
-    // Super Admins have unrestricted access
     if (isSuperAdmin) return true;
-    
-    // Strict Least Privilege Access for Sub-Admins and Seva Kendra Operators:
-    // ONLY allowed / ticked options should be accessible and displayed.
     if (!requiredPermission) return false;
     return userPermissions.includes(requiredPermission);
   };
 
   // Route protection: Enforce least privilege routing access
-  const allNavItems = navSections.flatMap(s => s.items);
+  const allNavItems = navItems;
   useEffect(() => {
     if (isSuperAdmin) return;
     const currentPath = location.pathname;
     const matchedItem = allNavItems.find(item => item.path === currentPath || (item.path !== '/' && currentPath.startsWith(item.path)));
     if (matchedItem && !hasAccess(matchedItem.requiredPermission)) {
-      // Find the first authorized navigation route for this sub-admin
       const firstAllowed = allNavItems.find(item => hasAccess(item.requiredPermission));
       if (firstAllowed) {
         navigate(firstAllowed.path, { replace: true });
@@ -320,153 +295,119 @@ export default function Layout() {
         </div>
       )}
 
-      {/* Sidebar Navigation */}
+      {/* Sidebar Navigation matching Image 1 Reference Design */}
       <aside className="sidebar" style={{
-        width: '270px',
+        width: isCollapsed ? '76px' : '255px',
+        minWidth: isCollapsed ? '76px' : '255px',
         background: '#FFFFFF',
         borderRight: '1px solid #E2E8F0',
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        overflowY: 'auto'
+        transition: 'width 0.2s ease, min-width 0.2s ease',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        position: 'sticky',
+        top: 0,
+        flexShrink: 0
       }}>
-        {/* Portal Branding */}
+        {/* Portal Branding matching Image 1 */}
         <div style={{
-          padding: '20px 20px 16px 20px',
-          borderBottom: '1px solid #F1F5F9'
+          padding: isCollapsed ? '20px 8px' : '20px 22px 18px 22px',
+          borderBottom: '1px solid #F1F5F9',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: isCollapsed ? 'center' : 'flex-start',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {isCollapsed ? (
             <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, #1E40AF 0%, #2563EB 100%)',
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              background: '#2563EB',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#FFFFFF',
               fontWeight: 900,
               fontSize: '18px',
-              boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)'
             }}>
-              C
+              CS
             </div>
+          ) : (
             <div>
-              <div style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                <span style={{ color: '#2563EB' }}>Cyber</span>save
+              <div style={{ fontSize: '24px', fontWeight: 800, color: '#2563EB', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                Cybersave
               </div>
-              <div style={{ fontSize: '10.5px', color: '#64748B', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                National E-Gov Console
+              <div style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: '4px' }}>
+                DIGITAL SERVICES • POWERED BY Seva Kendra
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Grouped Navigation */}
-        <div style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '18px', flex: 1 }}>
-          {navSections.map((section, sIdx) => {
-            const visibleItems = section.items.filter(
-              item => hasAccess(item.requiredPermission)
-            );
-
-            if (visibleItems.length === 0) return null;
-
-            return (
-              <div key={sIdx}>
-                <div style={{
-                  fontSize: '10.5px',
-                  fontWeight: 800,
-                  color: '#94A3B8',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  padding: '0 10px 6px 10px'
-                }}>
-                  {section.title}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  {visibleItems.map((item, iIdx) => (
-                    <NavLink
-                      key={iIdx}
-                      to={item.path}
-                      className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
-                      end={item.path === '/'}
-                      style={({ isActive }) => ({
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '8px 12px',
-                        borderRadius: '7px',
-                        fontSize: '13px',
-                        fontWeight: isActive ? 700 : 500,
-                        color: isActive ? '#1D4ED8' : '#475569',
-                        background: isActive ? '#EFF6FF' : 'transparent',
-                        textDecoration: 'none',
-                        transition: 'all 0.15s ease'
-                      })}
-                    >
-                      {item.icon}
-                      <span>{item.label}</span>
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+        {/* Flat Navigation Item List matching Image 1 */}
+        <div style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+          {navItems.filter(item => hasAccess(item.requiredPermission)).map((item, idx) => (
+            <NavLink
+              key={idx}
+              to={item.path}
+              end={item.path === '/'}
+              title={isCollapsed ? item.label : undefined}
+              style={({ isActive }) => ({
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: isCollapsed ? '10px 0' : '10px 14px',
+                borderRadius: '8px',
+                fontSize: '13.5px',
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? '#2563EB' : '#475569',
+                background: isActive ? '#EFF6FF' : 'transparent',
+                border: isActive ? '1px solid #BFDBFE' : '1px solid transparent',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease',
+                justifyContent: isCollapsed ? 'center' : 'flex-start',
+              })}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'inherit' }}>
+                {item.icon}
+              </span>
+              {!isCollapsed && <span>{item.label}</span>}
+            </NavLink>
+          ))}
         </div>
 
-        {/* Operator Badge & Sign Out */}
+        {/* Collapse Menu at bottom matching Image 1 */}
         <div style={{
-          padding: '14px 16px',
+          padding: '12px 14px',
           borderTop: '1px solid #F1F5F9',
           background: '#FAFAFA'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: '#E2E8F0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 700,
-                fontSize: '12px',
-                color: '#334155'
-              }}>
-                {(admin?.name || admin?.email || 'AD').slice(0, 2).toUpperCase()}
-              </div>
-              <div>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', lineHeight: 1.2 }}>
-                  {admin?.name || 'Principal Officer'}
-                </div>
-                <div style={{ fontSize: '10.5px', color: '#64748B' }}>
-                  ID: CSC-IND-8841
-                </div>
-              </div>
-            </div>
-          </div>
-
           <button
-            onClick={logout}
+            onClick={() => setIsCollapsed(!isCollapsed)}
             style={{
               width: '100%',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              border: '1px solid #FCA5A5',
-              background: '#FEF2F2',
-              color: '#DC2626',
-              fontSize: '12px',
-              fontWeight: 700,
-              cursor: 'pointer'
+              justifyContent: isCollapsed ? 'center' : 'flex-start',
+              gap: '10px',
+              padding: '8px 10px',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: '7px',
+              fontSize: '12.5px',
+              fontWeight: 600,
+              color: '#64748B',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
-            <LogOut size={13} />
-            <span>End Officer Session</span>
+            <PanelLeftClose size={17} color="#64748B" />
+            {!isCollapsed && <span>{currentTranslations.collapseMenu}</span>}
           </button>
         </div>
       </aside>
@@ -682,19 +623,35 @@ export default function Layout() {
                     </button>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
-                    <div style={{ padding: '8px', background: '#F8FAFC', borderRadius: '8px', fontSize: '12px' }}>
-                      <div style={{ fontWeight: 700, color: '#0F172A' }}>New PAN Application CS-2026-9024</div>
-                      <div style={{ color: '#64748B', fontSize: '11px', marginTop: '2px' }}>Priya Sharma submitted application • 5 mins ago</div>
-                    </div>
-                    <div style={{ padding: '8px', background: '#F8FAFC', borderRadius: '8px', fontSize: '12px' }}>
-                      <div style={{ fontWeight: 700, color: '#0F172A' }}>Aadhaar Correction Dispatch</div>
-                      <div style={{ color: '#64748B', fontSize: '11px', marginTop: '2px' }}>Centre #1024 uploaded verification documents • 18 mins ago</div>
-                    </div>
-                    <div style={{ padding: '8px', background: '#F8FAFC', borderRadius: '8px', fontSize: '12px' }}>
-                      <div style={{ fontWeight: 700, color: '#0F172A' }}>Refund Claim Approved</div>
-                      <div style={{ color: '#64748B', fontSize: '11px', marginTop: '2px' }}>Claim #REF-9024 processed for ₹50.00 • 35 mins ago</div>
-                    </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+                    {notificationList.map((notif) => (
+                      <div 
+                        key={notif.id} 
+                        onClick={() => {
+                          setShowNotifMenu(false);
+                          if (notif.path) navigate(notif.path);
+                        }}
+                        style={{ 
+                          padding: '10px', 
+                          background: notif.read ? '#FFFFFF' : '#F0F9FF', 
+                          borderRadius: '8px', 
+                          border: notif.read ? '1px solid #F1F5F9' : '1px solid #BAE6FD',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = '#E0F2FE')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = notif.read ? '#FFFFFF' : '#F0F9FF')}
+                      >
+                        <div style={{ fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{notif.title}</span>
+                          <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 500 }}>{notif.time}</span>
+                        </div>
+                        <div style={{ color: '#475569', fontSize: '11.5px', marginTop: '3px' }}>
+                          {notif.desc}
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #F1F5F9', textAlign: 'center' }}>
@@ -932,12 +889,11 @@ export default function Layout() {
                 </div>
               )}
               <div>
-                <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A', lineHeight: 1.2 }}>
-                  {admin?.name || 'Super Administrator'}
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', lineHeight: 1.2 }}>
+                  {admin?.name || 'Rajesh Kumar'}
                 </div>
-                <div style={{ fontSize: '10.5px', color: '#10B981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', display: 'inline-block' }}></span>
-                  Super Administrator Active
+                <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 500, marginTop: '2px' }}>
+                  Super Admin
                 </div>
               </div>
             </div>

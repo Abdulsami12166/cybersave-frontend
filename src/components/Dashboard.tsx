@@ -95,10 +95,196 @@ const LiveClock = React.memo(() => {
   );
 });
 
+const DASHBOARD_I18N: Record<string, Record<string, string>> = {
+  EN: {
+    greetingMorning: 'Good Morning',
+    greetingAfternoon: 'Good Afternoon',
+    greetingEvening: 'Good Evening',
+    overviewSubtitle: "Here's your operational overview for today",
+    revenueToday: 'Revenue Today',
+    applicationsToday: 'Applications Today',
+    pendingApps: 'Pending Applications',
+    completedToday: 'Completed Today',
+    rejectedToday: 'Rejected Today',
+    activeCentres: 'Active Centres',
+    normal: 'Normal',
+    highLoad: 'High load',
+    manualReview: 'Manual review',
+    liveNow: 'Live now',
+    rate: 'rate',
+    revenueOverview: 'Revenue Overview',
+    rev7DaySub: '7-day digital service transactions',
+    rev30DaySub: '30-day cumulative platform transactions',
+    days7: '7 Days',
+    days30: '30 Days',
+    appTrends: 'Application Trends',
+    appTrendsSub: 'Daily status of citizen certificates & updates',
+    completed: 'Completed',
+    pending: 'Pending',
+    rejected: 'Rejected',
+    serviceShare: 'Service Share',
+    collectionsSummary: 'Collections Summary',
+    totalCollectionsToday: 'Total Collections Today',
+    onlinePayments: 'Online Payments',
+    cashCollections: 'Cash Collections',
+    operatorLogs: 'Operator Logs',
+    recentServiceApps: 'Recent Service Applications',
+    recentServiceAppsSub: 'Real-time incoming government & financial services requests',
+    viewAll: 'View All',
+    colAppId: 'Application ID',
+    colCitizen: 'Citizen Name',
+    colService: 'Service',
+    colStatus: 'Status',
+    colFee: 'Fee Amount',
+    colSubmitted: 'Date Submitted',
+    colAction: 'Action',
+  },
+  HI: {
+    greetingMorning: 'शुभ प्रभात',
+    greetingAfternoon: 'शुभ दोपहर',
+    greetingEvening: 'शुभ संध्या',
+    overviewSubtitle: 'आज के लिए आपका परिचालन अवलोकन',
+    revenueToday: 'आज का राजस्व (Revenue Today)',
+    applicationsToday: 'आज के आवेदन (Applications Today)',
+    pendingApps: 'लंबित आवेदन (Pending)',
+    completedToday: 'आज पूर्ण (Completed Today)',
+    rejectedToday: 'आज अस्वीकृत (Rejected Today)',
+    activeCentres: 'सक्रिय केंद्र (Active Centres)',
+    normal: 'सामान्य (Normal)',
+    highLoad: 'अधिक भार (High load)',
+    manualReview: 'समीक्षाधीन (Manual review)',
+    liveNow: 'लाइव सक्रिय (Live now)',
+    rate: 'दर (rate)',
+    revenueOverview: 'राजस्व अवलोकन (Revenue Overview)',
+    rev7DaySub: '7-दिवसीय डिजिटल सेवा लेनदेन',
+    rev30DaySub: '30-दिवसीय संचयी प्लेटफ़ॉर्म लेनदेन',
+    days7: '7 दिन',
+    days30: '30 दिन',
+    appTrends: 'आवेदन रुझान (Application Trends)',
+    appTrendsSub: 'नागरिक प्रमाणपत्र एवं अद्यतनों की दैनिक स्थिति',
+    completed: 'पूर्ण (Completed)',
+    pending: 'लंबित (Pending)',
+    rejected: 'अस्वीकृत (Rejected)',
+    serviceShare: 'सेवा भागीदारी (Service Share)',
+    collectionsSummary: 'संग्रह सारांश (Collections Summary)',
+    totalCollectionsToday: 'आज का कुल संग्रह',
+    onlinePayments: 'ऑनलाइन भुगतान',
+    cashCollections: 'नकद संग्रह',
+    operatorLogs: 'ऑपरेटर लॉग (Operator Logs)',
+    recentServiceApps: 'हालिया सेवा आवेदन (Recent Applications)',
+    recentServiceAppsSub: 'वास्तविक समय में प्राप्त सरकारी एवं वित्तीय सेवाएं',
+    viewAll: 'सभी देखें (View All)',
+    colAppId: 'आवेदन संख्या (Application ID)',
+    colCitizen: 'नागरिक नाम (Citizen Name)',
+    colService: 'सेवा (Service)',
+    colStatus: 'स्थिति (Status)',
+    colFee: 'शुल्क (Fee Amount)',
+    colSubmitted: 'जमा करने की तिथि (Date Submitted)',
+    colAction: 'कार्रवाई (Action)',
+  },
+  GU: {
+    greetingMorning: 'શુભ સવાર',
+    greetingAfternoon: 'શુભ બપોર',
+    greetingEvening: 'શુભ સાંજ',
+    overviewSubtitle: 'આજની કામગીરીની રૂપરેખા',
+    revenueToday: 'આજની આવક (Revenue Today)',
+    applicationsToday: 'આજની અરજીઓ (Applications Today)',
+    pendingApps: 'બાકી અરજીઓ (Pending)',
+    completedToday: 'આજે પૂર્ણ (Completed Today)',
+    rejectedToday: 'આજે અસ્વીકૃત (Rejected Today)',
+    activeCentres: 'સક્રિય કેન્દ્રો (Active Centres)',
+    normal: 'સામાન્ય (Normal)',
+    highLoad: 'વધારે ભાર (High load)',
+    manualReview: 'પુનઃચકાસણી (Manual review)',
+    liveNow: 'લાઇવ સક્રિય (Live now)',
+    rate: 'દર (rate)',
+    revenueOverview: 'આવક ઝાંખી (Revenue Overview)',
+    rev7DaySub: '7 દિવસના ડિજિટલ સેવા વ્યવહારો',
+    rev30DaySub: '30 દિવસના કુલ પ્લેટફોર્મ વ્યવહારો',
+    days7: '7 દિવસ',
+    days30: '30 દિવસ',
+    appTrends: 'અરજી વલણ (Application Trends)',
+    appTrendsSub: 'પ્રમાણપત્ર અને અપડેટ્સની દૈનિક સ્થિતિ',
+    completed: 'પૂર્ણ (Completed)',
+    pending: 'બાકી (Pending)',
+    rejected: 'અસ્વીકૃત (Rejected)',
+    serviceShare: 'સેવા હિસ્સેદારી (Service Share)',
+    collectionsSummary: 'સંગ્રહ સારાંશ (Collections Summary)',
+    totalCollectionsToday: 'આજનો કુલ સંગ્રહ',
+    onlinePayments: 'ઓનલાઇન ચૂકવણી',
+    cashCollections: 'રોકડ સંગ્રહ',
+    operatorLogs: 'ઓપરેટર લૉગ્સ (Operator Logs)',
+    recentServiceApps: 'તાજેતરની સેવા અરજીઓ (Recent Applications)',
+    recentServiceAppsSub: 'રિયલ ટાઇમ સરકારી અને નાણાકીય સેવા અરજીઓ',
+    viewAll: 'બધું જુઓ (View All)',
+    colAppId: 'અરજી નંબર (Application ID)',
+    colCitizen: 'નાગરિક નામ (Citizen Name)',
+    colService: 'સેવા (Service)',
+    colStatus: 'સ્થિતિ (Status)',
+    colFee: 'ફી રકમ (Fee Amount)',
+    colSubmitted: 'સબમિટ તારીખ (Date Submitted)',
+    colAction: 'ક્રિયા (Action)',
+  },
+  MR: {
+    greetingMorning: 'शुभ सकाळ',
+    greetingAfternoon: 'शुभ दुपार',
+    greetingEvening: 'शुभ संध्याकाळ',
+    overviewSubtitle: 'आजचा कामाचा आढावा',
+    revenueToday: 'आजचा महसूल (Revenue Today)',
+    applicationsToday: 'आजचे अर्ज (Applications Today)',
+    pendingApps: 'प्रलंबित अर्ज (Pending)',
+    completedToday: 'आज पूर्ण (Completed Today)',
+    rejectedToday: 'आज नाकारलेले (Rejected Today)',
+    activeCentres: 'सक्रिय केंद्रे (Active Centres)',
+    normal: 'सामान्य (Normal)',
+    highLoad: 'अधिक भार (High load)',
+    manualReview: 'तपासणी बाकी (Manual review)',
+    liveNow: 'थेट सुरू (Live now)',
+    rate: 'दर (rate)',
+    revenueOverview: 'महसूल आढावा (Revenue Overview)',
+    rev7DaySub: '७ दिवसांचे डिजिटल सेवा व्यवहार',
+    rev30DaySub: '३० दिवसांचे एकत्रित प्लॅटफॉर्म व्यवहार',
+    days7: '७ दिवस',
+    days30: '३० दिवस',
+    appTrends: 'अर्ज कल (Application Trends)',
+    appTrendsSub: 'प्रमाणपत्र व अद्यतनांची दैनंदिन स्थिती',
+    completed: 'पूर्ण (Completed)',
+    pending: 'प्रलंबित (Pending)',
+    rejected: 'नाकारलेले (Rejected)',
+    serviceShare: 'सेवा वाटप (Service Share)',
+    collectionsSummary: 'संकलन सारांश (Collections Summary)',
+    totalCollectionsToday: 'आजचे एकूण संकलन',
+    onlinePayments: 'ऑनलाइन भरणा',
+    cashCollections: 'रोख संकलन',
+    operatorLogs: 'ऑपरेटर नोंदी (Operator Logs)',
+    recentServiceApps: 'नुकतेच आलेले अर्ज (Recent Applications)',
+    recentServiceAppsSub: 'थेट शासकीय व वित्तीय सेवा विनंत्या',
+    viewAll: 'सर्व पहा (View All)',
+    colAppId: 'अर्ज क्रमांक (Application ID)',
+    colCitizen: 'नागरिकाचे नाव (Citizen Name)',
+    colService: 'सेवा (Service)',
+    colStatus: 'स्थिती (Status)',
+    colFee: 'शुल्क रक्कम (Fee Amount)',
+    colSubmitted: 'सादर दिनांक (Date Submitted)',
+    colAction: 'कृती (Action)',
+  }
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
   const { admin } = useAuth();
+  const [currentLang, setCurrentLang] = useState<string>(() => localStorage.getItem('cybersave_admin_lang') || 'EN');
+  const i18n = DASHBOARD_I18N[currentLang] || DASHBOARD_I18N.EN;
+
+  useEffect(() => {
+    const handleLang = (e: any) => {
+      setCurrentLang(e.detail?.lang || localStorage.getItem('cybersave_admin_lang') || 'EN');
+    };
+    window.addEventListener('cybersave_lang_changed', handleLang);
+    return () => window.removeEventListener('cybersave_lang_changed', handleLang);
+  }, []);
+
   const [data, setData] = useState<any>(null);
   const [operatorCount, setOperatorCount] = useState<number | null>(null);
   const [rawApps, setRawApps] = useState<any[]>([]);
@@ -330,7 +516,7 @@ export default function Dashboard() {
 
   // Human Greeting & Formatted Date for Header
   const currentHour = new Date().getHours();
-  const greeting = currentHour < 12 ? 'Good Morning' : currentHour < 17 ? 'Good Afternoon' : 'Good Evening';
+  const greetingText = currentHour < 12 ? i18n.greetingMorning : currentHour < 17 ? i18n.greetingAfternoon : i18n.greetingEvening;
   const adminName = admin?.name?.trim() ? admin.name.split(' ')[0] : 'Rajesh';
   const formattedToday = new Date().toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -522,10 +708,10 @@ export default function Dashboard() {
       }}>
         <div>
           <h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
-            {greeting}, {adminName}
+            {greetingText}, {adminName}
           </h1>
           <p style={{ fontSize: '14px', color: '#64748B', marginTop: '4px', margin: 0, fontWeight: 500 }}>
-            Here's your operational overview for today
+            {i18n.overviewSubtitle}
           </p>
         </div>
 
@@ -606,7 +792,7 @@ export default function Dashboard() {
           </div>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
-              Revenue Today
+              {i18n.revenueToday}
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
               ₹{displayRevenueToday.toLocaleString('en-IN')}
@@ -642,13 +828,13 @@ export default function Dashboard() {
           </div>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
-              Applications Today
+              {i18n.applicationsToday}
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
               {displayAppsToday.toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '12px', fontWeight: 600, color: '#16A34A', marginTop: '6px' }}>
-              Normal
+              {i18n.normal}
             </div>
           </div>
         </div>
@@ -678,13 +864,13 @@ export default function Dashboard() {
           </div>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
-              Pending Applications
+              {i18n.pendingApps}
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
               {displayPending.toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '12px', fontWeight: 500, color: '#64748B', marginTop: '6px' }}>
-              High load
+              {i18n.highLoad}
             </div>
           </div>
         </div>
@@ -714,13 +900,13 @@ export default function Dashboard() {
           </div>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
-              Completed Today
+              {i18n.completedToday}
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
               {displayCompletedToday.toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '12px', fontWeight: 600, color: '#16A34A', marginTop: '6px' }}>
-              {completionRate}% rate
+              {completionRate}% {i18n.rate}
             </div>
           </div>
         </div>
@@ -750,13 +936,13 @@ export default function Dashboard() {
           </div>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
-              Rejected Today
+              {i18n.rejectedToday}
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
               {displayRejectedToday.toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '12px', fontWeight: 500, color: '#64748B', marginTop: '6px' }}>
-              Manual review
+              {i18n.manualReview}
             </div>
           </div>
         </div>
@@ -810,13 +996,13 @@ export default function Dashboard() {
           </div>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
-              Active Centres
+              {i18n.activeCentres}
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
               {displayActiveCentres.toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '12px', fontWeight: 600, color: '#16A34A', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16A34A', display: 'inline-block' }} /> Live now
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16A34A', display: 'inline-block' }} /> {i18n.liveNow}
             </div>
           </div>
         </div>
@@ -842,10 +1028,10 @@ export default function Dashboard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
             <div>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                Revenue Overview
+                {i18n.revenueOverview}
               </h3>
               <p style={{ fontSize: '12.5px', color: '#64748B', marginTop: '3px', margin: 0 }}>
-                {revenueRange === '7' ? '7-day digital service transactions' : '30-day cumulative platform transactions'}
+                {revenueRange === '7' ? i18n.rev7DaySub : i18n.rev30DaySub}
               </p>
             </div>
             <div style={{
@@ -869,7 +1055,7 @@ export default function Dashboard() {
                   transition: 'all 0.2s ease'
                 }}
               >
-                7 Days
+                {i18n.days7}
               </button>
               <button
                 onClick={() => setRevenueRange('30')}
@@ -886,7 +1072,7 @@ export default function Dashboard() {
                   transition: 'all 0.2s ease'
                 }}
               >
-                30 Days
+                {i18n.days30}
               </button>
             </div>
           </div>
@@ -936,21 +1122,21 @@ export default function Dashboard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '8px' }}>
             <div>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                Application Trends
+                {i18n.appTrends}
               </h3>
               <p style={{ fontSize: '12.5px', color: '#64748B', marginTop: '3px', margin: 0 }}>
-                Daily status of citizen certificates & updates
+                {i18n.appTrendsSub}
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#334155', fontWeight: 600 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} /> Completed
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} /> {i18n.completed}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#334155', fontWeight: 600 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} /> Pending
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} /> {i18n.pending}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#334155', fontWeight: 600 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', display: 'inline-block' }} /> Rejected
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', display: 'inline-block' }} /> {i18n.rejected}
               </span>
             </div>
           </div>
@@ -999,13 +1185,201 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ─── 3b. Operations Row (Service Share, Collections Summary, Operator Logs) ──── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '16px'
+      }}>
+        {/* Card 1: Service Share */}
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '22px 24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0, marginBottom: '16px' }}>
+            {i18n.serviceShare}
+          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1, gap: '16px' }}>
+            {/* Donut Chart with 100% Center */}
+            <div style={{ position: 'relative', width: 120, height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ResponsiveContainer width={120} height={120}>
+                <PieChart>
+                  <Pie
+                    data={serviceShareData}
+                    dataKey="percentage"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={36}
+                    outerRadius={54}
+                    stroke="none"
+                    paddingAngle={3}
+                  >
+                    {serviceShareData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column',
+                pointerEvents: 'none'
+              }}>
+                <span style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>100%</span>
+              </div>
+            </div>
+
+            {/* Service Breakdown List */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {serviceShareData.map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12.5px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, display: 'inline-block' }} />
+                    <span style={{ color: '#334155', fontWeight: 500 }}>{item.name}</span>
+                  </div>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>{item.percentage}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Collections Summary */}
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '22px 24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between'
+        }}>
+          <div>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+              {i18n.collectionsSummary}
+            </h3>
+            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '12px', fontWeight: 500 }}>
+              {i18n.totalCollectionsToday}
+            </div>
+            <div style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
+              ₹{collectionsData.total.toLocaleString('en-IN')}
+            </div>
+          </div>
+
+          <div style={{ marginTop: '18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12.5px' }}>
+              <span style={{ color: '#64748B', fontWeight: 500 }}>
+                {i18n.onlinePayments} ({collectionsData.onlinePct}%)
+              </span>
+              <span style={{ color: '#0F172A', fontWeight: 700 }}>
+                ₹{collectionsData.online.toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', fontSize: '12.5px' }}>
+              <span style={{ color: '#64748B', fontWeight: 500 }}>
+                {i18n.cashCollections} ({collectionsData.cashPct}%)
+              </span>
+              <span style={{ color: '#0F172A', fontWeight: 700 }}>
+                ₹{collectionsData.cash.toLocaleString('en-IN')}
+              </span>
+            </div>
+
+            {/* Dual Segment Progress Bar */}
+            <div style={{ width: '100%', height: '8px', borderRadius: '4px', background: '#F1F5F9', overflow: 'hidden', display: 'flex' }}>
+              <div style={{ width: `${collectionsData.onlinePct}%`, height: '100%', background: '#2563EB', transition: 'width 0.3s ease' }} />
+              <div style={{ width: `${collectionsData.cashPct}%`, height: '100%', background: '#10B981', transition: 'width 0.3s ease' }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Operator Logs */}
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '22px 24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0, marginBottom: '14px' }}>
+            {i18n.operatorLogs}
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {operatorLogsData.slice(0, 5).map((log: any, idx: number) => {
+              const isApproved = log.type === 'approved' || log.title.toLowerCase().includes('approved');
+              const isRejected = log.type === 'rejected' || log.title.toLowerCase().includes('reject');
+              const isWallet = log.type === 'wallet' || log.title.toLowerCase().includes('wallet');
+              const isTicket = log.type === 'ticket' || log.title.toLowerCase().includes('ticket');
+
+              const iconBg = isApproved ? '#DCFCE7' : isRejected ? '#FEE2E2' : isWallet ? '#CFFAFE' : isTicket ? '#F3E8FF' : '#DBEAFE';
+              const iconColor = isApproved ? '#16A34A' : isRejected ? '#DC2626' : isWallet ? '#0891B2' : isTicket ? '#9333EA' : '#2563EB';
+
+              return (
+                <div key={log.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                    <div style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      background: iconBg,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      {isApproved ? (
+                        <CheckCircle2 size={14} color={iconColor} strokeWidth={2.5} />
+                      ) : isRejected ? (
+                        <XCircle size={14} color={iconColor} strokeWidth={2.5} />
+                      ) : isWallet ? (
+                        <CreditCard size={14} color={iconColor} strokeWidth={2.5} />
+                      ) : isTicket ? (
+                        <ShieldCheck size={14} color={iconColor} strokeWidth={2.5} />
+                      ) : (
+                        <UserCheck size={14} color={iconColor} strokeWidth={2.5} />
+                      )}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {log.title}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {log.description}
+                      </div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {log.time}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* ─── 4. Live Dispatch & Verification Queue Table with Tab Switcher ──── */}
       <div style={{
         background: '#FFFFFF',
-        borderRadius: '12px',
-        border: '1px solid #E2E8F0',
-        padding: '20px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+        borderRadius: '16px',
+        border: '1px solid #F1F5F9',
+        padding: '22px 24px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
       }}>
         {/* Table View Switcher Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid #E2E8F0', paddingBottom: '12px', marginBottom: '16px', gap: '10px', flexWrap: 'wrap' }}>
@@ -1064,7 +1438,7 @@ export default function Dashboard() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                {activeView === 'APPLICATIONS' ? 'Recent Service Applications' : 'Live Financial Transactions & Settlement Journal'}
+                {activeView === 'APPLICATIONS' ? i18n.recentServiceApps : 'Live Financial Transactions & Settlement Journal'}
               </h2>
               <span style={{
                 background: '#F1F5F9',
@@ -1079,7 +1453,7 @@ export default function Dashboard() {
             </div>
             <p style={{ fontSize: '12.5px', color: '#64748B', marginTop: '2px', margin: 0 }}>
               {activeView === 'APPLICATIONS' 
-                ? 'Real-time incoming government & financial services requests'
+                ? i18n.recentServiceAppsSub
                 : 'Real-time financial transactions ledger synchronized with MongoDB and Razorpay settlements'}
             </p>
           </div>
@@ -1145,24 +1519,23 @@ export default function Dashboard() {
               </div>
             )}
 
-            <a
-              href={activeView === 'APPLICATIONS' ? "/applications" : "/transactions"}
+            <button
+              onClick={() => navigate(activeView === 'APPLICATIONS' ? "/applications" : "/transactions")}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
-                color: activeView === 'APPLICATIONS' ? '#2563EB' : '#059669',
-                fontSize: '12.5px',
+                color: '#2563EB',
+                fontSize: '13px',
                 fontWeight: 700,
-                textDecoration: 'none',
-                padding: '6px 12px',
-                borderRadius: '6px',
-                background: activeView === 'APPLICATIONS' ? '#EFF6FF' : '#ECFDF5',
-                border: `1px solid ${activeView === 'APPLICATIONS' ? '#BFDBFE' : '#A7F3D0'}`
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '6px 8px'
               }}
             >
-              {activeView === 'APPLICATIONS' ? 'Full Queue Registry' : 'Open Settlement Journal'} <ArrowUpRight size={14} />
-            </a>
+              {i18n.viewAll} &rarr;
+            </button>
           </div>
         </div>
 
@@ -1172,13 +1545,13 @@ export default function Dashboard() {
             <table style={{ width: '100%', minWidth: '940px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                  <th style={{ width: '140px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Reference No</th>
-                  <th style={{ width: '220px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Citizen Applicant</th>
-                  <th style={{ width: '220px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Service Requested</th>
-                  <th style={{ width: '130px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Stage / Status</th>
-                  <th style={{ width: '110px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fee Paid</th>
-                  <th style={{ width: '170px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Submitted On</th>
-                  <th style={{ width: '90px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>Action</th>
+                  <th style={{ width: '150px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{i18n.colAppId}</th>
+                  <th style={{ width: '220px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{i18n.colCitizen}</th>
+                  <th style={{ width: '220px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{i18n.colService}</th>
+                  <th style={{ width: '130px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{i18n.colStatus}</th>
+                  <th style={{ width: '110px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{i18n.colFee}</th>
+                  <th style={{ width: '170px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{i18n.colSubmitted}</th>
+                  <th style={{ width: '80px', padding: '11px 14px', fontWeight: 700, color: '#475569', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>{i18n.colAction}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1260,22 +1633,23 @@ export default function Dashboard() {
                       </td>
 
                       <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <a
-                          href={`/applications`}
+                        <button
+                          onClick={() => navigate('/applications')}
+                          title="Actions"
                           style={{
-                            display: 'inline-block',
-                            background: '#EFF6FF',
-                            color: '#2563EB',
-                            fontWeight: 700,
-                            fontSize: '11.5px',
-                            padding: '5px 10px',
-                            borderRadius: '6px',
-                            textDecoration: 'none',
-                            border: '1px solid #BFDBFE'
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            color: '#94A3B8',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '4px',
+                            borderRadius: '4px'
                           }}
                         >
-                          Verify &rarr;
-                        </a>
+                          <MoreHorizontal size={18} />
+                        </button>
                       </td>
                     </tr>
                   ))

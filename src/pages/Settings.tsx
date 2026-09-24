@@ -52,9 +52,9 @@ const getCachedProfile = (isSuper: boolean, currentAdmin: any) => {
     name: s.name || u.name || 'Suresh Kumar Sharma',
     email: s.email || u.email || 'admin@cybersave.com',
     phone: s.phone || u.phone || '+91 98450 19823',
-    kendraId: s.kendraId || 'CSC-DEL-8841',
+    kendraId: s.kendraId || 'CSB-KENDRA-01',
     designation: s.designation || 'Principal Verification Officer (SDM)',
-    district: s.district || 'Central Delhi, NCT of Delhi',
+    district: s.district || 'CyberSave Regional Hub',
     avatar: s.avatarUrl || u.avatarUrl || `https://ui-avatars.com/api/?name=Suresh+Sharma&background=1E40AF&color=fff`,
   };
 };
