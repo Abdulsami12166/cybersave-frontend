@@ -46,18 +46,30 @@ const Login: React.FC = () => {
       
       // Smart navigation based on assigned permissions
       if (enrichedAdmin.permissions && !enrichedAdmin.permissions.includes('DASHBOARD') && enrichedAdmin.email !== 'admin@cybersave.com') {
-        if (admin.permissions.includes('APPLICATIONS')) {
+        if (enrichedAdmin.permissions.includes('APPLICATIONS')) {
           navigate('/applications');
-        } else if (admin.permissions.includes('USERS')) {
+        } else if (enrichedAdmin.permissions.includes('REFUNDS')) {
+          navigate('/refunds');
+        } else if (enrichedAdmin.permissions.includes('USERS')) {
           navigate('/users');
-        } else if (admin.permissions.includes('OPERATORS')) {
+        } else if (enrichedAdmin.permissions.includes('OPERATORS')) {
           navigate('/operators');
-        } else if (admin.permissions.includes('REPORTS')) {
+        } else if (enrichedAdmin.permissions.includes('TRANSACTIONS')) {
+          navigate('/transactions');
+        } else if (enrichedAdmin.permissions.includes('SERVICES')) {
+          navigate('/services');
+        } else if (enrichedAdmin.permissions.includes('SUPPORT')) {
+          navigate('/support');
+        } else if (enrichedAdmin.permissions.includes('ANALYTICS') || enrichedAdmin.permissions.includes('REPORTS')) {
           navigate('/analytics');
-        } else if (admin.permissions.includes('SETTINGS')) {
+        } else if (enrichedAdmin.permissions.includes('NOTIFICATIONS')) {
+          navigate('/notifications');
+        } else if (enrichedAdmin.permissions.includes('AUDIT')) {
+          navigate('/audit');
+        } else if (enrichedAdmin.permissions.includes('SETTINGS')) {
           navigate('/settings');
         } else {
-          navigate('/applications');
+          navigate('/');
         }
       } else {
         navigate('/');

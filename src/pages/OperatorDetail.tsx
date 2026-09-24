@@ -68,6 +68,7 @@ export default function OperatorDetail() {
   const ALL_PERMISSION_KEYS = [
     'DASHBOARD',
     'APPLICATIONS',
+    'REFUNDS',
     'TRANSACTIONS',
     'SERVICES',
     'USERS',
@@ -86,6 +87,7 @@ export default function OperatorDetail() {
       items: [
         { id: 'DASHBOARD', title: 'Command Center (Dashboard)', desc: 'Access real-time operational overview, key performance indicators, quick stats, and application charts.' },
         { id: 'APPLICATIONS', title: 'Applications Queue', desc: 'Process citizen applications, verify attached documents, approve, reject, and issue certificates.' },
+        { id: 'REFUNDS', title: 'Refund Dispatches', desc: 'Review citizen refund requests, approve disbursements, track refund status, and manage financial reversals.' },
         { id: 'TRANSACTIONS', title: 'Settlement Journal', desc: 'Inspect financial transactions, citizen payment status, revenue collections, and fee receipts.' },
       ]
     },
@@ -273,7 +275,7 @@ export default function OperatorDetail() {
   const handleSavePermissions = async () => {
     if (!operator) return;
     setSavingPermissions(true);
-    const finalPermissions = Array.from(new Set([...selectedPermissions, 'SETTINGS']));
+    const finalPermissions = Array.from(new Set(selectedPermissions));
     try {
       await apiFetch(`/api/v1/operators/${operator.id}`, {
         method: 'PUT',
@@ -295,7 +297,6 @@ export default function OperatorDetail() {
   };
 
   const togglePermission = (permId: string) => {
-    if (permId === 'SETTINGS') return; // Settings is always normal for everyone
     if (selectedPermissions.includes(permId)) {
       setSelectedPermissions(selectedPermissions.filter(p => p !== permId));
     } else {
@@ -440,7 +441,7 @@ export default function OperatorDetail() {
   const pendingDocsCount = rawDocuments.filter((d: any) => d.status === 'Pending').length;
   const expiredDocsCount = rawDocuments.filter((d: any) => d.status === 'Expired' || d.status === 'Warning').length;
 
-  const totalPermissionsCount = 14;
+  const totalPermissionsCount = ALL_PERMISSION_KEYS.length;
   const activeGrantsCount = selectedPermissions.filter(p => ALL_PERMISSION_KEYS.includes(p)).length;
 
   return (
@@ -1008,8 +1009,7 @@ export default function OperatorDetail() {
                     {/* Category Sub-Items */}
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {group.items.map((item, iIdx) => {
-                        const isAlways = item.id === 'SETTINGS';
-                        const isEnabled = isAlways || selectedPermissions.includes(item.id);
+                        const isEnabled = selectedPermissions.includes(item.id);
                         return (
                           <div 
                             key={item.id} 
@@ -1018,34 +1018,29 @@ export default function OperatorDetail() {
                               justifyContent: 'space-between', 
                               alignItems: 'center', 
                               padding: '14px 18px',
-                              background: isAlways ? '#f0fdf4' : 'transparent',
+                              background: 'transparent',
                               borderBottom: iIdx === group.items.length - 1 ? 'none' : '1px solid #f1f5f9'
                             }}
                           >
                             <div style={{ flex: 1, paddingRight: 16 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                                <span style={{ fontWeight: 700, fontSize: 13, color: isAlways ? '#15803d' : (isEnabled ? '#0f172a' : '#94a3b8') }}>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: isEnabled ? '#0f172a' : '#94a3b8' }}>
                                   {item.title}
                                 </span>
-                                {isAlways && (
-                                  <span style={{ background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0', padding: '1px 7px', borderRadius: 4, fontSize: 10.5, fontWeight: 700 }}>
-                                    Normal for Everyone (Always Active)
-                                  </span>
-                                )}
                               </div>
                               <div style={{ fontSize: 11.5, color: isEnabled ? '#64748b' : '#cbd5e1', lineHeight: 1.4 }}>
                                 {item.desc}
                               </div>
                             </div>
                             <div 
-                              onClick={() => !isAlways && togglePermission(item.id)}
+                              onClick={() => togglePermission(item.id)}
                               style={{
                                 width: 38, 
                                 height: 22, 
                                 borderRadius: 11, 
                                 background: isEnabled ? '#10b981' : '#e2e8f0', 
                                 position: 'relative',
-                                cursor: isAlways ? 'default' : 'pointer',
+                                cursor: 'pointer',
                                 transition: 'background 0.2s ease',
                                 flexShrink: 0
                               }}

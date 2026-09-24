@@ -331,7 +331,9 @@ export default function SupportTickets() {
                   </div>
                   <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 16}}>
                     <span style={{color: '#6b7280'}}>Assigned To</span>
-                    <span style={{fontWeight: 700}}>{t.assignedTo}</span>
+                    <span style={{fontWeight: 700}}>
+                      {typeof t.assignedTo === 'object' ? (t.assignedTo?.name || 'Support Desk Agent') : (t.assignedTo || 'Amit S. (Support Desk)')}
+                    </span>
                   </div>
 
                   {t.attachmentUrl ? (

@@ -4,13 +4,98 @@ import {
   LayoutDashboard, Users, FileText, Grid, UserSquare2, 
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
   Settings, Search, Sun, PanelLeftClose, LogOut, CheckCircle2, X,
-  Building2, Command, Globe, RotateCcw
+  Building2, Command, Globe, RotateCcw, ChevronDown, UserPlus,
+  Download
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { apiFetch } from '../utils/apiConfig';
 
 export const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message, type } }));
+};
+
+const TRANSLATIONS: Record<string, Record<string, string>> = {
+  EN: {
+    operations: 'OPERATIONS',
+    governance: 'GOVERNANCE & REGISTRY',
+    compliance: 'AUDIT & COMPLIANCE',
+    dashboard: 'Command Center',
+    applications: 'Applications Queue',
+    refunds: 'Refund Dispatches',
+    transactions: 'Settlement Journal',
+    services: 'Service Schemes',
+    users: 'Citizen Directory',
+    operators: 'Seva Kendra Operators',
+    support: 'Citizen Grievances',
+    analytics: 'SLA Analytics',
+    audit: 'Security Audit Logs',
+    notifications: 'Broadcast Dispatches',
+    settings: 'System Configuration',
+    quickActions: 'Quick Actions',
+    searchPlaceholder: 'Search applications, citizens, operators...',
+    logout: 'End Officer Session',
+  },
+  HI: {
+    operations: 'संचालन (Operations)',
+    governance: 'शासन एवं नागरिक रजिस्ट्री',
+    compliance: 'ऑडिट एवं अनुपालन',
+    dashboard: 'कमांड सेंटर (Dashboard)',
+    applications: 'आवेदन कतार (Applications)',
+    refunds: 'रिफंड प्रेषण (Refunds)',
+    transactions: 'निपटान पत्रिका (Transactions)',
+    services: 'सेवा योजनाएं (Services)',
+    users: 'नागरिक निर्देशिका (Citizens)',
+    operators: 'सेवा केंद्र संचालक (Operators)',
+    support: 'नागरिक शिकायतें (Grievances)',
+    analytics: 'एसएलए विश्लेषण (Analytics)',
+    audit: 'सुरक्षा ऑडिट लॉग (Audit Logs)',
+    notifications: 'प्रसारण प्रेषण (Broadcasts)',
+    settings: 'सिस्टम कॉन्फ़िगरेशन (Settings)',
+    quickActions: 'त्वरित कार्रवाई',
+    searchPlaceholder: 'आवेदन, नागरिक, संचालक खोजें...',
+    logout: 'सत्र समाप्त करें (Logout)',
+  },
+  GU: {
+    operations: 'કામગીરી (Operations)',
+    governance: 'શાસન અને નાગરિક નોંધણી',
+    compliance: 'ઓડિટ અને પાલન',
+    dashboard: 'કમાન્ડ સેન્ટર (Dashboard)',
+    applications: 'અરજી કતાર (Applications)',
+    refunds: 'રીફંડ ચૂકવણી (Refunds)',
+    transactions: 'પતાવટ પત્રિકા (Transactions)',
+    services: 'સેવા યોજનાઓ (Services)',
+    users: 'નાગરિક નિર્દેશિકા (Citizens)',
+    operators: 'સેવા કેન્દ્ર સંચાલકો (Operators)',
+    support: 'નાગરિક ફરિયાદો (Grievances)',
+    analytics: 'એસએલએ વિશ્લેષણ (Analytics)',
+    audit: 'સુરક્ષા ઓડિટ લૉગ્સ (Audit Logs)',
+    notifications: 'પ્રસારણ સંદેશાઓ (Broadcasts)',
+    settings: 'સિસ્ટમ રૂપરેખાંકન (Settings)',
+    quickActions: 'ઝડપી ક્રિયાઓ',
+    searchPlaceholder: 'અરજીઓ, નાગરિકો, સંચાલકો શોધો...',
+    logout: 'સત્ર સમાપ્ત કરો (Logout)',
+  },
+  MR: {
+    operations: 'कार्यान्वयन (Operations)',
+    governance: 'शासन व नागरिक नोंदवही',
+    compliance: 'ऑडिट व अनुपालन',
+    dashboard: 'कमांड सेंटर (Dashboard)',
+    applications: 'अर्ज रांग (Applications)',
+    refunds: 'परतावा वितरण (Refunds)',
+    transactions: 'व्यवहार नोंदवही (Transactions)',
+    services: 'सेवा योजना (Services)',
+    users: 'नागरिक निर्देशिका (Citizens)',
+    operators: 'सेवा केंद्र चालक (Operators)',
+    support: 'नागरिक तक्रारी (Grievances)',
+    analytics: 'कामगिरी विश्लेषण (Analytics)',
+    audit: 'सुरक्षा ऑडिट नोंदी (Audit Logs)',
+    notifications: 'सूचना प्रसारण (Broadcasts)',
+    settings: 'प्रणाली संरचना (Settings)',
+    quickActions: 'त्वरित कृती',
+    searchPlaceholder: 'अर्ज, नागरिक, चालक शोधा...',
+    logout: 'सत्र समाप्त करा (Logout)',
+  }
 };
 
 export default function Layout() {
@@ -18,8 +103,77 @@ export default function Layout() {
   const location = useLocation();
   const [toast, setToast] = useState<{message: string, type: string} | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentLang, setCurrentLang] = useState<string>(() => localStorage.getItem('cybersave_admin_lang') || 'EN');
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(false);
+  const [notifCount, setNotifCount] = useState(12);
   const { admin, logout, updateAdmin } = useAuth();
   const { socket } = useSocket();
+
+  const currentTranslations = TRANSLATIONS[currentLang] || TRANSLATIONS.EN;
+
+  const LANGUAGES = [
+    { code: 'EN', label: 'English (EN)' },
+    { code: 'HI', label: 'हिन्दी (Hindi)' },
+    { code: 'GU', label: 'ગુજરાતી (Gujarati)' },
+    { code: 'MR', label: 'मराठी (Marathi)' },
+  ];
+
+  const handleSelectLanguage = (code: string) => {
+    setCurrentLang(code);
+    localStorage.setItem('cybersave_admin_lang', code);
+    setShowLangMenu(false);
+    window.dispatchEvent(new CustomEvent('cybersave_lang_changed', { detail: { lang: code } }));
+    showToast(`Language set to ${code === 'HI' ? 'हिन्दी (Hindi)' : code === 'GU' ? 'ગુજરાતી (Gujarati)' : code === 'MR' ? 'मराठी (Marathi)' : 'English'}`);
+  };
+
+  const handleQuickAction = async (action: string) => {
+    setShowQuickActions(false);
+    switch (action) {
+      case 'ENROLL_CITIZEN':
+        navigate('/users');
+        break;
+      case 'ADD_OPERATOR':
+        navigate('/operators');
+        break;
+      case 'REVIEW_APPLICATIONS':
+        navigate('/applications');
+        break;
+      case 'PROCESS_REFUNDS':
+        navigate('/refunds');
+        break;
+      case 'EXPORT_AUDIT':
+        try {
+          const res = await apiFetch('/api/v1/audit-logs');
+          const json = await res.json();
+          const logs = Array.isArray(json) ? json : (json?.logs || []);
+          const headers = ['Event ID', 'Timestamp', 'User', 'Action', 'Details', 'IP'];
+          const rows = logs.map((l: any) => [
+            `"${l.id || ''}"`,
+            `"${l.timestamp || l.createdAt || ''}"`,
+            `"${l.user || l.userName || ''}"`,
+            `"${l.action || ''}"`,
+            `"${(l.details || l.resource || '').replace(/"/g, '""')}"`,
+            `"${l.ipAddress || ''}"`
+          ]);
+          const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\r\n');
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `cybersave_security_audit_${new Date().toISOString().slice(0, 10)}.csv`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          showToast('Security audit log exported to CSV!');
+        } catch (e) {
+          showToast('Failed to export audit log', 'error');
+        }
+        break;
+    }
+  };
 
   useEffect(() => {
     const handleToast = (e: any) => {
@@ -66,30 +220,30 @@ export default function Layout() {
 
   const navSections = [
     {
-      title: 'OPERATIONS',
+      title: currentTranslations.operations,
       items: [
-        { icon: <LayoutDashboard size={18} />, label: 'Command Center', path: '/', requiredPermission: 'DASHBOARD' },
-        { icon: <FileText size={18} />, label: 'Applications Queue', path: '/applications', requiredPermission: 'APPLICATIONS' },
-        { icon: <RotateCcw size={18} />, label: 'Refund Dispatches', path: '/refunds', requiredPermission: 'APPLICATIONS' },
-        { icon: <ArrowLeftRight size={18} />, label: 'Settlement Journal', path: '/transactions', requiredPermission: 'TRANSACTIONS' },
+        { icon: <LayoutDashboard size={18} />, label: currentTranslations.dashboard, path: '/', requiredPermission: 'DASHBOARD' },
+        { icon: <FileText size={18} />, label: currentTranslations.applications, path: '/applications', requiredPermission: 'APPLICATIONS' },
+        { icon: <RotateCcw size={18} />, label: currentTranslations.refunds, path: '/refunds', requiredPermission: 'REFUNDS' },
+        { icon: <ArrowLeftRight size={18} />, label: currentTranslations.transactions, path: '/transactions', requiredPermission: 'TRANSACTIONS' },
       ]
     },
     {
-      title: 'GOVERNANCE & REGISTRY',
+      title: currentTranslations.governance,
       items: [
-        { icon: <Grid size={18} />, label: 'Service Schemes', path: '/services', requiredPermission: 'SERVICES' },
-        { icon: <Users size={18} />, label: 'Citizen Directory', path: '/users', requiredPermission: 'USERS' },
-        { icon: <UserSquare2 size={18} />, label: 'Seva Kendra Operators', path: '/operators', requiredPermission: 'OPERATORS' },
+        { icon: <Grid size={18} />, label: currentTranslations.services, path: '/services', requiredPermission: 'SERVICES' },
+        { icon: <Users size={18} />, label: currentTranslations.users, path: '/users', requiredPermission: 'USERS' },
+        { icon: <UserSquare2 size={18} />, label: currentTranslations.operators, path: '/operators', requiredPermission: 'OPERATORS' },
       ]
     },
     {
-      title: 'AUDIT & COMPLIANCE',
+      title: currentTranslations.compliance,
       items: [
-        { icon: <HelpCircle size={18} />, label: 'Citizen Grievances', path: '/support', requiredPermission: 'SUPPORT' },
-        { icon: <BarChart3 size={18} />, label: 'SLA Analytics', path: '/analytics', requiredPermission: 'ANALYTICS' },
-        { icon: <ShieldCheck size={18} />, label: 'Security Audit Logs', path: '/audit', requiredPermission: 'AUDIT' },
-        { icon: <Bell size={18} />, label: 'Broadcast Dispatches', path: '/notifications', requiredPermission: 'NOTIFICATIONS' },
-        { icon: <Settings size={18} />, label: 'System Configuration', path: '/settings', requiredPermission: 'SETTINGS' },
+        { icon: <HelpCircle size={18} />, label: currentTranslations.support, path: '/support', requiredPermission: 'SUPPORT' },
+        { icon: <BarChart3 size={18} />, label: currentTranslations.analytics, path: '/analytics', requiredPermission: 'ANALYTICS' },
+        { icon: <ShieldCheck size={18} />, label: currentTranslations.audit, path: '/audit', requiredPermission: 'AUDIT' },
+        { icon: <Bell size={18} />, label: currentTranslations.notifications, path: '/notifications', requiredPermission: 'NOTIFICATIONS' },
+        { icon: <Settings size={18} />, label: currentTranslations.settings, path: '/settings', requiredPermission: 'SETTINGS' },
       ]
     }
   ];
@@ -98,15 +252,17 @@ export default function Layout() {
     admin?.email === 'admin@cybersave.com' || 
     admin?.email === 'officer.admin@cybersave.gov.in' ||
     admin?.role === 'SUPER_ADMIN' ||
-    (admin?.role === 'ADMIN' && (!admin?.permissions || admin?.permissions?.length === 0 || admin?.permissions?.includes('ALL') || admin?.permissions?.includes('SUPER_ADMIN')));
+    (Array.isArray(admin?.permissions) && (admin.permissions.includes('ALL') || admin.permissions.includes('SUPER_ADMIN')));
 
   const userPermissions = Array.isArray(admin?.permissions) ? admin.permissions : [];
 
   const hasAccess = (requiredPermission?: string) => {
+    // Super Admins have unrestricted access
     if (isSuperAdmin) return true;
-    if (admin?.role === 'ADMIN' && (!userPermissions || userPermissions.length === 0 || userPermissions.includes('ALL') || userPermissions.includes('SUPER_ADMIN'))) return true;
-    // System Configuration is standard/normal for everyone across all roles
-    if (!requiredPermission || requiredPermission === 'SETTINGS') return true;
+    
+    // Strict Least Privilege Access for Sub-Admins and Seva Kendra Operators:
+    // ONLY allowed / ticked options should be accessible and displayed.
+    if (!requiredPermission) return false;
     return userPermissions.includes(requiredPermission);
   };
 
@@ -324,7 +480,7 @@ export default function Layout() {
         overflowY: 'auto',
         background: '#F8FAFC'
       }}>
-        {/* Global Operational Header Bar */}
+        {/* Global Operational Header Bar Matching Reference Image */}
         <header style={{
           background: '#FFFFFF',
           borderBottom: '1px solid #E2E8F0',
@@ -336,63 +492,111 @@ export default function Layout() {
           top: 0,
           zIndex: 40
         }}>
-          {/* Universal Registry Search */}
+          {/* Universal Search Input matching Reference */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            background: '#F1F5F9',
+            background: '#F8FAFC',
             border: '1px solid #E2E8F0',
-            borderRadius: '8px',
-            padding: '7px 14px',
-            width: '360px',
-            gap: '8px'
+            borderRadius: '10px',
+            padding: '8px 14px',
+            width: '380px',
+            gap: '10px',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
           }}>
-            <Search size={15} color="#64748B" />
+            <Search size={16} color="#64748B" />
             <input
               type="text"
-              placeholder="Search citizen, application ref, or service..."
+              placeholder={currentTranslations.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  navigate(`/applications?q=${encodeURIComponent(searchQuery.trim())}`);
+                }
+              }}
               style={{
                 border: 'none',
                 outline: 'none',
                 background: 'transparent',
-                fontSize: '12.5px',
+                fontSize: '13px',
                 color: '#0F172A',
                 width: '100%'
               }}
             />
-            <span style={{
-              fontSize: '10.5px',
-              fontWeight: 700,
-              background: '#FFFFFF',
-              color: '#64748B',
-              padding: '2px 5px',
-              borderRadius: '4px',
-              border: '1px solid #CBD5E1'
-            }}>
-              ⌘K
-            </span>
           </div>
 
-          {/* Header Right Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '12px',
-              color: '#0F172A',
-              fontWeight: 600,
-              background: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              padding: '5px 10px',
-              borderRadius: '6px'
-            }}>
-              <Globe size={13} color="#2563EB" />
-              <span>Center Node: DEL-01</span>
+          {/* Header Right Actions matching Reference */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+            {/* Language Switcher Dropdown (EN v) */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLangMenu(!showLangMenu);
+                  setShowNotifMenu(false);
+                  setShowQuickActions(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: '#475569',
+                  padding: '4px 8px',
+                  borderRadius: '6px'
+                }}
+              >
+                <span>{currentLang}</span>
+                <ChevronDown size={14} color="#64748B" />
+              </button>
+
+              {showLangMenu && (
+                <div style={{
+                  position: 'absolute',
+                  top: '120%',
+                  right: 0,
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '10px',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.12)',
+                  minWidth: '160px',
+                  padding: '6px',
+                  zIndex: 100
+                }}>
+                  {LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => handleSelectLanguage(lang.code)}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 12px',
+                        background: currentLang === lang.code ? '#EFF6FF' : 'transparent',
+                        color: currentLang === lang.code ? '#2563EB' : '#1E293B',
+                        fontWeight: currentLang === lang.code ? 700 : 500,
+                        fontSize: '12.5px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <span>{lang.label}</span>
+                      {currentLang === lang.code && <CheckCircle2 size={13} color="#2563EB" />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
+            {/* Theme Toggle Button */}
             <div 
               onClick={toggleDarkMode}
               title="Toggle Display Theme"
@@ -406,20 +610,273 @@ export default function Layout() {
                 justifyContent: 'center'
               }}
             >
-              <Sun size={17} />
+              <Sun size={18} strokeWidth={2} />
             </div>
 
-            <div style={{ position: 'relative', cursor: 'pointer', padding: '6px' }}>
-              <Bell size={17} color="#475569" />
-              <span style={{
-                position: 'absolute',
-                top: 2,
-                right: 2,
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                background: '#EF4444'
-              }}></span>
+            {/* Notifications Button with Red Badge 12 */}
+            <div style={{ position: 'relative' }}>
+              <div 
+                onClick={() => {
+                  setShowNotifMenu(!showNotifMenu);
+                  setShowLangMenu(false);
+                  setShowQuickActions(false);
+                }}
+                style={{ 
+                  position: 'relative', 
+                  cursor: 'pointer', 
+                  padding: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title="Notifications"
+              >
+                <Bell size={18} color="#334155" strokeWidth={2} />
+                <span style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -4,
+                  minWidth: '18px',
+                  height: '18px',
+                  borderRadius: '9px',
+                  background: '#EF4444',
+                  color: '#FFFFFF',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 4px',
+                  boxShadow: '0 1px 3px rgba(239, 68, 68, 0.4)'
+                }}>
+                  {notifCount}
+                </span>
+              </div>
+
+              {/* Notification Popover Dropdown */}
+              {showNotifMenu && (
+                <div style={{
+                  position: 'absolute',
+                  top: '140%',
+                  right: -40,
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '12px',
+                  boxShadow: '0 12px 30px -5px rgba(0,0,0,0.15)',
+                  width: '320px',
+                  padding: '12px',
+                  zIndex: 100
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
+                      Operational Dispatches ({notifCount})
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setNotifCount(0);
+                        showToast('All notifications marked as read');
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+                    <div style={{ padding: '8px', background: '#F8FAFC', borderRadius: '8px', fontSize: '12px' }}>
+                      <div style={{ fontWeight: 700, color: '#0F172A' }}>New PAN Application CS-2026-9024</div>
+                      <div style={{ color: '#64748B', fontSize: '11px', marginTop: '2px' }}>Priya Sharma submitted application • 5 mins ago</div>
+                    </div>
+                    <div style={{ padding: '8px', background: '#F8FAFC', borderRadius: '8px', fontSize: '12px' }}>
+                      <div style={{ fontWeight: 700, color: '#0F172A' }}>Aadhaar Correction Dispatch</div>
+                      <div style={{ color: '#64748B', fontSize: '11px', marginTop: '2px' }}>Centre #1024 uploaded verification documents • 18 mins ago</div>
+                    </div>
+                    <div style={{ padding: '8px', background: '#F8FAFC', borderRadius: '8px', fontSize: '12px' }}>
+                      <div style={{ fontWeight: 700, color: '#0F172A' }}>Refund Claim Approved</div>
+                      <div style={{ color: '#64748B', fontSize: '11px', marginTop: '2px' }}>Claim #REF-9024 processed for ₹50.00 • 35 mins ago</div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #F1F5F9', textAlign: 'center' }}>
+                    <button
+                      onClick={() => {
+                        setShowNotifMenu(false);
+                        navigate('/notifications');
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      View All Dispatches &rarr;
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Blue Quick Actions Button matching Reference Image */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuickActions(!showQuickActions);
+                  setShowLangMenu(false);
+                  setShowNotifMenu(false);
+                }}
+                style={{
+                  background: '#2563EB',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '9px',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
+                  transition: 'background 0.15s ease'
+                }}
+              >
+                <span>{currentTranslations.quickActions}</span>
+              </button>
+
+              {/* Quick Actions Dropdown Menu */}
+              {showQuickActions && (
+                <div style={{
+                  position: 'absolute',
+                  top: '125%',
+                  right: 0,
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '12px',
+                  boxShadow: '0 12px 30px -5px rgba(0,0,0,0.15)',
+                  minWidth: '220px',
+                  padding: '6px',
+                  zIndex: 100
+                }}>
+                  <button
+                    onClick={() => handleQuickAction('ENROLL_CITIZEN')}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '9px 12px',
+                      background: 'transparent',
+                      color: '#1E293B',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <UserPlus size={15} color="#2563EB" />
+                    <span>Enroll Citizen</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleQuickAction('ADD_OPERATOR')}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '9px 12px',
+                      background: 'transparent',
+                      color: '#1E293B',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <UserSquare2 size={15} color="#059669" />
+                    <span>Add Seva Kendra Operator</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleQuickAction('REVIEW_APPLICATIONS')}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '9px 12px',
+                      background: 'transparent',
+                      color: '#1E293B',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <FileText size={15} color="#D97706" />
+                    <span>Review Applications Queue</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleQuickAction('PROCESS_REFUNDS')}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '9px 12px',
+                      background: 'transparent',
+                      color: '#1E293B',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <RotateCcw size={15} color="#DC2626" />
+                    <span>Process Refund Dispatches</span>
+                  </button>
+
+                  <div style={{ height: '1px', background: '#F1F5F9', margin: '4px 0' }} />
+
+                  <button
+                    onClick={() => handleQuickAction('EXPORT_AUDIT')}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '9px 12px',
+                      background: 'transparent',
+                      color: '#1E293B',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <Download size={15} color="#475569" />
+                    <span>Export Audit Logs CSV</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div 

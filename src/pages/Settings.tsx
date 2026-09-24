@@ -801,6 +801,7 @@ export default function Settings() {
                     <CheckCircle2 size={13} color="#16A34A" />
                     {perm === 'DASHBOARD' ? 'Command Center' :
                      perm === 'APPLICATIONS' ? 'Applications Queue' :
+                     perm === 'REFUNDS' ? 'Refund Dispatches' :
                      perm === 'TRANSACTIONS' ? 'Settlement Journal' :
                      perm === 'SERVICES' ? 'Service Schemes' :
                      perm === 'USERS' ? 'Citizen Directory' :
@@ -809,7 +810,7 @@ export default function Settings() {
                      perm === 'ANALYTICS' ? 'SLA Analytics' :
                      perm === 'AUDIT' ? 'Security Audit Logs' :
                      perm === 'NOTIFICATIONS' ? 'Broadcast Dispatches' :
-                     perm === 'SETTINGS' ? 'System Configuration (Standard)' : perm}
+                     perm === 'SETTINGS' ? 'System Configuration' : perm}
                   </span>
                 ))}
               </div>

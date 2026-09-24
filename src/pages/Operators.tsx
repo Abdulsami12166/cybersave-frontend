@@ -25,6 +25,7 @@ export default function Operators() {
   const ALL_FEATURES = [
     { id: 'DASHBOARD', label: 'Command Center', category: 'Operations', desc: 'Real-time overview, operational KPIs & performance statistics' },
     { id: 'APPLICATIONS', label: 'Applications Queue', category: 'Operations', desc: 'Verify, review, approve, reject and process citizen service applications' },
+    { id: 'REFUNDS', label: 'Refund Dispatches', category: 'Operations', desc: 'Review citizen refund claims, approve disbursements, process bank reversals and dispatch refunds' },
     { id: 'TRANSACTIONS', label: 'Settlement Journal', category: 'Operations', desc: 'Financial transaction ledgers, citizen payment status & revenue receipts' },
     { id: 'SERVICES', label: 'Service Schemes', category: 'Governance & Registry', desc: 'Manage government schemes catalog, forms, rules & service criteria' },
     { id: 'USERS', label: 'Citizen Directory', category: 'Governance & Registry', desc: 'Citizen registry, KYC verification status, and direct notifications' },
@@ -33,7 +34,7 @@ export default function Operators() {
     { id: 'ANALYTICS', label: 'SLA Analytics', category: 'Audit & Compliance', desc: 'Review operational performance metrics, turnaround times & SLA compliance' },
     { id: 'AUDIT', label: 'Security Audit Logs', category: 'Audit & Compliance', desc: 'Cryptographic security audit trails and administrator activity records' },
     { id: 'NOTIFICATIONS', label: 'Broadcast Dispatches', category: 'Audit & Compliance', desc: 'Compose and dispatch citizen announcements, circulars & emergency alerts' },
-    { id: 'SETTINGS', label: 'System Configuration', category: 'Audit & Compliance', desc: 'Portal configuration, contact details & maintenance (Normal for Everyone - Always Active)', isDefaultEveryone: true },
+    { id: 'SETTINGS', label: 'System Configuration', category: 'Audit & Compliance', desc: 'Portal configuration, contact details & maintenance settings' },
   ];
 
   const fetchOperatorsRest = async () => {
@@ -101,10 +102,10 @@ export default function Operators() {
       return;
     }
 
-    const finalPermissions = Array.from(new Set([...newOpFeats, 'SETTINGS']));
+    const finalPermissions = Array.from(new Set(newOpFeats));
 
     try {
-      await apiFetch('/api/v1/operators', {
+      const res = await apiFetch('/api/v1/operators', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,31 +117,30 @@ export default function Operators() {
         }),
       });
 
-      if (socket) {
-        socket.emit('add_new_operator', { 
-          name: newOpName.trim(), 
-          email: newOpEmail.trim(), 
-          password: newOpPass.trim(), 
-          permissions: finalPermissions,
-          department: 'Operations'
-        });
+      if (res.ok) {
+        window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Operator "${newOpName}" created successfully with selected features!` } }));
+        setShowAddOpModal(false);
+        setNewOpName('');
+        setNewOpEmail('');
+        setNewOpPass('');
+        setNewOpFeats(['DASHBOARD']);
+        fetchOperatorsRest();
+        if (socket) {
+          socket.emit('request_operators_data');
+        }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: errJson.error || 'Failed to create operator', type: 'error' } }));
       }
-
-      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Operator "${newOpName}" created successfully with selected features!` } }));
-      setShowAddOpModal(false);
-      setNewOpName('');
-      setNewOpEmail('');
-      setNewOpPass('');
-      setNewOpFeats(['DASHBOARD']);
-      fetchOperatorsRest();
     } catch (err) {
       console.warn('Create operator error:', err);
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Network error creating operator', type: 'error' } }));
     }
   };
 
   const handleSaveAccess = async () => {
     if (!managingOp) return;
-    const finalPermissions = Array.from(new Set([...opPermissions, 'SETTINGS']));
+    const finalPermissions = Array.from(new Set(opPermissions));
     try {
       await apiFetch(`/api/v1/operators/${managingOp.id}`, {
         method: 'PUT',
@@ -161,7 +161,6 @@ export default function Operators() {
   };
 
   const togglePermission = (featId: string) => {
-    if (featId === 'SETTINGS') return; // Settings is always active for everyone
     if (opPermissions.includes(featId)) {
       setOpPermissions(opPermissions.filter(p => p !== featId));
     } else {
@@ -321,9 +320,15 @@ export default function Operators() {
                 <span style={{color: '#6b7280'}}>Joined Date</span>
                 <span style={{fontWeight: 600}}>{op.joinedDate}</span>
               </div>
-              <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 24}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 12}}>
                 <span style={{color: '#6b7280'}}>Last Active</span>
                 <span style={{fontWeight: 600}}>{op.lastActive}</span>
+              </div>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, marginBottom: 20, padding: '8px 10px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0'}}>
+                <span style={{color: '#475569', fontSize: 12, fontWeight: 600}}>Allowed Privileges</span>
+                <span style={{fontWeight: 700, color: '#2563eb', fontSize: 11.5, background: '#eff6ff', padding: '2px 8px', borderRadius: 4}}>
+                  {Array.isArray(op.permissions) ? op.permissions.length : 0} of {ALL_FEATURES.length} Allowed
+                </span>
               </div>
 
               <div style={{display: 'flex', gap: 12, marginTop: 'auto'}} onClick={(e) => e.stopPropagation()}>
@@ -340,7 +345,7 @@ export default function Operators() {
                   onClick={() => { 
                     setManagingOp(op); 
                     const currentPerms = Array.isArray(op.permissions) ? op.permissions : [];
-                    setOpPermissions(Array.from(new Set([...currentPerms, 'SETTINGS']))); 
+                    setOpPermissions(Array.from(new Set(currentPerms))); 
                   }}
                 >
                   Manage Access
@@ -390,8 +395,7 @@ export default function Operators() {
 
               <div style={{display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24}}>
                 {ALL_FEATURES.map(feat => {
-                  const isAlways = feat.id === 'SETTINGS';
-                  const isChecked = isAlways || opPermissions.includes(feat.id);
+                  const isChecked = opPermissions.includes(feat.id);
                   return (
                     <label 
                       key={feat.id} 
@@ -402,28 +406,25 @@ export default function Operators() {
                         padding: '10px 14px', 
                         borderRadius: 10,
                         border: isChecked ? '1px solid #93c5fd' : '1px solid #f1f5f9',
-                        background: isAlways ? '#f0fdf4' : (isChecked ? '#f0f7ff' : '#ffffff'),
-                        cursor: isAlways ? 'default' : 'pointer',
+                        background: isChecked ? '#f0f7ff' : '#ffffff',
+                        cursor: 'pointer',
                         transition: 'all 0.15s ease'
                       }}
                     >
                       <input 
                         type="checkbox" 
                         checked={isChecked} 
-                        disabled={isAlways}
-                        onChange={() => !isAlways && togglePermission(feat.id)}
-                        style={{marginTop: 3, width: 17, height: 17, accentColor: isAlways ? '#16a34a' : '#2563eb', cursor: isAlways ? 'default' : 'pointer'}}
+                        onChange={() => togglePermission(feat.id)}
+                        style={{marginTop: 3, width: 17, height: 17, accentColor: '#2563eb', cursor: 'pointer'}}
                       />
                       <div style={{flex: 1}}>
                         <div style={{display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap'}}>
-                          <span style={{fontSize: 13, fontWeight: 700, color: isAlways ? '#15803d' : (isChecked ? '#1e40af' : '#1e293b')}}>
+                          <span style={{fontSize: 13, fontWeight: 700, color: isChecked ? '#1e40af' : '#1e293b'}}>
                             {feat.label}
                           </span>
-                          {isAlways && (
-                            <span style={{background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0', padding: '1px 7px', borderRadius: 4, fontSize: 10.5, fontWeight: 700}}>
-                              Normal for Everyone (Always Active)
-                            </span>
-                          )}
+                          <span style={{background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: 4, fontSize: 10.5, fontWeight: 600}}>
+                            {feat.category}
+                          </span>
                         </div>
                         <div style={{fontSize: 11.5, color: '#64748b', marginTop: 2}}>
                           {feat.desc}
@@ -521,8 +522,7 @@ export default function Operators() {
 
               <div style={{display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto', paddingRight: 4}}>
                 {ALL_FEATURES.map(feat => {
-                  const isAlways = feat.id === 'SETTINGS';
-                  const isChecked = isAlways || newOpFeats.includes(feat.id);
+                  const isChecked = newOpFeats.includes(feat.id);
                   return (
                     <label 
                       key={feat.id} 
@@ -533,29 +533,25 @@ export default function Operators() {
                         padding: '8px 12px', 
                         borderRadius: 8,
                         border: isChecked ? '1px solid #93c5fd' : '1px solid #f1f5f9',
-                        background: isAlways ? '#f0fdf4' : (isChecked ? '#f0f7ff' : '#fafafa'),
-                        cursor: isAlways ? 'default' : 'pointer'
+                        background: isChecked ? '#f0f7ff' : '#fafafa',
+                        cursor: 'pointer'
                       }}
                     >
                       <input 
                         type="checkbox" 
                         checked={isChecked} 
-                        disabled={isAlways}
                         onChange={() => {
-                          if (isAlways) return;
                           if (isChecked) setNewOpFeats(newOpFeats.filter(f => f !== feat.id));
                           else setNewOpFeats([...newOpFeats, feat.id]);
                         }} 
-                        style={{width: 16, height: 16, accentColor: isAlways ? '#16a34a' : '#2563eb', cursor: isAlways ? 'default' : 'pointer'}}
+                        style={{width: 16, height: 16, accentColor: '#2563eb', cursor: 'pointer'}}
                       />
-                      <span style={{fontSize: 12.5, fontWeight: isChecked ? 700 : 500, color: isAlways ? '#15803d' : (isChecked ? '#1e40af' : '#334155')}}>
+                      <span style={{fontSize: 12.5, fontWeight: isChecked ? 700 : 500, color: isChecked ? '#1e40af' : '#334155'}}>
                         {feat.label}
                       </span>
-                      {isAlways && (
-                        <span style={{background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, marginLeft: 'auto'}}>
-                          Normal for Everyone
-                        </span>
-                      )}
+                      <span style={{fontSize: 10.5, color: '#64748b', marginLeft: 'auto'}}>
+                        {feat.category}
+                      </span>
                     </label>
                   );
                 })}

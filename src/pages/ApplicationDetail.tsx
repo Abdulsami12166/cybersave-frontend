@@ -796,7 +796,7 @@ export default function ApplicationDetail() {
             </div>
 
             <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10, lineHeight: 1.6 }}>
-              Submitted: {app.submitted} &nbsp;•&nbsp; Assigned Operator: <span style={{ color: '#2563eb', fontWeight: 600 }}>{app.assignedTo}</span> &nbsp;•&nbsp; Centre: {app.centre}
+              Submitted: {app.submitted} &nbsp;•&nbsp; Assigned Operator: <span style={{ color: '#2563eb', fontWeight: 600 }}>{typeof app.assignedTo === 'object' ? (app.assignedTo?.name || 'Principal Officer') : (app.assignedTo || 'Auto Assigned')}</span> &nbsp;•&nbsp; Centre: {app.centre}
             </div>
           </div>
 
