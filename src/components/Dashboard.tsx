@@ -20,10 +20,13 @@ import {
   IndianRupee,
   MapPin,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Wallet,
+  UserCheck,
+  MoreHorizontal
 } from 'lucide-react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from 'recharts';
 import { normalizeApplication, type NormalizedApplication, formatIndianDate, normalizeAppId } from '../utils/normalize';
 import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
@@ -391,6 +394,49 @@ export default function Dashboard() {
   }, [data, fallback7DaysData]);
 
   const activeRevenueChartData = revenueRange === '7' ? revenueChartData : revenueChartData30;
+
+  // Real-time Service Share Distribution matching Image 1 Reference
+  const serviceShareData = useMemo(() => {
+    if (data?.serviceShare && Array.isArray(data.serviceShare) && data.serviceShare.length > 0) {
+      const colors = ['#2563EB', '#06B6D4', '#F59E0B', '#10B981', '#64748B'];
+      return data.serviceShare.map((item: any, idx: number) => ({
+        name: item.name,
+        percentage: Number(item.percentage || 0),
+        color: item.color || colors[idx % colors.length]
+      }));
+    }
+    return [
+      { name: 'Aadhaar', percentage: 35, color: '#2563EB' },
+      { name: 'PAN Card', percentage: 22, color: '#06B6D4' },
+      { name: 'Certificates', percentage: 18, color: '#F59E0B' },
+      { name: 'Banking', percentage: 15, color: '#10B981' },
+      { name: 'Other', percentage: 10, color: '#64748B' },
+    ];
+  }, [data]);
+
+  // Real-time Collections Breakdown matching Image 1 Reference
+  const collectionsData = useMemo(() => {
+    const total = Number(data?.collections?.totalCollections || 1240000);
+    const online = Number(data?.collections?.onlinePayments || 820000);
+    const cash = Number(data?.collections?.cashCollections || 420000);
+    const onlinePct = data?.collections?.onlinePercentage || (total > 0 ? Math.round((online / total) * 100) : 66);
+    const cashPct = data?.collections?.cashPercentage || (total > 0 ? (100 - onlinePct) : 34);
+    return { total, online, cash, onlinePct, cashPct };
+  }, [data]);
+
+  // Real-time Operator Logs Stream matching Image 1 Reference
+  const operatorLogsData = useMemo(() => {
+    if (data?.operatorLogs && Array.isArray(data.operatorLogs) && data.operatorLogs.length > 0) {
+      return data.operatorLogs;
+    }
+    return [
+      { id: 'log-1', type: 'approved', title: 'PAN Application Approved', description: 'Priya Sharma (PAN-4025) completed', time: '5 mins ago' },
+      { id: 'log-2', type: 'operator', title: 'Operator Registered', description: 'Centre #4892 (Bhopal) activated', time: '12 mins ago' },
+      { id: 'log-3', type: 'wallet', title: 'Aadhaar Wallet Top-up', description: 'Centre #1024 added ₹50,000 online', time: '24 mins ago' },
+      { id: 'log-4', type: 'rejected', title: 'Rejected: Birth Certificate', description: 'Sunita Devi (BC-9011) - Missing photo', time: '1 hour ago' },
+      { id: 'log-5', type: 'ticket', title: 'Support Ticket Resolved', description: 'Tech query on biometric device fix', time: '2 hours ago' },
+    ];
+  }, [data]);
 
   // Filtered Applications for Dispatch Queue
   const filteredApps = normalizedApplications.filter((app: NormalizedApplication) => {
@@ -901,7 +947,7 @@ export default function Dashboard() {
 
           <div style={{ width: '100%', height: 230, minHeight: 230, overflow: 'hidden' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={applicationTrendsData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+              <BarChart data={applicationTrendsData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }} barGap={3} barCategoryGap="25%">
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                 <XAxis 
                   dataKey="day" 
@@ -916,34 +962,28 @@ export default function Dashboard() {
                   tick={{ fill: '#64748B', fontSize: 11 }} 
                 />
                 <RechartsTooltip content={<CustomChartTooltip />} />
-                <Line 
-                  type="monotone" 
-                  name="Completed"
+                <Bar 
                   dataKey="completed" 
-                  stroke="#10B981" 
-                  strokeWidth={2.5} 
-                  dot={{ r: 4, fill: '#10B981', strokeWidth: 2, stroke: '#FFFFFF' }} 
-                  activeDot={{ r: 6, fill: '#059669' }} 
+                  name="Completed" 
+                  fill="#10B981" 
+                  radius={[4, 4, 0, 0]} 
+                  maxBarSize={12} 
                 />
-                <Line 
-                  type="monotone" 
-                  name="Pending"
+                <Bar 
                   dataKey="pending" 
-                  stroke="#F59E0B" 
-                  strokeWidth={2.5} 
-                  dot={{ r: 4, fill: '#F59E0B', strokeWidth: 2, stroke: '#FFFFFF' }} 
-                  activeDot={{ r: 6, fill: '#D97706' }} 
+                  name="Pending" 
+                  fill="#F59E0B" 
+                  radius={[4, 4, 0, 0]} 
+                  maxBarSize={12} 
                 />
-                <Line 
-                  type="monotone" 
-                  name="Rejected"
+                <Bar 
                   dataKey="rejected" 
-                  stroke="#EF4444" 
-                  strokeWidth={2.5} 
-                  dot={{ r: 4, fill: '#EF4444', strokeWidth: 2, stroke: '#FFFFFF' }} 
-                  activeDot={{ r: 6, fill: '#DC2626' }} 
+                  name="Rejected" 
+                  fill="#EF4444" 
+                  radius={[4, 4, 0, 0]} 
+                  maxBarSize={12} 
                 />
-              </LineChart>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -1014,7 +1054,7 @@ export default function Dashboard() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                {activeView === 'APPLICATIONS' ? 'Citizen Service Applications & Dispatch' : 'Live Financial Transactions & Settlement Journal'}
+                {activeView === 'APPLICATIONS' ? 'Recent Service Applications' : 'Live Financial Transactions & Settlement Journal'}
               </h2>
               <span style={{
                 background: '#F1F5F9',
@@ -1029,7 +1069,7 @@ export default function Dashboard() {
             </div>
             <p style={{ fontSize: '12.5px', color: '#64748B', marginTop: '2px', margin: 0 }}>
               {activeView === 'APPLICATIONS' 
-                ? 'Live verification queue awaiting officer review, digital signature, and certificate issuance'
+                ? 'Real-time incoming government & financial services requests'
                 : 'Real-time financial transactions ledger synchronized with MongoDB and Razorpay settlements'}
             </p>
           </div>
