@@ -182,6 +182,9 @@ export default function ServiceWizard() {
   const [showAddSubModal, setShowAddSubModal] = useState(false);
   const [newSubName, setNewSubName] = useState('');
   const [newSubCode, setNewSubCode] = useState('');
+  const [newSubFee, setNewSubFee] = useState<number | string>(50);
+  const [newSubSla, setNewSubSla] = useState('3-5 Days');
+  const [newSubDesc, setNewSubDesc] = useState('');
 
   // Required document add modal
   const [showAddDocModal, setShowAddDocModal] = useState(false);
@@ -210,15 +213,26 @@ export default function ServiceWizard() {
       });
     }
 
-    // Also try REST API fallback
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || getApiBaseUrl();
-    axios.get(`${backendUrl}/api/v1/services/${serviceIdParam}`)
-      .then(res => {
-        if (res.data) {
-          populateService(res.data);
-        }
-      })
-      .catch(() => null);
+    // Also try REST API fallback across candidate endpoints
+    const endpoints = [
+      `http://localhost:3001/api/v1/services/${serviceIdParam}`,
+      `http://localhost:3001/api/services/${serviceIdParam}`,
+      `http://localhost:3000/api/v1/services/${serviceIdParam}`,
+      `http://localhost:3000/api/services/${serviceIdParam}`,
+      `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/v1/services/${serviceIdParam}`,
+      `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/services/${serviceIdParam}`,
+    ];
+    (async () => {
+      for (const ep of endpoints) {
+        try {
+          const res = await axios.get(ep, { timeout: 3000 });
+          if (res.data) {
+            populateService(res.data);
+            break;
+          }
+        } catch (_) {}
+      }
+    })();
 
     return () => {
       if (socket) {
@@ -470,10 +484,20 @@ export default function ServiceWizard() {
       }
 
       // 2. Also POST to backend REST endpoint for guaranteed persistence & curl testing
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || getApiBaseUrl();
-      await axios.post(`${backendUrl}/api/v1/services`, payload).catch(() => {
-        return axios.post(`${backendUrl}/api/services`, payload);
-      }).catch(() => null);
+      const endpoints = [
+        'http://localhost:3001/api/v1/services',
+        'http://localhost:3001/api/services',
+        'http://localhost:3000/api/v1/services',
+        'http://localhost:3000/api/services',
+        `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/v1/services`,
+        `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/services`,
+      ];
+      for (const ep of endpoints) {
+        try {
+          await axios.post(ep, payload, { timeout: 4000 });
+          break;
+        } catch (_) {}
+      }
 
       setIsSubmitting(false);
       if (isPublish) {
@@ -494,12 +518,27 @@ export default function ServiceWizard() {
   const handleAddSubService = () => {
     if (!newSubName.trim()) return;
     const code = newSubCode.trim() || `CS-${newSubName.toUpperCase().replace(/\s+/g, '-').slice(0, 8)}`;
+    const feeNum = typeof newSubFee === 'number' ? newSubFee : (parseFloat(String(newSubFee)) || 50);
     setServiceData(prev => ({
       ...prev,
-      subServices: [...prev.subServices, { name: newSubName.trim(), code, status: 'Active' }]
+      subServices: [
+        ...prev.subServices,
+        {
+          name: newSubName.trim(),
+          title: newSubName.trim(),
+          code,
+          status: 'Active',
+          fee: feeNum,
+          sla: newSubSla.trim() || '3-5 Days',
+          description: newSubDesc.trim() || `${newSubName.trim()} sub-service workflow`,
+        }
+      ]
     }));
     setNewSubName('');
     setNewSubCode('');
+    setNewSubFee(50);
+    setNewSubSla('3-5 Days');
+    setNewSubDesc('');
     setShowAddSubModal(false);
   };
 
@@ -872,12 +911,21 @@ export default function ServiceWizard() {
               onChange={e => setServiceData({ ...serviceData, category: e.target.value })}
               style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13.5, outline: 'none', background: '#ffffff' }}
             >
-              <option value="Identity Services">Identity Services</option>
-              <option value="Government">Government</option>
-              <option value="Finance">Finance</option>
+              <option value="Employment">Employment (Job Schemes & Recruitment)</option>
+              <option value="Gov. Scheme">Gov. Scheme (Welfare & Subsidies)</option>
+              <option value="Agriculture">Agriculture (Farmer Schemes & PM-Kisan)</option>
+              <option value="Government">Government (Administrative Services)</option>
+              <option value="Certificates">Certificates (Birth, Caste, Income)</option>
+              <option value="Finance">Finance & Banking</option>
+              <option value="Banking (AEPS)">Banking (AEPS & Cash)</option>
+              <option value="Insurance">Insurance (PMSBY, PMJJBY)</option>
+              <option value="Pension Plan">Pension Plan (APY & National)</option>
+              <option value="Education">Education & Scholarships</option>
+              <option value="Health Services">Health Services (Ayushman)</option>
+              <option value="Utility Bills">Utility Bills (Electricity, Water)</option>
               <option value="PAN Card Services">PAN Card Services</option>
+              <option value="Identity Services">Identity Services (Aadhaar)</option>
               <option value="Passport Services">Passport Services</option>
-              <option value="Certificates">Certificates</option>
               <option value="Citizen Welfare">Citizen Welfare</option>
             </select>
           </div>
@@ -1158,17 +1206,31 @@ export default function ServiceWizard() {
           {showAddSubModal && (
             <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 10, padding: 20, marginBottom: 24 }}>
               <h4 style={{ margin: '0 0 14px 0', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Add New Sub-Service Workflow</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, alignItems: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 120px 140px 1fr auto', gap: 12, alignItems: 'center' }}>
                 <input
                   type="text"
-                  placeholder="Sub Service Name (e.g. Mobile Update)"
+                  placeholder="Sub Service Name (e.g. Police Constable)"
                   value={newSubName}
                   onChange={e => setNewSubName(e.target.value)}
                   style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
                 />
                 <input
+                  type="number"
+                  placeholder="Fee (₹)"
+                  value={newSubFee}
+                  onChange={e => setNewSubFee(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13, fontWeight: 600 }}
+                />
+                <input
                   type="text"
-                  placeholder="Service Code (e.g. CS-ADDR-MOB)"
+                  placeholder="SLA (e.g. 5-7 Days)"
+                  value={newSubSla}
+                  onChange={e => setNewSubSla(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
+                />
+                <input
+                  type="text"
+                  placeholder="Code (e.g. CS-POL-CONST)"
                   value={newSubCode}
                   onChange={e => setNewSubCode(e.target.value)}
                   style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
@@ -1197,6 +1259,8 @@ export default function ServiceWizard() {
               <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
                 <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>SUB SERVICE NAME</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>CODE</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>FEE (₹)</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>SLA / TAT</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>STATUS</th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>ACTIONS</th>
               </tr>
@@ -1209,6 +1273,12 @@ export default function ServiceWizard() {
                   </td>
                   <td style={{ padding: '14px 16px', fontSize: 12.5, color: '#475569', fontFamily: 'monospace' }}>
                     {sub.code}
+                  </td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 700, color: '#2563eb' }}>
+                    ₹{sub.fee !== undefined ? sub.fee : serviceData.pricing.fee}
+                  </td>
+                  <td style={{ padding: '14px 16px', fontSize: 12.5, color: '#64748b' }}>
+                    {sub.sla || serviceData.tat || '3-5 Days'}
                   </td>
                   <td style={{ padding: '14px 16px' }}>
                     <span style={{ background: sub.status === 'Active' ? '#d1fae5' : '#f1f5f9', color: sub.status === 'Active' ? '#059669' : '#64748b', padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 700 }}>

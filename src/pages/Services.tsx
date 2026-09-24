@@ -237,7 +237,7 @@ export default function Services() {
             </button>
           </div>
           <div style={{color: '#64748b', fontSize: 13, fontWeight: 600}}>
-            5 Main Categories Active
+            {categoriesList.length} Categories Active
           </div>
         </div>
 

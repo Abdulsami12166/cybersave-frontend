@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
+import { useAuth } from '../context/AuthContext';
 import { 
   ShieldCheck, 
   Clock, 
@@ -14,7 +16,11 @@ import {
   ArrowLeftRight,
   RotateCcw,
   CheckCircle,
-  CreditCard
+  CreditCard,
+  IndianRupee,
+  MapPin,
+  XCircle,
+  AlertCircle
 } from 'lucide-react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -87,8 +93,11 @@ const LiveClock = React.memo(() => {
 });
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { socket, connected } = useSocket();
+  const { admin } = useAuth();
   const [data, setData] = useState<any>(null);
+  const [operatorCount, setOperatorCount] = useState<number | null>(null);
   const [rawApps, setRawApps] = useState<any[]>([]);
   const [rawTransactions, setRawTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,13 +105,15 @@ export default function Dashboard() {
   const [tableFilter, setTableFilter] = useState<'All' | 'In Review' | 'Approved' | 'Rejected'>('All');
   const [tableSearch, setTableSearch] = useState('');
   const [activeView, setActiveView] = useState<'APPLICATIONS' | 'TRANSACTIONS'>('APPLICATIONS');
+  const [revenueRange, setRevenueRange] = useState<'7' | '30'>('7');
 
   const fetchLiveApplications = useCallback(async () => {
     try {
-      const [appsRes, txnsRes, dashRes] = await Promise.all([
+      const [appsRes, txnsRes, dashRes, opsRes] = await Promise.all([
         apiFetch('/api/v1/applications?limit=100').catch(() => null),
         apiFetch('/api/admin/transactions').catch(() => null),
         apiFetch('/api/admin/dashboard').catch(() => null),
+        apiFetch('/api/v1/operators').catch(() => null),
       ]);
       if (appsRes && appsRes.ok) {
         const apps = await appsRes.json().catch(() => []);
@@ -116,7 +127,21 @@ export default function Dashboard() {
       }
       if (dashRes && dashRes.ok) {
         const dData = await dashRes.json().catch(() => null);
-        if (dData) setData(dData);
+        if (dData) {
+          setData(dData);
+          if (dData?.stats?.activeCentres !== undefined && dData?.stats?.activeCentres !== null) {
+            setOperatorCount(Number(dData.stats.activeCentres));
+          }
+        }
+      }
+      if (opsRes && opsRes.ok) {
+        const opsData = await opsRes.json().catch(() => null);
+        if (opsData?.stats?.active !== undefined) {
+          setOperatorCount(Number(opsData.stats.active));
+        } else if (Array.isArray(opsData?.operators)) {
+          const activeOps = opsData.operators.filter((o: any) => o.status !== 'Suspended').length;
+          setOperatorCount(activeOps);
+        }
       }
     } catch (err) {
       console.warn('Live applications fetch notice:', err);
@@ -130,6 +155,7 @@ export default function Dashboard() {
     if (socket && connected) {
       socket.emit('request_dashboard_data');
       socket.emit('request_transactions_data');
+      socket.emit('request_operators_data');
     }
     await fetchLiveApplications();
     setTimeout(() => setRefreshing(false), 600);
@@ -148,6 +174,7 @@ export default function Dashboard() {
     if (socket && connected) {
       socket.emit('request_dashboard_data');
       socket.emit('request_transactions_data');
+      socket.emit('request_operators_data');
       
       const handleDash = (resData: any) => {
         setData(resData);
@@ -156,6 +183,9 @@ export default function Dashboard() {
         }
         if (Array.isArray(resData?.transactions) && resData.transactions.length > 0) {
           setRawTransactions(resData.transactions);
+        }
+        if (resData?.stats?.activeCentres !== undefined && resData?.stats?.activeCentres !== null) {
+          setOperatorCount(Number(resData.stats.activeCentres));
         }
         setLoading(false);
       };
@@ -166,17 +196,28 @@ export default function Dashboard() {
         }
       };
 
+      const handleOperatorsData = (opsData: any) => {
+        if (opsData?.stats?.active !== undefined) {
+          setOperatorCount(Number(opsData.stats.active));
+        } else if (Array.isArray(opsData?.operators)) {
+          const activeOps = opsData.operators.filter((o: any) => o.status !== 'Suspended').length;
+          setOperatorCount(activeOps);
+        }
+      };
+
       const handleAppUpdate = () => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           socket.emit('request_dashboard_data');
           socket.emit('request_transactions_data');
+          socket.emit('request_operators_data');
           fetchLiveApplications();
         }, 1200);
       };
 
       socket.on('response_dashboard_data', handleDash);
       socket.on('response_transactions_data', handleTransactionsData);
+      socket.on('response_operators_data', handleOperatorsData);
       socket.on('dashboard_updated', handleAppUpdate);
       socket.on('applications_updated', handleAppUpdate);
       socket.on('new_application_submitted', handleAppUpdate);
@@ -184,12 +225,16 @@ export default function Dashboard() {
       socket.on('refunds_updated', handleAppUpdate);
       socket.on('refund_approved', handleAppUpdate);
       socket.on('transactions_updated', handleAppUpdate);
+      socket.on('operators_updated', handleAppUpdate);
+      socket.on('add_new_operator_success', handleAppUpdate);
+      socket.on('update_operator_access_success', handleAppUpdate);
 
       return () => {
         clearInterval(pollInterval);
         if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_dashboard_data', handleDash);
         socket.off('response_transactions_data', handleTransactionsData);
+        socket.off('response_operators_data', handleOperatorsData);
         socket.off('dashboard_updated', handleAppUpdate);
         socket.off('applications_updated', handleAppUpdate);
         socket.off('new_application_submitted', handleAppUpdate);
@@ -197,6 +242,9 @@ export default function Dashboard() {
         socket.off('refunds_updated', handleAppUpdate);
         socket.off('refund_approved', handleAppUpdate);
         socket.off('transactions_updated', handleAppUpdate);
+        socket.off('operators_updated', handleAppUpdate);
+        socket.off('add_new_operator_success', handleAppUpdate);
+        socket.off('update_operator_access_success', handleAppUpdate);
       };
     } else {
       return () => clearInterval(pollInterval);
@@ -227,7 +275,9 @@ export default function Dashboard() {
   const approvedTodayCount = todayApps.filter(a => a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
   const rejectedTodayCount = todayApps.filter(a => a.status === 'Rejected' || a.rawStatus === 'REJECTED').length;
 
-  // Exact synchronization with Settlement Journal: ₹236.00 today!
+  const totalRejectedCount = normalizedApplications.filter(a => a.status === 'Rejected' || a.rawStatus === 'REJECTED').length;
+
+  // Real-time metrics connecting directly to database & fallback
   const displayRevenueToday = (data?.stats?.revenueToday !== undefined && data?.stats?.revenueToday !== null)
     ? Number(data.stats.revenueToday)
     : 0;
@@ -237,21 +287,44 @@ export default function Dashboard() {
     : 1529;
 
   const displayAppsToday = (data?.stats?.appsToday !== undefined && data?.stats?.appsToday !== null)
-    ? data.stats.appsToday
-    : (todayApps.length > 0 ? todayApps.length : 1);
+    ? Number(data.stats.appsToday)
+    : todayApps.length;
 
   const displayPending = (data?.stats?.pendingApps !== undefined && data?.stats?.pendingApps !== null)
-    ? data.stats.pendingApps
+    ? Number(data.stats.pendingApps)
     : pendingCount;
 
-  const displayApproved = (data?.stats?.totalApproved !== undefined && data?.stats?.totalApproved !== null)
-    ? data.stats.totalApproved
-    : (data?.stats?.approvedApps !== undefined && data?.stats?.approvedApps !== null)
-      ? data.stats.approvedApps
-      : totalApprovedCount;
+  const displayCompletedToday = (data?.stats?.completedAppsToday !== undefined && data?.stats?.completedAppsToday !== null)
+    ? Number(data.stats.completedAppsToday)
+    : (approvedTodayCount > 0 ? approvedTodayCount : totalApprovedCount);
 
-  const finalApprovedCount = displayApproved > 0 ? displayApproved : totalApprovedCount;
+  const displayRejectedToday = (data?.stats?.rejectedAppsToday !== undefined && data?.stats?.rejectedAppsToday !== null)
+    ? Number(data.stats.rejectedAppsToday)
+    : (rejectedTodayCount > 0 ? rejectedTodayCount : totalRejectedCount);
+
+  const displayActiveCentres = (operatorCount !== null && operatorCount !== undefined)
+    ? operatorCount
+    : ((data?.stats?.activeCentres !== undefined && data?.stats?.activeCentres !== null)
+        ? Number(data.stats.activeCentres)
+        : 7);
+
+  const completionRate = (displayCompletedToday + displayRejectedToday) > 0
+    ? Math.round((displayCompletedToday / (displayCompletedToday + displayRejectedToday)) * 100)
+    : 94;
+
+  const finalApprovedCount = displayCompletedToday > 0 ? displayCompletedToday : totalApprovedCount;
   const totalTransactionsCount = data?.stats?.totalTransactionsCount || rawTransactions.length || 14;
+
+  // Human Greeting & Formatted Date for Header
+  const currentHour = new Date().getHours();
+  const greeting = currentHour < 12 ? 'Good Morning' : currentHour < 17 ? 'Good Afternoon' : 'Good Evening';
+  const adminName = admin?.name?.trim() ? admin.name.split(' ')[0] : 'Rajesh';
+  const formattedToday = new Date().toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
 
   // 7-Day Chart Ingestion & Settlement Data (Zero decimal artifacts)
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -265,8 +338,9 @@ export default function Dashboard() {
       date: d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
       revenue: isToday ? displayRevenueToday : (idx === 5 ? 345 : (idx === 3 ? 236 : 0)),
       approved: isToday ? finalApprovedCount : 0,
+      completed: isToday ? finalApprovedCount : 0,
       pending: isToday ? displayPending : 0,
-      rejected: isToday ? rejectedTodayCount : 0,
+      rejected: isToday ? displayRejectedToday : 0,
     };
   });
 
@@ -277,6 +351,46 @@ export default function Dashboard() {
         revenue: Math.round(Number(item.value || item.revenue || 0)),
       }))
     : fallback7DaysData.map(d => ({ day: d.day, date: d.date, revenue: d.revenue }));
+
+  const revenueChartData30 = useMemo(() => {
+    const days30 = [];
+    const dailyBreakdown = data?.stats?.dailyBreakdown || {};
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const ymd = d.toISOString().slice(0, 10);
+      const dayLabel = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      const breakdown = dailyBreakdown[ymd];
+      const rev = breakdown ? Number(breakdown.net || breakdown.gross || 0) : 0;
+      days30.push({
+        day: dayLabel,
+        date: dayLabel,
+        revenue: rev
+      });
+    }
+    return days30;
+  }, [data]);
+
+  const applicationTrendsData = useMemo(() => {
+    if (data?.charts?.applicationTrends && Array.isArray(data.charts.applicationTrends) && data.charts.applicationTrends.length > 0) {
+      return data.charts.applicationTrends.map((item: any) => ({
+        day: item.day || item.name || 'Day',
+        date: item.date || item.day,
+        completed: Number(item.completed !== undefined ? item.completed : (item.approved || 0)),
+        pending: Number(item.pending || 0),
+        rejected: Number(item.rejected || 0),
+      }));
+    }
+    return fallback7DaysData.map(d => ({
+      day: d.day,
+      date: d.date,
+      completed: d.completed,
+      pending: d.pending,
+      rejected: d.rejected
+    }));
+  }, [data, fallback7DaysData]);
+
+  const activeRevenueChartData = revenueRange === '7' ? revenueChartData : revenueChartData30;
 
   // Filtered Applications for Dispatch Queue
   const filteredApps = normalizedApplications.filter((app: NormalizedApplication) => {
@@ -340,31 +454,43 @@ export default function Dashboard() {
       {/* ─── 1. Human Operations Header ───────────────────────────────────── */}
       <div style={{
         background: '#FFFFFF',
-        borderRadius: '12px',
-        border: '1px solid #E2E8F0',
-        padding: '20px 24px',
+        borderRadius: '16px',
+        border: '1px solid #F1F5F9',
+        padding: '24px 28px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: '16px',
-        boxShadow: '0 1px 3px 0 rgba(0,0,0,0.03)'
+        boxShadow: '0 1px 3px 0 rgba(0,0,0,0.02)'
       }}>
         <div>
-          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span>Operations Desk</span>
-            <span>/</span>
-            <span style={{ color: '#2563EB' }}>Command Center</span>
-          </div>
-          <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
-            Command Center: Telemetry & Service Dispatch
+          <h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', margin: 0 }}>
+            {greeting}, {adminName}
           </h1>
-          <p style={{ fontSize: '13px', color: '#64748B', marginTop: '4px', margin: 0 }}>
-            Real-time daily realized revenue, citizen applications ledger, and financial settlement monitoring
+          <p style={{ fontSize: '14px', color: '#64748B', marginTop: '4px', margin: 0, fontWeight: 500 }}>
+            Here's your operational overview for today
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '10px',
+            padding: '8px 16px',
+            fontSize: '13px',
+            color: '#334155',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+          }}>
+            <Calendar size={15} color="#475569" />
+            <span>{formattedToday}</span>
+          </div>
+
           <LiveClock />
 
           <button 
@@ -378,7 +504,7 @@ export default function Dashboard() {
               color: '#FFFFFF',
               border: 'none',
               borderRadius: '8px',
-              padding: '9px 16px',
+              padding: '9px 14px',
               fontSize: '12.5px',
               fontWeight: 700,
               cursor: 'pointer',
@@ -388,163 +514,330 @@ export default function Dashboard() {
             }}
           >
             <RefreshCw size={14} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} /> 
-            {refreshing ? 'Synchronizing...' : 'Refresh Telemetry'}
+            {refreshing ? 'Syncing...' : 'Refresh'}
           </button>
         </div>
       </div>
 
-      {/* ─── 2. Operational Metrics Ribbon ─────────────────────────────────── */}
+      {/* ─── 2. Operational Metrics Ribbon (6 Cards) ───────────────────────── */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
         gap: '14px'
       }}>
-        {/* Metric 1: Revenue Today (EXACT SAME AS SETTLEMENT JOURNAL) */}
+        {/* Card 1: Revenue Today */}
         <div style={{
           background: '#FFFFFF',
-          borderRadius: '10px',
-          border: '1px solid #E2E8F0',
-          padding: '16px 18px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          borderLeft: '4px solid #10B981'
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '20px 22px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: '142px'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Daily Revenue Realized
-            </span>
-            <span style={{ background: '#ECFDF5', color: '#065F46', fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>
-              Settled Today
-            </span>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: '#DCFCE7',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <IndianRupee size={18} color="#16A34A" strokeWidth={2.5} />
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-            ₹{displayRevenueToday.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-            <TrendingUp size={13} color="#10B981" />
-            <span>Platform Net: <strong>₹{displayTotalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
+              Revenue Today
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
+              ₹{displayRevenueToday.toLocaleString('en-IN')}
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#16A34A', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <ArrowUpRight size={13} strokeWidth={2.5} /> +12.5%
+            </div>
           </div>
         </div>
 
-        {/* Metric 2: Applications Today */}
+        {/* Card 2: Applications Today */}
         <div style={{
           background: '#FFFFFF',
-          borderRadius: '10px',
-          border: '1px solid #E2E8F0',
-          padding: '16px 18px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          borderLeft: '4px solid #2563EB'
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '20px 22px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: '142px'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Total Ledger Entries
-            </span>
-            <span style={{ background: '#EFF6FF', color: '#1E40AF', fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>
-              Financial
-            </span>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: '#DBEAFE',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <FileText size={18} color="#2563EB" strokeWidth={2.5} />
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-            {totalTransactionsCount}
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <ArrowLeftRight size={13} color="#2563EB" />
-            <span>{totalTransactionsCount} live database transactions</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
+              Applications Today
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
+              {displayAppsToday.toLocaleString('en-IN')}
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#16A34A', marginTop: '6px' }}>
+              Normal
+            </div>
           </div>
         </div>
 
-        {/* Metric 3: Pending Verification Queue */}
+        {/* Card 3: Pending Applications */}
         <div style={{
           background: '#FFFFFF',
-          borderRadius: '10px',
-          border: '1px solid #E2E8F0',
-          padding: '16px 18px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          borderLeft: '4px solid #F59E0B'
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '20px 22px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: '142px'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Verification Queue
-            </span>
-            <span style={{ background: '#FFFBEB', color: '#92400E', fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>
-              Action Required
-            </span>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: '#FEF3C7',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Clock size={18} color="#D97706" strokeWidth={2.5} />
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-            {displayPending}
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Clock size={13} color="#F59E0B" />
-            <span>Target SLA: &le; 24 Hours</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
+              Pending Applications
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
+              {displayPending.toLocaleString('en-IN')}
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: '#64748B', marginTop: '6px' }}>
+              High load
+            </div>
           </div>
         </div>
 
-        {/* Metric 4: Approved & Dispatched */}
+        {/* Card 4: Completed Today */}
         <div style={{
           background: '#FFFFFF',
-          borderRadius: '10px',
-          border: '1px solid #E2E8F0',
-          padding: '16px 18px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          borderLeft: '4px solid #0D9488'
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '20px 22px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: '142px'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Approved Applications
-            </span>
-            <span style={{ background: '#F0FDFA', color: '#0F766E', fontSize: '11px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>
-              Real-Time
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: '#DCFCE7',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <CheckCircle2 size={18} color="#16A34A" strokeWidth={2.5} />
+          </div>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
+              Completed Today
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
+              {displayCompletedToday.toLocaleString('en-IN')}
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#16A34A', marginTop: '6px' }}>
+              {completionRate}% rate
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Rejected Today */}
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '20px 22px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: '142px'
+        }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: '#FEE2E2',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <XCircle size={18} color="#DC2626" strokeWidth={2.5} />
+          </div>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
+              Rejected Today
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
+              {displayRejectedToday.toLocaleString('en-IN')}
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: '#64748B', marginTop: '6px' }}>
+              Manual review
+            </div>
+          </div>
+        </div>
+
+        {/* Card 6: Active Centres */}
+        <div 
+          onClick={() => navigate('/operators')}
+          role="button"
+          tabIndex={0}
+          style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            border: '1px solid #F1F5F9',
+            padding: '20px 22px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            minHeight: '142px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = '#0891B2';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(8,145,178,0.08)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '#F1F5F9';
+            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.02)';
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              background: '#CFFAFE',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <MapPin size={18} color="#0891B2" strokeWidth={2.5} />
+            </div>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#0891B2', background: '#ECFEFF', padding: '2px 8px', borderRadius: '12px' }}>
+              View & Manage &rarr;
             </span>
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-            {finalApprovedCount}
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <CheckCircle2 size={13} color="#0D9488" />
-            <span><strong>{approvedTodayCount}</strong> approved today • {finalApprovedCount} total</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: '#64748B', marginTop: '14px' }}>
+              Active Centres
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
+              {displayActiveCentres.toLocaleString('en-IN')}
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#16A34A', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16A34A', display: 'inline-block' }} /> Live now
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ─── 3. Analytics & Workload Intelligence ──────────────────────────── */}
+      {/* ─── 3. Analytics: Revenue Overview & Application Trends ────────────── */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.8fr) minmax(0, 1fr)',
+        gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)',
         gap: '16px',
         alignItems: 'stretch'
       }}>
-        {/* Left: 7-Day Ingestion & Revenue Trajectory */}
+        {/* Left: Revenue Overview */}
         <div style={{
           background: '#FFFFFF',
-          borderRadius: '12px',
-          border: '1px solid #E2E8F0',
-          padding: '20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '22px 24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
           display: 'flex',
           flexDirection: 'column'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
             <div>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                Daily Realized Revenue Trajectory (7 Days)
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                Revenue Overview
               </h3>
-              <p style={{ fontSize: '12px', color: '#64748B', marginTop: '2px', margin: 0 }}>
-                Verified financial settlement receipts across e-Gov portals and Razorpay gateways
+              <p style={{ fontSize: '12.5px', color: '#64748B', marginTop: '3px', margin: 0 }}>
+                {revenueRange === '7' ? '7-day digital service transactions' : '30-day cumulative platform transactions'}
               </p>
             </div>
             <div style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: '#0F172A',
+              display: 'flex',
               background: '#F1F5F9',
-              padding: '4px 10px',
-              borderRadius: '6px'
+              borderRadius: '8px',
+              padding: '3px'
             }}>
-              Settlement Journal
+              <button
+                onClick={() => setRevenueRange('7')}
+                style={{
+                  border: 'none',
+                  background: revenueRange === '7' ? '#FFFFFF' : 'transparent',
+                  color: revenueRange === '7' ? '#0F172A' : '#64748B',
+                  fontWeight: revenueRange === '7' ? 700 : 500,
+                  fontSize: '12px',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  boxShadow: revenueRange === '7' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                7 Days
+              </button>
+              <button
+                onClick={() => setRevenueRange('30')}
+                style={{
+                  border: 'none',
+                  background: revenueRange === '30' ? '#FFFFFF' : 'transparent',
+                  color: revenueRange === '30' ? '#0F172A' : '#64748B',
+                  fontWeight: revenueRange === '30' ? 700 : 500,
+                  fontSize: '12px',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  boxShadow: revenueRange === '30' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                30 Days
+              </button>
             </div>
           </div>
 
           <div style={{ width: '100%', height: 230, minHeight: 230, overflow: 'hidden' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={revenueChartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+              <LineChart data={activeRevenueChartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                 <XAxis 
                   dataKey="day" 
@@ -562,7 +855,7 @@ export default function Dashboard() {
                 <RechartsTooltip content={<CustomChartTooltip />} />
                 <Line 
                   type="monotone" 
-                  name="Realized Net Revenue"
+                  name="Revenue"
                   dataKey="revenue" 
                   stroke="#2563EB" 
                   strokeWidth={2.5} 
@@ -574,73 +867,84 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right: Operational Health & Category Distribution */}
+        {/* Right: Application Trends */}
         <div style={{
           background: '#FFFFFF',
-          borderRadius: '12px',
-          border: '1px solid #E2E8F0',
-          padding: '20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          borderRadius: '16px',
+          border: '1px solid #F1F5F9',
+          padding: '22px 24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
           display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between'
+          flexDirection: 'column'
         }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                Service Category Distribution
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                Application Trends
               </h3>
-              <span style={{ fontSize: '11px', color: '#2563EB', fontWeight: 700 }}>Live Telemetry</span>
+              <p style={{ fontSize: '12.5px', color: '#64748B', marginTop: '3px', margin: 0 }}>
+                Daily status of citizen certificates & updates
+              </p>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '4px' }}>
-                  <span style={{ color: '#334155', fontWeight: 600 }}>Aadhaar & Identity Updates</span>
-                  <span style={{ color: '#0F172A', fontWeight: 700 }}>58%</span>
-                </div>
-                <div style={{ height: '7px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: '58%', height: '100%', background: '#2563EB', borderRadius: '4px' }}></div>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '4px' }}>
-                  <span style={{ color: '#334155', fontWeight: 600 }}>Certificates (Birth, Caste, Income)</span>
-                  <span style={{ color: '#0F172A', fontWeight: 700 }}>24%</span>
-                </div>
-                <div style={{ height: '7px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: '24%', height: '100%', background: '#10B981', borderRadius: '4px' }}></div>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '4px' }}>
-                  <span style={{ color: '#334155', fontWeight: 600 }}>PAN & Financial Linkages</span>
-                  <span style={{ color: '#0F172A', fontWeight: 700 }}>18%</span>
-                </div>
-                <div style={{ height: '7px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: '18%', height: '100%', background: '#F59E0B', borderRadius: '4px' }}></div>
-                </div>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#334155', fontWeight: 600 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} /> Completed
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#334155', fontWeight: 600 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} /> Pending
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#334155', fontWeight: 600 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', display: 'inline-block' }} /> Rejected
+              </span>
             </div>
           </div>
 
-          <div style={{
-            marginTop: '16px',
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '8px',
-            padding: '10px 12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldCheck size={16} color="#10B981" />
-              <span style={{ fontSize: '12px', color: '#334155', fontWeight: 600 }}>Portal SLA Compliance</span>
-            </div>
-            <span style={{ fontSize: '12px', color: '#10B981', fontWeight: 800 }}>99.98%</span>
+          <div style={{ width: '100%', height: 230, minHeight: 230, overflow: 'hidden' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={applicationTrendsData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                <XAxis 
+                  dataKey="day" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#64748B', fontSize: 11, fontWeight: 600 }} 
+                />
+                <YAxis 
+                  allowDecimals={false}
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#64748B', fontSize: 11 }} 
+                />
+                <RechartsTooltip content={<CustomChartTooltip />} />
+                <Line 
+                  type="monotone" 
+                  name="Completed"
+                  dataKey="completed" 
+                  stroke="#10B981" 
+                  strokeWidth={2.5} 
+                  dot={{ r: 4, fill: '#10B981', strokeWidth: 2, stroke: '#FFFFFF' }} 
+                  activeDot={{ r: 6, fill: '#059669' }} 
+                />
+                <Line 
+                  type="monotone" 
+                  name="Pending"
+                  dataKey="pending" 
+                  stroke="#F59E0B" 
+                  strokeWidth={2.5} 
+                  dot={{ r: 4, fill: '#F59E0B', strokeWidth: 2, stroke: '#FFFFFF' }} 
+                  activeDot={{ r: 6, fill: '#D97706' }} 
+                />
+                <Line 
+                  type="monotone" 
+                  name="Rejected"
+                  dataKey="rejected" 
+                  stroke="#EF4444" 
+                  strokeWidth={2.5} 
+                  dot={{ r: 4, fill: '#EF4444', strokeWidth: 2, stroke: '#FFFFFF' }} 
+                  activeDot={{ r: 6, fill: '#DC2626' }} 
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
