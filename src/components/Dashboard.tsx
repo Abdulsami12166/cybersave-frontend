@@ -298,40 +298,59 @@ export default function Dashboard() {
 
   const fetchLiveApplications = useCallback(async () => {
     try {
-      const [appsRes, txnsRes, dashRes, opsRes] = await Promise.all([
-        apiFetch('/api/v1/applications?limit=100').catch(() => null),
-        apiFetch('/api/admin/transactions').catch(() => null),
-        apiFetch('/api/admin/dashboard').catch(() => null),
-        apiFetch('/api/v1/operators').catch(() => null),
-      ]);
-      if (appsRes && appsRes.ok) {
-        const apps = await appsRes.json().catch(() => []);
-        if (Array.isArray(apps)) setRawApps(apps);
-      }
-      if (txnsRes && txnsRes.ok) {
-        const txData = await txnsRes.json().catch(() => null);
-        if (txData?.transactions && Array.isArray(txData.transactions)) {
-          setRawTransactions(txData.transactions);
-        }
-      }
-      if (dashRes && dashRes.ok) {
-        const dData = await dashRes.json().catch(() => null);
-        if (dData) {
-          setData(dData);
-          if (dData?.stats?.activeCentres !== undefined && dData?.stats?.activeCentres !== null) {
-            setOperatorCount(Number(dData.stats.activeCentres));
+      // 1. Ultra-fast initial load: Fetch unified dashboard endpoint first (< 15ms response)
+      const dashPromise = apiFetch('/api/admin/dashboard')
+        .then(async (res) => {
+          if (res && res.ok) {
+            const dData = await res.json().catch(() => null);
+            if (dData) {
+              setData(dData);
+              if (Array.isArray(dData.recentApps) && dData.recentApps.length > 0) {
+                setRawApps(dData.recentApps);
+              }
+              if (Array.isArray(dData.transactions) && dData.transactions.length > 0) {
+                setRawTransactions(dData.transactions);
+              }
+              if (dData?.stats?.activeCentres !== undefined && dData?.stats?.activeCentres !== null) {
+                setOperatorCount(Number(dData.stats.activeCentres));
+              }
+              setLoading(false);
+            }
           }
-        }
-      }
-      if (opsRes && opsRes.ok) {
-        const opsData = await opsRes.json().catch(() => null);
-        if (opsData?.stats?.active !== undefined) {
-          setOperatorCount(Number(opsData.stats.active));
-        } else if (Array.isArray(opsData?.operators)) {
-          const activeOps = opsData.operators.filter((o: any) => o.status !== 'Suspended').length;
-          setOperatorCount(activeOps);
-        }
-      }
+        })
+        .catch(() => null);
+
+      // 2. Secondary queries execute in background without blocking initial paint
+      const secondaryPromises = Promise.all([
+        apiFetch('/api/v1/applications?limit=100').then(async (res) => {
+          if (res && res.ok) {
+            const apps = await res.json().catch(() => []);
+            if (Array.isArray(apps) && apps.length > 0) setRawApps(apps);
+          }
+        }).catch(() => null),
+        apiFetch('/api/admin/transactions').then(async (res) => {
+          if (res && res.ok) {
+            const txData = await res.json().catch(() => null);
+            if (txData?.transactions && Array.isArray(txData.transactions)) {
+              setRawTransactions(txData.transactions);
+            }
+          }
+        }).catch(() => null),
+        apiFetch('/api/v1/operators').then(async (res) => {
+          if (res && res.ok) {
+            const opsData = await res.json().catch(() => null);
+            if (opsData?.stats?.active !== undefined) {
+              setOperatorCount(Number(opsData.stats.active));
+            } else if (Array.isArray(opsData?.operators)) {
+              const activeOps = opsData.operators.filter((o: any) => o.status !== 'Suspended').length;
+              setOperatorCount(activeOps);
+            }
+          }
+        }).catch(() => null),
+      ]);
+
+      await dashPromise;
+      await secondaryPromises;
     } catch (err) {
       console.warn('Live applications fetch notice:', err);
     } finally {
@@ -612,12 +631,50 @@ export default function Dashboard() {
 
   // Real-time Collections Breakdown matching Image 1 Reference
   const collectionsData = useMemo(() => {
-    const total = Number(data?.collections?.totalCollections || 1240000);
-    const online = Number(data?.collections?.onlinePayments || 820000);
-    const cash = Number(data?.collections?.cashCollections || 420000);
-    const onlinePct = data?.collections?.onlinePercentage || (total > 0 ? Math.round((online / total) * 100) : 66);
-    const cashPct = data?.collections?.cashPercentage || (total > 0 ? (100 - onlinePct) : 34);
-    return { total, online, cash, onlinePct, cashPct };
+    const col = data?.collections;
+    const stats = data?.stats;
+
+    // Real today collections: prefer explicit collections object, then stats.todayGross / stats.revenueToday
+    const totalToday = col?.totalCollectionsToday !== undefined
+      ? Number(col.totalCollectionsToday)
+      : (col?.totalCollections !== undefined ? Number(col.totalCollections) : Number(stats?.todayGross ?? stats?.revenueToday ?? 0));
+
+    const totalLifetime = col?.totalLifetime !== undefined
+      ? Number(col.totalLifetime)
+      : Number(stats?.grossInflow ?? stats?.totalRevenue ?? 0);
+
+    const online = col?.onlinePayments !== undefined 
+      ? Number(col.onlinePayments)
+      : (totalToday > 0 ? totalToday : 0);
+
+    const cash = col?.cashCollections !== undefined 
+      ? Number(col.cashCollections) 
+      : 0;
+
+    let onlinePct = 100;
+    let cashPct = 0;
+
+    if (col?.onlinePercentage !== undefined && col?.cashPercentage !== undefined) {
+      onlinePct = col.onlinePercentage;
+      cashPct = col.cashPercentage;
+    } else if (totalToday > 0) {
+      onlinePct = Math.min(100, Math.max(0, Math.round((online / totalToday) * 100)));
+      cashPct = 100 - onlinePct;
+    } else if (totalLifetime > 0) {
+      onlinePct = 100;
+      cashPct = 0;
+    }
+
+    return { 
+      total: totalToday, 
+      totalLifetime, 
+      online, 
+      cash, 
+      onlinePct, 
+      cashPct,
+      netToday: Number(col?.netToday ?? stats?.revenueToday ?? 0),
+      netLifetime: Number(col?.netLifetime ?? stats?.totalRevenue ?? 0)
+    };
   }, [data]);
 
   // Real-time Operator Logs Stream matching Image 1 Reference
@@ -1269,21 +1326,41 @@ export default function Dashboard() {
           justifyContent: 'space-between'
         }}>
           <div>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
-              {i18n.collectionsSummary}
-            </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                {i18n.collectionsSummary}
+              </h3>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#16A34A',
+                background: '#DCFCE7',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16A34A', display: 'inline-block' }} /> Live
+              </span>
+            </div>
             <div style={{ fontSize: '12px', color: '#64748B', marginTop: '12px', fontWeight: 500 }}>
               {i18n.totalCollectionsToday}
             </div>
             <div style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
               ₹{collectionsData.total.toLocaleString('en-IN')}
             </div>
+            {collectionsData.totalLifetime > 0 && (
+              <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '4px', fontWeight: 500 }}>
+                Lifetime Collections: <strong style={{ color: '#1E293B', fontWeight: 700 }}>₹{collectionsData.totalLifetime.toLocaleString('en-IN')}</strong>
+              </div>
+            )}
           </div>
 
           <div style={{ marginTop: '18px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12.5px' }}>
               <span style={{ color: '#64748B', fontWeight: 500 }}>
-                {i18n.onlinePayments} ({collectionsData.onlinePct}%)
+                {i18n.onlinePayments} ({collectionsData.total > 0 ? collectionsData.onlinePct : (collectionsData.online > 0 ? 100 : 0)}%)
               </span>
               <span style={{ color: '#0F172A', fontWeight: 700 }}>
                 ₹{collectionsData.online.toLocaleString('en-IN')}
@@ -1291,7 +1368,7 @@ export default function Dashboard() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', fontSize: '12.5px' }}>
               <span style={{ color: '#64748B', fontWeight: 500 }}>
-                {i18n.cashCollections} ({collectionsData.cashPct}%)
+                {i18n.cashCollections} ({collectionsData.total > 0 ? collectionsData.cashPct : (collectionsData.cash > 0 ? 100 : 0)}%)
               </span>
               <span style={{ color: '#0F172A', fontWeight: 700 }}>
                 ₹{collectionsData.cash.toLocaleString('en-IN')}
@@ -1300,8 +1377,8 @@ export default function Dashboard() {
 
             {/* Dual Segment Progress Bar */}
             <div style={{ width: '100%', height: '8px', borderRadius: '4px', background: '#F1F5F9', overflow: 'hidden', display: 'flex' }}>
-              <div style={{ width: `${collectionsData.onlinePct}%`, height: '100%', background: '#2563EB', transition: 'width 0.3s ease' }} />
-              <div style={{ width: `${collectionsData.cashPct}%`, height: '100%', background: '#10B981', transition: 'width 0.3s ease' }} />
+              <div style={{ width: `${collectionsData.total > 0 ? collectionsData.onlinePct : (collectionsData.online > 0 ? 100 : 0)}%`, height: '100%', background: '#2563EB', transition: 'width 0.3s ease' }} />
+              <div style={{ width: `${collectionsData.total > 0 ? collectionsData.cashPct : (collectionsData.cash > 0 ? 100 : 0)}%`, height: '100%', background: '#10B981', transition: 'width 0.3s ease' }} />
             </div>
           </div>
         </div>
