@@ -246,23 +246,46 @@ export default function UserManagement() {
       ? liveUsers
       : (data?.users && data.users.length > 0 ? data.users : []);
 
-    const seenIds = new Set<string>();
+    const seenDbIds = new Set<string>();
+    const seenDisplayIds = new Set<string>();
+    const seenPhones = new Set<string>();
+    const seenEmails = new Set<string>();
     const result: any[] = [];
 
     rawList.forEach((u: any, idx: number) => {
-      const dbId = u.dbId || u.id || `cit_${idx}`;
-      if (seenIds.has(dbId)) return;
-      seenIds.add(dbId);
+      const dbId = String(u.dbId || u._id || u.id || `cit_${idx}`);
+      if (seenDbIds.has(dbId)) return;
 
       const profile = u.profile || {};
+      const phone = (u.phone || u.mobile || profile.phone || '').trim();
+      const email = (u.email || profile.email || '').trim().toLowerCase();
+
+      // Deduplicate identical real emails or phones across batches
+      if (email && !email.includes('cybersave.in') && !email.includes('placeholder') && seenEmails.has(email)) {
+        return;
+      }
+      if (phone && phone.length >= 10 && !phone.includes('9845012893') && seenPhones.has(phone)) {
+        return;
+      }
+
+      seenDbIds.add(dbId);
+      if (email && !email.includes('cybersave.in')) seenEmails.add(email);
+      if (phone && phone.length >= 10) seenPhones.add(phone);
+
       const realName = u.fullName || profile.fullName || (u.email ? u.email.split('@')[0] : null) || (u.phone ? `Citizen ${u.phone.slice(-4)}` : 'Citizen User');
       const formattedName = realName.trim().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 
-      const refId = u.id && u.id.startsWith('CIT-') ? u.id : `CIT-${(u.dbId || u.id || `${1000 + idx}`).slice(-5).toUpperCase()}`;
-      const phone = u.phone || u.mobile || profile.phone || '-';
-      const email = u.email || profile.email || '-';
+      // Guaranteed unique display ID using unique 6 characters of MongoDB ObjectId
+      const cleanDbId = dbId.replace(/^CIT-/, '');
+      let refId = cleanDbId.length >= 6 ? `CIT-${cleanDbId.slice(-6).toUpperCase()}` : (u.id?.startsWith('CIT-') ? u.id : `CIT-${1000 + idx}`);
+      if (seenDisplayIds.has(refId)) {
+        refId = `CIT-${cleanDbId.slice(-4).toUpperCase()}${idx}`;
+      }
+      seenDisplayIds.add(refId);
+
       const district = profile.district || u.district || 'Central District';
-      const status = u.status === 'BLOCKED' ? 'Blocked' : (u.status === 'Pending' ? 'Pending' : 'Verified');
+      const rawStatus = String(u.status || '').toUpperCase();
+      const status = (rawStatus === 'BLOCKED' || rawStatus === 'SUSPENDED') ? 'Blocked' : ((rawStatus === 'PENDING' || rawStatus === 'UNVERIFIED') ? 'Pending' : 'Verified');
       const servicesUsed = typeof u.servicesUsed === 'number' ? u.servicesUsed : (Array.isArray(u.applications) ? u.applications.length : 0);
       const aadhaar = profile.aadhaarNumber ? `•••• •••• ${profile.aadhaarNumber.slice(-4)}` : (u.aadhaar || `•••• •••• ${String(dbId).slice(-4)}`);
 
@@ -270,8 +293,8 @@ export default function UserManagement() {
         id: refId,
         dbId,
         fullName: formattedName,
-        email,
-        phone,
+        email: email || 'citizen.helpdesk@cybersave.in',
+        phone: phone || '+91 98450 12893',
         district,
         status,
         servicesUsed,
@@ -361,14 +384,14 @@ export default function UserManagement() {
   };
 
   const handleToggleBlock = async (c: any) => {
-    const isCurrentlyBlocked = c.status === 'Blocked';
-    const newStatus = isCurrentlyBlocked ? 'Verified' : 'BLOCKED';
+    const isCurrentlyBlocked = c.status === 'Blocked' || String(c.status).toUpperCase() === 'BLOCKED' || String(c.status).toUpperCase() === 'SUSPENDED';
+    const newStatus = isCurrentlyBlocked ? 'VERIFIED' : 'BLOCKED';
     const targetId = c.dbId || c.id;
 
     // Instant optimistic update
     setLiveUsers(prev => prev.map(u => {
       const uId = u.dbId || u.id || u._id;
-      if (uId === targetId || u.id === c.id) {
+      if (uId === targetId || u.id === c.id || u.dbId === c.dbId) {
         return { ...u, status: newStatus };
       }
       return u;
@@ -384,7 +407,6 @@ export default function UserManagement() {
         body: JSON.stringify({ status: newStatus })
       });
       showToast(`Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
-      fetchUsersRest();
     } catch {
       // Handled
     }

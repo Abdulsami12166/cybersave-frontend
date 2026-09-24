@@ -5,7 +5,7 @@ import {
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
   Settings, Search, Sun, PanelLeftClose, LogOut, CheckCircle2, X,
   Building2, Command, Globe, RotateCcw, ChevronDown, UserPlus,
-  Download
+  Download, Plus, Sliders, Shield, AlertTriangle, Send, Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -124,51 +124,174 @@ export default function Layout() {
     showToast(`Language set to ${code === 'HI' ? 'हिन्दी (Hindi)' : code === 'GU' ? 'ગુજરાતી (Gujarati)' : code === 'MR' ? 'मराठी (Marathi)' : 'English'}`);
   };
 
-  const handleQuickAction = async (action: string) => {
-    setShowQuickActions(false);
-    switch (action) {
-      case 'ENROLL_CITIZEN':
-        navigate('/users');
-        break;
-      case 'ADD_OPERATOR':
-        navigate('/operators');
-        break;
-      case 'REVIEW_APPLICATIONS':
-        navigate('/applications');
-        break;
-      case 'PROCESS_REFUNDS':
-        navigate('/refunds');
-        break;
-      case 'EXPORT_AUDIT':
-        try {
-          const res = await apiFetch('/api/v1/audit-logs');
-          const json = await res.json();
-          const logs = Array.isArray(json) ? json : (json?.logs || []);
-          const headers = ['Event ID', 'Timestamp', 'User', 'Action', 'Details', 'IP'];
-          const rows = logs.map((l: any) => [
-            `"${l.id || ''}"`,
-            `"${l.timestamp || l.createdAt || ''}"`,
-            `"${l.user || l.userName || ''}"`,
-            `"${l.action || ''}"`,
-            `"${(l.details || l.resource || '').replace(/"/g, '""')}"`,
-            `"${l.ipAddress || ''}"`
-          ]);
-          const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\r\n');
-          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `cybersave_security_audit_${new Date().toISOString().slice(0, 10)}.csv`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          showToast('Security audit log exported to CSV!');
-        } catch (e) {
-          showToast('Failed to export audit log', 'error');
-        }
-        break;
+  // Modals state for Quick Actions
+  const [showCampaignModal, setShowCampaignModal] = useState(false);
+  const [campaignTitle, setCampaignTitle] = useState('');
+  const [campaignAudience, setCampaignAudience] = useState('ALL');
+  const [campaignChannel, setCampaignChannel] = useState('PUSH_AND_SMS');
+  const [campaignPriority, setCampaignPriority] = useState('HIGH');
+  const [campaignContent, setCampaignContent] = useState('');
+  const [isLaunchingCampaign, setIsLaunchingCampaign] = useState(false);
+
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [showAddTeamMember, setShowAddTeamMember] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamEmail, setNewTeamEmail] = useState('');
+  const [newTeamPhone, setNewTeamPhone] = useState('');
+  const [newTeamDept, setNewTeamDept] = useState('CSC Operations & Verification Desk');
+  const [newTeamPerms, setNewTeamPerms] = useState<string[]>(['DASHBOARD', 'APPLICATIONS', 'USERS']);
+  const [savingTeamMember, setSavingTeamMember] = useState(false);
+
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [quickSettings, setQuickSettings] = useState({
+    maintenanceMode: false,
+    autoApprovalThreshold: 85,
+    smsGatewayProvider: 'Gov NIC SMS Gateway',
+    biometricStrictness: 'High',
+    auditRetentionDays: 90
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  const handleLaunchCampaign = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!campaignTitle.trim() || !campaignContent.trim()) {
+      showToast('Please provide a campaign title and announcement message', 'error');
+      return;
     }
+    setIsLaunchingCampaign(true);
+    try {
+      const res = await apiFetch('/api/v1/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: campaignTitle.trim(),
+          targetAudience: campaignAudience,
+          channel: campaignChannel,
+          priority: campaignPriority,
+          content: campaignContent.trim()
+        })
+      });
+      if (res.ok) {
+        showToast('Campaign successfully broadcasted to citizens!', 'success');
+        setShowCampaignModal(false);
+        setCampaignTitle('');
+        setCampaignContent('');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.error || 'Failed to dispatch campaign', 'error');
+      }
+    } catch {
+      showToast('Network error while broadcasting campaign', 'error');
+    } finally {
+      setIsLaunchingCampaign(false);
+    }
+  };
+
+  const fetchTeamMembers = async () => {
+    setLoadingTeam(true);
+    try {
+      const res = await apiFetch('/api/v1/operators');
+      if (res.ok) {
+        const json = await res.json();
+        setTeamMembers(Array.isArray(json) ? json : (json?.operators || []));
+      }
+    } catch (_) {}
+    finally { setLoadingTeam(false); }
+  };
+
+  const handleCreateTeamMember = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newTeamName.trim() || !newTeamEmail.trim()) {
+      showToast('Name and email are required', 'error');
+      return;
+    }
+    setSavingTeamMember(true);
+    try {
+      const res = await apiFetch('/api/v1/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newTeamName.trim(),
+          email: newTeamEmail.trim(),
+          phone: newTeamPhone.trim(),
+          department: newTeamDept,
+          permissions: newTeamPerms
+        })
+      });
+      if (res.ok) {
+        showToast(`Team member ${newTeamName} registered successfully!`);
+        setShowAddTeamMember(false);
+        setNewTeamName('');
+        setNewTeamEmail('');
+        setNewTeamPhone('');
+        fetchTeamMembers();
+      } else {
+        showToast('Failed to register team member', 'error');
+      }
+    } catch {
+      showToast('Error registering team member', 'error');
+    } finally {
+      setSavingTeamMember(false);
+    }
+  };
+
+  const handleToggleTeamStatus = async (member: any) => {
+    const newStatus = member.status === 'Suspended' ? 'ACTIVE' : 'SUSPENDED';
+    try {
+      await apiFetch(`/api/v1/operators/${member.id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      showToast(`Member access ${newStatus === 'ACTIVE' ? 'activated' : 'suspended'}`);
+      fetchTeamMembers();
+    } catch {
+      showToast('Failed to update member status', 'error');
+    }
+  };
+
+  const fetchQuickSettings = async () => {
+    try {
+      const res = await apiFetch('/api/v1/system-settings');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.settings) setQuickSettings(json.settings);
+      }
+    } catch (_) {}
+  };
+
+  const handleSaveQuickSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const res = await apiFetch('/api/v1/system-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(quickSettings)
+      });
+      if (res.ok) {
+        showToast('System configuration & security policies updated!', 'success');
+        setShowSettingsModal(false);
+      }
+    } catch {
+      showToast('Failed to update system settings', 'error');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await apiFetch('/api/v1/auth/admin-logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: admin?.email, name: admin?.name })
+      }).catch(() => null);
+    } catch (_) {}
+    logout();
+    showToast('Logged out successfully');
+    navigate('/login');
   };
 
   useEffect(() => {
@@ -695,9 +818,10 @@ export default function Layout() {
                 }}
               >
                 <span>{currentTranslations.quickActions}</span>
+                <ChevronDown size={14} color="#FFFFFF" />
               </button>
 
-              {/* Quick Actions Dropdown Menu */}
+              {/* Quick Actions Dropdown Menu matching Screenshot */}
               {showQuickActions && (
                 <div style={{
                   position: 'absolute',
@@ -707,130 +831,124 @@ export default function Layout() {
                   border: '1px solid #E2E8F0',
                   borderRadius: '12px',
                   boxShadow: '0 12px 30px -5px rgba(0,0,0,0.15)',
-                  minWidth: '220px',
+                  minWidth: '225px',
                   padding: '6px',
                   zIndex: 100
                 }}>
                   <button
-                    onClick={() => handleQuickAction('ENROLL_CITIZEN')}
+                    onClick={() => {
+                      setShowQuickActions(false);
+                      setShowCampaignModal(true);
+                    }}
                     style={{
                       width: '100%',
                       textAlign: 'left',
-                      padding: '9px 12px',
+                      padding: '10px 14px',
                       background: 'transparent',
                       color: '#1E293B',
-                      fontSize: '12.5px',
+                      fontSize: '13px',
                       fontWeight: 600,
                       border: 'none',
-                      borderRadius: '6px',
+                      borderRadius: '8px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px'
+                      gap: '12px',
+                      transition: 'background 0.15s ease'
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <UserPlus size={15} color="#2563EB" />
-                    <span>Enroll Citizen</span>
+                    <Plus size={16} color="#2563EB" strokeWidth={2.2} />
+                    <span>Create New Campaign</span>
                   </button>
 
                   <button
-                    onClick={() => handleQuickAction('ADD_OPERATOR')}
+                    onClick={() => {
+                      setShowQuickActions(false);
+                      setShowTeamModal(true);
+                      fetchTeamMembers();
+                    }}
                     style={{
                       width: '100%',
                       textAlign: 'left',
-                      padding: '9px 12px',
+                      padding: '10px 14px',
                       background: 'transparent',
                       color: '#1E293B',
-                      fontSize: '12.5px',
+                      fontSize: '13px',
                       fontWeight: 600,
                       border: 'none',
-                      borderRadius: '6px',
+                      borderRadius: '8px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px'
+                      gap: '12px',
+                      transition: 'background 0.15s ease'
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <UserSquare2 size={15} color="#059669" />
-                    <span>Add Seva Kendra Operator</span>
+                    <Users size={16} color="#2563EB" strokeWidth={2.2} />
+                    <span>Manage Team Members</span>
                   </button>
 
                   <button
-                    onClick={() => handleQuickAction('REVIEW_APPLICATIONS')}
+                    onClick={() => {
+                      setShowQuickActions(false);
+                      setShowSettingsModal(true);
+                      fetchQuickSettings();
+                    }}
                     style={{
                       width: '100%',
                       textAlign: 'left',
-                      padding: '9px 12px',
+                      padding: '10px 14px',
                       background: 'transparent',
                       color: '#1E293B',
-                      fontSize: '12.5px',
+                      fontSize: '13px',
                       fontWeight: 600,
                       border: 'none',
-                      borderRadius: '6px',
+                      borderRadius: '8px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px'
+                      gap: '12px',
+                      transition: 'background 0.15s ease'
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <FileText size={15} color="#D97706" />
-                    <span>Review Applications Queue</span>
+                    <Settings size={16} color="#2563EB" strokeWidth={2.2} />
+                    <span>System Settings</span>
                   </button>
 
+                  <div style={{ height: '1px', background: '#F1F5F9', margin: '4px 6px' }} />
+
                   <button
-                    onClick={() => handleQuickAction('PROCESS_REFUNDS')}
+                    onClick={() => {
+                      setShowQuickActions(false);
+                      handleLogout();
+                    }}
                     style={{
                       width: '100%',
                       textAlign: 'left',
-                      padding: '9px 12px',
+                      padding: '10px 14px',
                       background: 'transparent',
-                      color: '#1E293B',
-                      fontSize: '12.5px',
+                      color: '#EF4444',
+                      fontSize: '13px',
                       fontWeight: 600,
                       border: 'none',
-                      borderRadius: '6px',
+                      borderRadius: '8px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px'
+                      gap: '12px',
+                      transition: 'background 0.15s ease'
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#FEF2F2')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <RotateCcw size={15} color="#DC2626" />
-                    <span>Process Refund Dispatches</span>
-                  </button>
-
-                  <div style={{ height: '1px', background: '#F1F5F9', margin: '4px 0' }} />
-
-                  <button
-                    onClick={() => handleQuickAction('EXPORT_AUDIT')}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '9px 12px',
-                      background: 'transparent',
-                      color: '#1E293B',
-                      fontSize: '12.5px',
-                      fontWeight: 600,
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <Download size={15} color="#475569" />
-                    <span>Export Audit Logs CSV</span>
+                    <LogOut size={16} color="#EF4444" strokeWidth={2.2} />
+                    <span>Log Out</span>
                   </button>
                 </div>
               )}
@@ -925,6 +1043,633 @@ export default function Layout() {
             <span>Release 2.6.4</span>
           </div>
         </footer>
+      {/* ─── Production Ready Quick Action Modals ─── */}
+      {/* 1. Create New Campaign Modal */}
+      {showCampaignModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '560px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            overflow: 'hidden',
+            border: '1px solid #E2E8F0'
+          }}>
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#F8FAFC'
+            }}>
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Plus size={18} color="#2563EB" />
+                  <span>Create New Broadcast Campaign</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                  Broadcast announcements and service alerts to citizens across digital channels
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowCampaignModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleLaunchCampaign} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Campaign Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Pradhan Mantri Awas Yojana 2026 Awareness"
+                  value={campaignTitle}
+                  onChange={(e) => setCampaignTitle(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    color: '#0F172A',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Target Audience
+                  </label>
+                  <select
+                    value={campaignAudience}
+                    onChange={(e) => setCampaignAudience(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12.5px',
+                      color: '#0F172A'
+                    }}
+                  >
+                    <option value="ALL">All Registered Citizens (Live Network)</option>
+                    <option value="VERIFIED">Verified Citizens Only</option>
+                    <option value="PENDING">Pending Verification Citizens</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Broadcast Channel
+                  </label>
+                  <select
+                    value={campaignChannel}
+                    onChange={(e) => setCampaignChannel(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12.5px',
+                      color: '#0F172A'
+                    }}
+                  >
+                    <option value="PUSH_AND_SMS">Push Notification + SMS Broadcast</option>
+                    <option value="PUSH_ONLY">In-App Mobile Push Only</option>
+                    <option value="SMS_ONLY">Official SMS Broadcast Only</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Priority Level
+                </label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  {[
+                    { key: 'HIGH', label: 'High Priority (Alert)', color: '#DC2626', bg: '#FEF2F2' },
+                    { key: 'STANDARD', label: 'Standard Advisory', color: '#2563EB', bg: '#EFF6FF' },
+                    { key: 'URGENT', label: 'Urgent Directive', color: '#D97706', bg: '#FFFBEB' },
+                  ].map(p => (
+                    <button
+                      type="button"
+                      key={p.key}
+                      onClick={() => setCampaignPriority(p.key)}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: campaignPriority === p.key ? `2px solid ${p.color}` : '1px solid #E2E8F0',
+                        background: campaignPriority === p.key ? p.bg : '#FFFFFF',
+                        color: campaignPriority === p.key ? p.color : '#64748B',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Announcement Message Content *
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  placeholder="Type the message to be broadcasted to citizen devices..."
+                  value={campaignContent}
+                  onChange={(e) => setCampaignContent(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    color: '#0F172A',
+                    outline: 'none',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCampaignModal(false)}
+                  style={{
+                    padding: '9px 16px',
+                    background: '#F1F5F9',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    color: '#475569',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLaunchingCampaign}
+                  style={{
+                    padding: '9px 22px',
+                    background: '#2563EB',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: '#FFFFFF',
+                    cursor: isLaunchingCampaign ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Send size={15} />
+                  <span>{isLaunchingCampaign ? 'Broadcasting...' : 'Launch & Broadcast'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Manage Team Members Modal */}
+      {showTeamModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '680px',
+            maxHeight: '85vh',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            border: '1px solid #E2E8F0'
+          }}>
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#F8FAFC'
+            }}>
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Users size={18} color="#2563EB" />
+                  <span>Manage Administrative Team Members</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                  Configure Seva Kendra verification officers, SDM magistrates, and operators
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={() => setShowAddTeamMember(!showAddTeamMember)}
+                  style={{
+                    background: '#2563EB',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '7px',
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Plus size={14} />
+                  <span>{showAddTeamMember ? 'Cancel' : 'Add Member'}</span>
+                </button>
+                <button 
+                  onClick={() => setShowTeamModal(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
+              {showAddTeamMember && (
+                <form onSubmit={handleCreateTeamMember} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '12px' }}>
+                    Register New Administrative Team Member
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Officer Full Name"
+                      value={newTeamName}
+                      onChange={(e) => setNewTeamName(e.target.value)}
+                      style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12.5px' }}
+                    />
+                    <input
+                      type="email"
+                      required
+                      placeholder="Official Government Email"
+                      value={newTeamEmail}
+                      onChange={(e) => setNewTeamEmail(e.target.value)}
+                      style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12.5px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                    <input
+                      type="text"
+                      placeholder="Contact Mobile (+91)"
+                      value={newTeamPhone}
+                      onChange={(e) => setNewTeamPhone(e.target.value)}
+                      style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12.5px' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Department / Designation"
+                      value={newTeamDept}
+                      onChange={(e) => setNewTeamDept(e.target.value)}
+                      style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12.5px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddTeamMember(false)}
+                      style={{ padding: '6px 14px', background: '#E2E8F0', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingTeamMember}
+                      style={{ padding: '6px 16px', background: '#16A34A', border: 'none', borderRadius: '6px', color: '#FFF', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      {savingTeamMember ? 'Saving...' : 'Save Member'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#475569', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Active Operating Officers &amp; Staff ({teamMembers.length})
+              </div>
+
+              {loadingTeam ? (
+                <div style={{ textAlign: 'center', padding: '30px', color: '#64748B', fontSize: '13px' }}>
+                  Loading real team directory from database...
+                </div>
+              ) : teamMembers.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px', color: '#64748B', fontSize: '13px' }}>
+                  No team members found. Click '+ Add Member' above to create one.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {teamMembers.map((m: any) => (
+                    <div 
+                      key={m.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 14px',
+                        background: '#FFFFFF',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: '10px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '50%',
+                          background: '#EFF6FF',
+                          color: '#2563EB',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          {m.name ? m.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() : 'OP'}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                            {m.name}
+                          </div>
+                          <div style={{ fontSize: '11.5px', color: '#64748B' }}>
+                            {m.email} • {m.department || 'CSC Operations'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          background: m.status === 'Suspended' ? '#FEF2F2' : '#ECFDF5',
+                          color: m.status === 'Suspended' ? '#DC2626' : '#16A34A'
+                        }}>
+                          {m.status || 'Active'}
+                        </span>
+                        <button
+                          onClick={() => handleToggleTeamStatus(m)}
+                          style={{
+                            padding: '4px 10px',
+                            background: m.status === 'Suspended' ? '#ECFDF5' : '#FEF2F2',
+                            color: m.status === 'Suspended' ? '#16A34A' : '#DC2626',
+                            border: `1px solid ${m.status === 'Suspended' ? '#A7F3D0' : '#FECACA'}`,
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {m.status === 'Suspended' ? 'Activate' : 'Suspend'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '14px 24px', borderTop: '1px solid #E2E8F0', background: '#F8FAFC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#64748B' }}>
+                All actions are cryptographically sealed in the Security Audit Ledger.
+              </div>
+              <button
+                onClick={() => {
+                  setShowTeamModal(false);
+                  navigate('/operators');
+                }}
+                style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                View Full Operator Workspace &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. System Settings Modal */}
+      {showSettingsModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '540px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            overflow: 'hidden',
+            border: '1px solid #E2E8F0'
+          }}>
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#F8FAFC'
+            }}>
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Settings size={18} color="#2563EB" />
+                  <span>Portal System Configuration</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                  Set administrative parameters, gateway rules, and security enforcement
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSettingsModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 14px',
+                background: quickSettings.maintenanceMode ? '#FEF2F2' : '#F8FAFC',
+                border: quickSettings.maintenanceMode ? '1px solid #FECACA' : '1px solid #E2E8F0',
+                borderRadius: '10px'
+              }}>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                    Portal Maintenance Mode
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#64748B' }}>
+                    Temporarily restrict public applications during planned maintenance
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={quickSettings.maintenanceMode}
+                  onChange={(e) => setQuickSettings(prev => ({ ...prev, maintenanceMode: e.target.checked }))}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  SMS Gateway Provider
+                </label>
+                <select
+                  value={quickSettings.smsGatewayProvider}
+                  onChange={(e) => setQuickSettings(prev => ({ ...prev, smsGatewayProvider: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    color: '#0F172A'
+                  }}
+                >
+                  <option value="Gov NIC SMS Gateway">Gov NIC SMS Gateway (National Informatics Centre)</option>
+                  <option value="CDAC National SMS Hub">CDAC National e-Governance SMS Hub</option>
+                  <option value="Twilio Enterprise GovCloud">Twilio Enterprise GovCloud Gateway</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Biometric Verification Strictness
+                </label>
+                <select
+                  value={quickSettings.biometricStrictness}
+                  onChange={(e) => setQuickSettings(prev => ({ ...prev, biometricStrictness: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    color: '#0F172A'
+                  }}
+                >
+                  <option value="High">High (Strict UIDAI XML Level-2 Hash Match)</option>
+                  <option value="Standard">Standard (Multi-Factor Biometric + OTP)</option>
+                  <option value="Relaxed">Relaxed (Facilitated Rural Onboarding)</option>
+                </select>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
+                    Auto-Approval Confidence Threshold
+                  </label>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#2563EB' }}>
+                    {quickSettings.autoApprovalThreshold}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="50"
+                  max="99"
+                  value={quickSettings.autoApprovalThreshold}
+                  onChange={(e) => setQuickSettings(prev => ({ ...prev, autoApprovalThreshold: Number(e.target.value) }))}
+                  style={{ width: '100%', cursor: 'pointer' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  style={{
+                    padding: '9px 16px',
+                    background: '#F1F5F9',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    color: '#475569',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveQuickSettings}
+                  disabled={savingSettings}
+                  style={{
+                    padding: '9px 22px',
+                    background: '#2563EB',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: '#FFFFFF',
+                    cursor: savingSettings ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Check size={15} />
+                  <span>{savingSettings ? 'Saving...' : 'Save Policies'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
