@@ -328,14 +328,16 @@ export default function SupportTicketDetail() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
               {(ticket.messages || []).map((msg: any, i: number) => {
                 const isAgent = msg.role === 'AGENT';
+                const isResolution = msg.isResolution || (msg.text && msg.text.includes('marked as RESOLVED'));
                 return (
                   <div 
                     key={i} 
                     style={{
-                      background: isAgent ? '#F0FDF4' : '#F8FAFC',
-                      border: isAgent ? '1px solid #BBF7D0' : '1px solid #E2E8F0',
+                      background: isResolution ? '#ECFDF5' : isAgent ? '#F0FDF4' : '#F8FAFC',
+                      border: isResolution ? '1.5px solid #10B981' : isAgent ? '1px solid #BBF7D0' : '1px solid #E2E8F0',
                       borderRadius: 10,
-                      padding: 16
+                      padding: 16,
+                      boxShadow: isResolution ? '0 2px 8px rgba(16, 185, 129, 0.12)' : 'none'
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -344,7 +346,7 @@ export default function SupportTicketDetail() {
                           width: 32,
                           height: 32,
                           borderRadius: '50%',
-                          background: isAgent ? '#15803D' : '#2563EB',
+                          background: isResolution ? '#10B981' : isAgent ? '#15803D' : '#2563EB',
                           color: '#FFFFFF',
                           display: 'flex',
                           alignItems: 'center',
@@ -352,28 +354,28 @@ export default function SupportTicketDetail() {
                           fontWeight: 700,
                           fontSize: 13
                         }}>
-                          {(msg.senderName || 'U').charAt(0).toUpperCase()}
+                          {isResolution ? '✓' : (msg.senderName || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             <span style={{ fontWeight: 700, fontSize: 13.5, color: '#0F172A' }}>{msg.senderName}</span>
                             <span style={{
-                              background: isAgent ? '#22C55E' : '#3B82F6',
+                              background: isResolution ? '#10B981' : isAgent ? '#22C55E' : '#3B82F6',
                               color: 'white',
                               padding: '1px 7px',
                               borderRadius: 10,
                               fontSize: 10,
                               fontWeight: 700
                             }}>
-                              {isAgent ? 'Support Officer' : 'Citizen'}
+                              {isResolution ? 'Official Resolution' : isAgent ? 'Support Officer' : 'Citizen'}
                             </span>
                           </div>
-                          <div style={{ fontSize: 11, color: '#64748B' }}>{isAgent ? 'CSC Grievance Desk' : 'Reporter'}</div>
+                          <div style={{ fontSize: 11, color: '#64748B' }}>{isResolution ? 'Verified Grievance Closure' : isAgent ? 'CSC Grievance Desk' : 'Reporter'}</div>
                         </div>
                       </div>
                       <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 500 }}>{msg.time || 'Recent'}</div>
                     </div>
-                    <div style={{ fontSize: 13.5, color: '#334155', lineHeight: '1.6', marginTop: 6, whiteSpace: 'pre-wrap' }}>
+                    <div style={{ fontSize: 13.5, color: isResolution ? '#065F46' : '#334155', fontWeight: isResolution ? 600 : 400, lineHeight: '1.6', marginTop: 6, whiteSpace: 'pre-wrap' }}>
                       {msg.text}
                     </div>
                   </div>
