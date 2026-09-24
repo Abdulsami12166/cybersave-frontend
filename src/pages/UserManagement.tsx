@@ -534,9 +534,31 @@ export default function UserManagement() {
   };
 
   const totalCount = normalizedCitizens.length;
-  const activeCount = normalizedCitizens.filter(c => c.isOnline === true).length;
   const verifiedCount = normalizedCitizens.filter(c => c.status === 'Verified').length;
-  const pendingCount = normalizedCitizens.filter(c => c.status === 'Pending' || c.status === 'Unverified').length;
+
+  const displayTotalCitizens = data?.stats?.totalCitizens !== undefined
+    ? Number(data.stats.totalCitizens)
+    : totalCount;
+
+  const displayActiveCitizens = data?.stats?.activeCitizens !== undefined
+    ? Number(data.stats.activeCitizens)
+    : normalizedCitizens.filter(c => c.status !== 'Blocked').length;
+
+  const displayNewThisMonth = data?.stats?.newThisMonth !== undefined
+    ? Number(data.stats.newThisMonth)
+    : normalizedCitizens.filter(c => {
+        const d = new Date(c.createdAt);
+        const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        return d >= start;
+      }).length;
+
+  const displayPendingVerification = data?.stats?.pendingVerification !== undefined
+    ? Number(data.stats.pendingVerification)
+    : normalizedCitizens.filter(c => c.status === 'Pending' || c.status === 'Unverified').length;
+
+  const activePercentage = displayTotalCitizens > 0
+    ? Math.round((displayActiveCitizens / displayTotalCitizens) * 100)
+    : 100;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -661,11 +683,11 @@ export default function UserManagement() {
           </div>
           <div style={{ marginTop: '12px' }}>
             <div style={{ fontSize: '28px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-              {totalCount > 10 ? totalCount.toLocaleString() : '48,392'}
+              {displayTotalCitizens.toLocaleString()}
             </div>
             <div style={{ fontSize: '12px', color: '#16A34A', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span>↑ +2.4%</span>
-              <span style={{ color: '#64748B', fontWeight: 400 }}>+2.4% this month</span>
+              <span style={{ color: '#64748B', fontWeight: 400 }}>this month</span>
             </div>
           </div>
         </div>
@@ -698,10 +720,10 @@ export default function UserManagement() {
           </div>
           <div style={{ marginTop: '12px' }}>
             <div style={{ fontSize: '28px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-              {activeCount > 5 ? activeCount.toLocaleString() : '35,127'}
+              {displayActiveCitizens.toLocaleString()}
             </div>
             <div style={{ fontSize: '12px', color: '#16A34A', fontWeight: 600, marginTop: '4px' }}>
-              72.6% of total
+              {activePercentage}% of total
             </div>
           </div>
         </div>
@@ -734,7 +756,7 @@ export default function UserManagement() {
           </div>
           <div style={{ marginTop: '12px' }}>
             <div style={{ fontSize: '28px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-              1,284
+              {displayNewThisMonth.toLocaleString()}
             </div>
             <div style={{ fontSize: '12px', color: '#16A34A', fontWeight: 600, marginTop: '4px' }}>
               Inbound registration
@@ -770,7 +792,7 @@ export default function UserManagement() {
           </div>
           <div style={{ marginTop: '12px' }}>
             <div style={{ fontSize: '28px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-              {pendingCount > 0 ? pendingCount : '892'}
+              {displayPendingVerification.toLocaleString()}
             </div>
             <div style={{ fontSize: '12px', color: '#D97706', fontWeight: 600, marginTop: '4px' }}>
               Awaiting review
@@ -1153,7 +1175,7 @@ export default function UserManagement() {
           gap: '10px'
         }}>
           <div style={{ fontSize: '12.5px', color: '#64748B' }}>
-            Showing <strong>{filteredCitizens.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}-{Math.min(currentPage * pageSize, filteredCitizens.length)}</strong> of <strong>{totalCount > 10 ? totalCount.toLocaleString() : '48,392'}</strong> citizens
+            Showing <strong>{filteredCitizens.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}-{Math.min(currentPage * pageSize, filteredCitizens.length)}</strong> of <strong>{displayTotalCitizens.toLocaleString()}</strong> citizens
           </div>
 
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
