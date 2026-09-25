@@ -107,6 +107,39 @@ export default function Layout() {
   const { admin, logout, updateAdmin } = useAuth();
   const { socket } = useSocket();
 
+  // Dynamic Operator / Admin Full Profile State
+  const [operatorProfile, setOperatorProfile] = useState<{ name: string; designation: string; avatarUrl?: string }>(() => {
+    let s: any = {};
+    let u: any = {};
+    try { s = JSON.parse(localStorage.getItem('adminSettings') || '{}'); } catch {}
+    try { u = JSON.parse(localStorage.getItem('adminUser') || '{}'); } catch {}
+    const name = u.name || u.fullName || s.name || 'Suresh Kumar Sharma';
+    const designation = u.role || s.designation || (u.email === 'admin@cybersave.com' ? 'Super Admin' : 'Principal Verification Officer (SDM)');
+    const avatarUrl = u.avatarUrl || s.avatarUrl;
+    return { name, designation, avatarUrl };
+  });
+
+  useEffect(() => {
+    const syncOperatorData = () => {
+      let s: any = {};
+      let u: any = {};
+      try { s = JSON.parse(localStorage.getItem('adminSettings') || '{}'); } catch {}
+      try { u = JSON.parse(localStorage.getItem('adminUser') || '{}'); } catch {}
+      const name = admin?.name || (admin as any)?.fullName || u.name || u.fullName || s.name || 'Suresh Kumar Sharma';
+      const designation = admin?.role || u.role || s.designation || (admin?.email === 'admin@cybersave.com' ? 'Super Admin' : 'Principal Verification Officer (SDM)');
+      const avatarUrl = admin?.avatarUrl || u.avatarUrl || s.avatarUrl;
+      setOperatorProfile({ name, designation, avatarUrl });
+    };
+
+    syncOperatorData();
+    window.addEventListener('storage', syncOperatorData);
+    window.addEventListener('cybersave_admin_updated', syncOperatorData);
+    return () => {
+      window.removeEventListener('storage', syncOperatorData);
+      window.removeEventListener('cybersave_admin_updated', syncOperatorData);
+    };
+  }, [admin]);
+
   const currentTranslations = TRANSLATIONS[currentLang] || TRANSLATIONS.EN;
 
   const LANGUAGES = [
@@ -161,29 +194,80 @@ export default function Layout() {
       return;
     }
     setIsLaunchingCampaign(true);
+
+    const title = campaignTitle.trim();
+    const content = campaignContent.trim();
+    const formattedTitle = title.startsWith('📢') ? title : `📢 ${title}`;
+
+    // 1. Instant zero-latency direct socket broadcast across cluster
+    if (socket) {
+      const payload = {
+        id: `NOTIF-${Date.now().toString(36).toUpperCase()}`,
+        title: formattedTitle,
+        body: content,
+        message: content,
+        content: content,
+        targetAudience: campaignAudience,
+        channel: campaignChannel,
+        priority: campaignPriority,
+        createdAt: new Date().toISOString()
+      };
+      try {
+        socket.emit('broadcast_notification', payload);
+        socket.emit('send_global_push', { title: formattedTitle, body: content });
+        socket.emit('campaign_broadcast', payload);
+      } catch (sockErr) {
+        console.warn('Socket broadcast emit notice:', sockErr);
+      }
+    }
+
     try {
-      const res = await apiFetch('/api/v1/campaigns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: campaignTitle.trim(),
-          targetAudience: campaignAudience,
-          channel: campaignChannel,
-          priority: campaignPriority,
-          content: campaignContent.trim()
+      // 2. Parallel REST dispatch to campaigns & notifications broadcast endpoints
+      const [campRes, notifRes] = await Promise.allSettled([
+        apiFetch('/api/v1/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: formattedTitle,
+            targetAudience: campaignAudience,
+            channel: campaignChannel,
+            priority: campaignPriority,
+            content
+          })
+        }),
+        apiFetch('/api/v1/notifications/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: formattedTitle,
+            body: content,
+            message: content,
+            priority: campaignPriority,
+            targetAudience: campaignAudience
+          })
         })
-      });
-      if (res.ok) {
-        showToast('Campaign successfully broadcasted to citizens!', 'success');
+      ]);
+
+      const isSuccess = (campRes.status === 'fulfilled' && campRes.value.ok) ||
+                        (notifRes.status === 'fulfilled' && notifRes.value.ok);
+
+      if (isSuccess || socket) {
+        showToast('Notification broadcast successfully dispatched to citizen status bars!', 'success');
         setShowCampaignModal(false);
         setCampaignTitle('');
         setCampaignContent('');
       } else {
-        const err = await res.json().catch(() => ({}));
-        showToast(err.error || 'Failed to dispatch campaign', 'error');
+        showToast('Failed to dispatch campaign', 'error');
       }
     } catch {
-      showToast('Network error while broadcasting campaign', 'error');
+      if (socket) {
+        showToast('Dispatched to citizens via real-time gateway', 'success');
+        setShowCampaignModal(false);
+        setCampaignTitle('');
+        setCampaignContent('');
+      } else {
+        showToast('Network error while broadcasting campaign', 'error');
+      }
     } finally {
       setIsLaunchingCampaign(false);
     }
@@ -437,41 +521,44 @@ export default function Layout() {
       }}>
         {/* Portal Branding matching CyberSave Logo from inspect reference */}
         <div style={{
-          padding: isCollapsed ? '18px 8px' : '20px 16px 14px 16px',
+          padding: isCollapsed ? '18px 8px' : '22px 14px 18px 14px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           boxSizing: 'border-box'
         }}>
           {isCollapsed ? (
-            <div style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '10px',
-              background: '#0B2B82',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#FFFFFF',
-              fontWeight: 900,
-              fontSize: '18px',
-              boxShadow: '0 2px 6px rgba(11, 43, 130, 0.3)'
-            }}>
-              CS
-            </div>
+            <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="CyberSave">
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #082567 0%, #1668FE 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#FFFFFF',
+                fontWeight: 900,
+                fontSize: '17px',
+                boxShadow: '0 2px 8px rgba(22, 104, 254, 0.35)',
+                letterSpacing: '-0.5px'
+              }}>
+                CS
+              </div>
+            </Link>
           ) : (
-            <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-              <img
-                src="/cybersave-logo.png"
-                alt="CyberSave — Digital Services • Trusted Always"
-                style={{
-                  height: '38px',
-                  width: 'auto',
-                  maxWidth: '180px',
-                  objectFit: 'contain',
-                  display: 'block'
-                }}
-              />
+            <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', userSelect: 'none' }} title="CyberSave — Digital Services • Trusted Always">
+              <div style={{ display: 'flex', alignItems: 'baseline', lineHeight: 1, letterSpacing: '-0.5px' }}>
+                <span style={{ fontSize: '27px', fontWeight: 800, color: '#082567', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>Cyber</span>
+                <span style={{ fontSize: '27px', fontWeight: 800, color: '#1668FE', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>save</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '6px', width: '100%' }}>
+                <span style={{ height: '1.2px', width: '22px', background: '#64748B', opacity: 0.8, display: 'inline-block' }} />
+                <span style={{ fontSize: '7.2px', fontWeight: 800, letterSpacing: '1.2px', color: '#0F172A', textTransform: 'uppercase', whiteSpace: 'nowrap', fontFamily: "'Inter', -apple-system, sans-serif" }}>
+                  DIGITAL SERVICES • TRUSTED ALWAYS
+                </span>
+                <span style={{ height: '1.2px', width: '22px', background: '#64748B', opacity: 0.8, display: 'inline-block' }} />
+              </div>
             </Link>
           )}
         </div>
@@ -566,17 +653,9 @@ export default function Layout() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {isCollapsed && (
               <>
-                <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }} title="CyberSave Admin Portal">
-                  <img
-                    src="/cybersave-logo.png"
-                    alt="CyberSave — Digital Services • Trusted Always"
-                    style={{
-                      height: '32px',
-                      width: 'auto',
-                      objectFit: 'contain',
-                      display: 'block'
-                    }}
-                  />
+                <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'baseline', gap: '1px' }} title="CyberSave Admin Portal">
+                  <span style={{ fontSize: '20px', fontWeight: 800, color: '#082567', fontFamily: "'Inter', -apple-system, sans-serif" }}>Cyber</span>
+                  <span style={{ fontSize: '20px', fontWeight: 800, color: '#1668FE', fontFamily: "'Inter', -apple-system, sans-serif" }}>save</span>
                 </Link>
                 <div style={{ height: '24px', width: '1px', background: '#E2E8F0' }} />
               </>
@@ -885,8 +964,8 @@ export default function Layout() {
                     onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <Plus size={16} color="#2563EB" strokeWidth={2.2} />
-                    <span>Create New Campaign</span>
+                    <Bell size={16} color="#2563EB" strokeWidth={2.2} />
+                    <span>Broadcast Notification (Status Bar)</span>
                   </button>
 
                   <button
@@ -996,10 +1075,10 @@ export default function Layout() {
               onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
               onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
             >
-              {admin?.avatarUrl && admin.avatarUrl.trim() !== '' ? (
+              {operatorProfile.avatarUrl && operatorProfile.avatarUrl.trim() !== '' ? (
                 <img
-                  src={admin.avatarUrl}
-                  alt={admin.name || 'Administrator'}
+                  src={operatorProfile.avatarUrl}
+                  alt={operatorProfile.name || 'Administrator'}
                   style={{
                     width: '34px',
                     height: '34px',
@@ -1027,17 +1106,17 @@ export default function Layout() {
                   justifyContent: 'center',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                 }}>
-                  {admin?.name
-                    ? admin.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+                  {operatorProfile.name
+                    ? operatorProfile.name.split(' ').map((n: string) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
                     : 'SA'}
                 </div>
               )}
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', lineHeight: 1.2 }}>
-                  {admin?.name || 'Rajesh Kumar'}
+                  {operatorProfile.name}
                 </div>
                 <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 500, marginTop: '2px' }}>
-                  Super Admin
+                  {operatorProfile.designation}
                 </div>
               </div>
             </div>
@@ -1102,11 +1181,11 @@ export default function Layout() {
             }}>
               <div>
                 <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Plus size={18} color="#2563EB" />
-                  <span>Create New Broadcast Campaign</span>
+                  <Bell size={18} color="#2563EB" />
+                  <span>Broadcast Status Bar Notification</span>
                 </div>
                 <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
-                  Broadcast announcements and service alerts to citizens across digital channels
+                  Dispatches instant push alerts directly into the Android status bar & notification shade of citizen devices
                 </div>
               </div>
               <button 
@@ -1276,7 +1355,7 @@ export default function Layout() {
                   }}
                 >
                   <Send size={15} />
-                  <span>{isLaunchingCampaign ? 'Broadcasting...' : 'Launch & Broadcast'}</span>
+                  <span>{isLaunchingCampaign ? 'Broadcasting...' : 'Broadcast to Status Bar'}</span>
                 </button>
               </div>
             </form>

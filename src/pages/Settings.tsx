@@ -326,6 +326,7 @@ export default function Settings() {
     }
     localStorage.setItem('adminSettings', JSON.stringify({ ...profilePayload, ...settingsPayload }));
     localStorage.setItem('adminSessionTimeout', sessionTimeout);
+    window.dispatchEvent(new CustomEvent('cybersave_admin_updated'));
 
     // Real-time WebSocket dispatch
     if (socket && connected) {
@@ -393,6 +394,7 @@ export default function Settings() {
           avatarUrl: avatar,
         });
       }
+      window.dispatchEvent(new CustomEvent('cybersave_admin_updated'));
 
       showToast('Operator profile details updated successfully');
     } catch {

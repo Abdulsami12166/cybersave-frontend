@@ -55,7 +55,7 @@ let activeBaseUrl: string = (() => {
   if (envUrl) {
     return envUrl;
   }
-  return isLocalhost ? 'http://localhost:3000' : 'https://cybersave-nine.vercel.app';
+  return isLocalhost ? 'http://localhost:3001' : 'https://cybersave-nine.vercel.app';
 })();
 
 export function getApiBaseUrl(): string {
