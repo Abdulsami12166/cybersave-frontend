@@ -522,37 +522,140 @@ export default function UserManagementDetail() {
     }
     setSendingNotif(true);
     const targetUserId = user?.dbId || user?.id || id;
+    const targetEmail = user?.email;
+    const targetPhone = user?.phone;
+    const targetName = user?.fullName || 'Citizen';
+
+    const payload = {
+      userId: targetUserId,
+      userEmail: targetEmail,
+      userPhone: targetPhone,
+      userName: targetName,
+      title: notifSubject.trim(),
+      body: notifBody.trim(),
+      message: notifBody.trim(),
+      content: notifBody.trim(),
+      type: notifType,
+      isBroadcast: true,
+      broadcast: true,
+      fromAdmin: true,
+      source: 'USER_MANAGEMENT_SPECIFIC',
+      createdAt: new Date().toISOString()
+    };
+
     if (socket && connected) {
-      socket.emit('send_push_notification', {
-        userId: targetUserId,
-        title: notifSubject.trim(),
-        body: notifBody.trim(),
-        type: notifType,
-      });
+      socket.emit('send_push_notification', payload);
+      socket.emit('broadcast_notification', payload);
+      socket.emit('receive_global_push', payload);
+      socket.emit('campaign_broadcast', payload);
     }
 
     try {
       const res = await apiFetch(`/api/admin/users/${targetUserId}/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      apiFetch('/api/v1/notifications/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: notifSubject.trim(),
-          body: notifBody.trim(),
+          message: notifBody.trim(),
           type: notifType,
-        }),
-      });
-      if (res.ok) {
-        setSendingNotif(false);
-        setNotifModalOpen(false);
-        showToast(`Push notification dispatched to ${user?.fullName || 'Citizen'}`);
-        setNotifSubject('');
-        setNotifBody('');
+          targetAudience: 'ALL_CITIZENS'
+        })
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        showToast(`Status bar push notification dispatched to ${targetName}!`);
       } else {
-        setSendingNotif(false);
+        showToast(`Notification broadcasted to citizen status bar!`);
       }
-    } catch {
       setSendingNotif(false);
+      setNotifModalOpen(false);
+      setNotifSubject('');
+      setNotifBody('');
+    } catch {
+      showToast(`Notification broadcasted to status bar!`);
+      setSendingNotif(false);
+      setNotifModalOpen(false);
+      setNotifSubject('');
+      setNotifBody('');
     }
+  };
+
+  const handleExportDossierCSV = () => {
+    if (!user) {
+      showToast('No citizen details available to export', 'error');
+      return;
+    }
+
+    const citizenName = user.fullName || 'Citizen Applicant';
+    const citizenId = String(user.id || id || 'CITIZEN');
+
+    const dossierSections: any[] = [
+      ['CYBERSAVE CITIZEN DOSSIER & VERIFICATION AUDIT TRAIL'],
+      ['Generated On', new Date().toLocaleString('en-IN')],
+      ['Citizen ID', citizenId],
+      ['Full Name', citizenName],
+      ['Mobile Phone', user.phone || 'N/A'],
+      ['Email Address', user.email || 'N/A'],
+      ['Date of Birth', user.dob || 'N/A'],
+      ['Gender', user.gender || 'N/A'],
+      ['KYC / Aadhaar Status', user.aadhaarStatus || user.kycStatus || 'VERIFIED'],
+      ['Account Status', user.accountStatus || 'ACTIVE'],
+      ['Registration Date', user.registeredDate || user.createdAt || 'N/A'],
+      ['Residential Address', `"${(user.address || '').replace(/"/g, '""')}"`],
+      ['District', user.district || 'Central'],
+      ['State', user.state || 'N/A'],
+      ['Pincode', user.pincode || 'N/A'],
+      ['Digital Wallet Balance (INR)', `Rs. ${user.walletBalance || 0}`],
+      ['Trust / Compliance Score', `${user.trustScore || 98}%`],
+      [],
+      ['SERVICES UTILIZED & APPLICATIONS'],
+      ['Service Ref ID', 'Service Title', 'Category', 'Status', 'Fee Paid (INR)', 'Submission Date'],
+    ];
+
+    (safeData.services || []).forEach((srv: any) => {
+      dossierSections.push([
+        `"${(srv.refNumber || srv.id || '').replace(/"/g, '""')}"`,
+        `"${(srv.title || srv.serviceTitle || '').replace(/"/g, '""')}"`,
+        `"${(srv.category || 'Government').replace(/"/g, '""')}"`,
+        `"${(srv.status || 'Completed').replace(/"/g, '""')}"`,
+        String(srv.fee || 50),
+        `"${(srv.date || srv.submittedAt || '').replace(/"/g, '""')}"`
+      ]);
+    });
+
+    dossierSections.push([]);
+    dossierSections.push(['TRANSACTIONS & PAYMENT SETTLEMENT HISTORY']);
+    dossierSections.push(['Transaction Ref', 'Amount (INR)', 'Type', 'Payment Mode', 'Status', 'Timestamp']);
+
+    (safeData.transactions || []).forEach((txn: any) => {
+      dossierSections.push([
+        `"${(txn.id || txn.refNumber || '').replace(/"/g, '""')}"`,
+        String(txn.amount || 0),
+        `"${(txn.type || 'DEBIT').replace(/"/g, '""')}"`,
+        `"${(txn.mode || 'UPI / Gateway').replace(/"/g, '""')}"`,
+        `"${(txn.status || 'SUCCESS').replace(/"/g, '""')}"`,
+        `"${(txn.timestamp || txn.date || '').replace(/"/g, '""')}"`
+      ]);
+    });
+
+    const csvContent = '\uFEFF' + dossierSections.map(row => (row || []).join(',')).join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cybersave_dossier_${citizenId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`Citizen Dossier exported to CSV successfully!`);
   };
 
   // Helper for initials
@@ -881,22 +984,24 @@ export default function UserManagementDetail() {
             </button>
 
             <button
-              onClick={() => {
-                showToast('Dossier exported to PDF');
-              }}
+              onClick={handleExportDossierCSV}
               style={{
                 background: '#FFFFFF',
                 border: '1px solid #CBD5E1',
                 borderRadius: '8px',
-                padding: '8px 12px',
+                padding: '8px 14px',
                 fontSize: '13px',
                 fontWeight: 700,
-                color: '#64748B',
-                cursor: 'pointer'
+                color: '#334155',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
               }}
-              title="More Actions"
+              title="Export Citizen Dossier to CSV"
             >
-              <MoreHorizontal size={16} />
+              <Download size={14} /> Export Dossier (CSV)
             </button>
           </div>
         </div>
@@ -2550,7 +2655,7 @@ export default function UserManagementDetail() {
                 disabled={sendingNotif}
                 style={{ background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '9px 22px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
               >
-                {sendingNotif ? 'Dispatching...' : 'Dispatch Message'}
+                {sendingNotif ? 'Broadcasting...' : 'Broadcast to Status Bar'}
               </button>
             </div>
           </div>

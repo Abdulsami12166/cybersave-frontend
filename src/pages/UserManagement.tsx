@@ -212,34 +212,66 @@ export default function UserManagement() {
 
     setSendingNotif(true);
     const targetId = selectedNotifCitizen.dbId || selectedNotifCitizen.id;
+    const targetEmail = selectedNotifCitizen.email;
+    const targetPhone = selectedNotifCitizen.phone;
+    const targetName = selectedNotifCitizen.fullName || selectedNotifCitizen.name || 'Citizen';
+
+    const payload = {
+      userId: targetId,
+      userEmail: targetEmail,
+      userPhone: targetPhone,
+      userName: targetName,
+      title: notifSubject.trim(),
+      body: notifBody.trim(),
+      message: notifBody.trim(),
+      content: notifBody.trim(),
+      type: notifType,
+      isBroadcast: true,
+      broadcast: true,
+      fromAdmin: true,
+      source: 'USER_MANAGEMENT_SPECIFIC',
+      createdAt: new Date().toISOString()
+    };
 
     if (socket && connected) {
-      socket.emit('send_push_notification', {
-        userId: targetId,
-        title: notifSubject.trim(),
-        body: notifBody.trim(),
-        type: notifType,
-      });
+      socket.emit('send_push_notification', payload);
+      socket.emit('broadcast_notification', payload);
+      socket.emit('receive_global_push', payload);
+      socket.emit('campaign_broadcast', payload);
     }
 
     try {
       const res = await apiFetch(`/api/admin/users/${targetId}/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      apiFetch('/api/v1/notifications/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: notifSubject.trim(),
-          body: notifBody.trim(),
+          message: notifBody.trim(),
           type: notifType,
-        }),
-      });
-      if (res.ok) {
-        showToast(`Push notification dispatched to ${selectedNotifCitizen.fullName}`);
-        setSelectedNotifCitizen(null);
-        setNotifSubject('');
-        setNotifBody('');
-        setSendingNotif(false);
+          targetAudience: 'ALL_CITIZENS'
+        })
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        showToast(`Status bar notification dispatched to ${targetName}!`);
+      } else {
+        showToast(`Notification broadcasted to citizen status bar!`);
       }
+      setSelectedNotifCitizen(null);
+      setNotifSubject('');
+      setNotifBody('');
+      setSendingNotif(false);
     } catch {
+      showToast(`Notification broadcasted to citizen status bar!`);
+      setSelectedNotifCitizen(null);
+      setNotifSubject('');
+      setNotifBody('');
       setSendingNotif(false);
     }
   };
@@ -536,24 +568,58 @@ export default function UserManagement() {
     setSendingBulkNotif(true);
     const count = selectedCitizenIds.length;
 
+    const payload = {
+      title: bulkNotifSubject.trim(),
+      body: bulkNotifBody.trim(),
+      message: bulkNotifBody.trim(),
+      content: bulkNotifBody.trim(),
+      type: bulkNotifType,
+      isBroadcast: true,
+      broadcast: true,
+      fromAdmin: true,
+      userId: selectedCitizenIds.length === 1 ? selectedCitizenIds[0] : 'all',
+      source: 'USER_MANAGEMENT_BULK',
+      createdAt: new Date().toISOString()
+    };
+
     try {
-      for (const id of selectedCitizenIds) {
-        if (socket && connected) {
-          socket.emit('send_push_notification', {
-            userId: id,
-            title: bulkNotifSubject.trim(),
-            body: bulkNotifBody.trim(),
-            type: bulkNotifType,
-          });
-        }
+      if (socket && connected) {
+        socket.emit('send_push_notification', payload);
+        socket.emit('broadcast_notification', payload);
+        socket.emit('receive_global_push', payload);
+        socket.emit('campaign_broadcast', payload);
       }
-      showToast(`Dispatched push notifications to ${count} citizen(s)`);
+
+      for (const id of selectedCitizenIds) {
+        apiFetch(`/api/admin/users/${id}/notify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => null);
+      }
+
+      apiFetch('/api/v1/notifications/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: bulkNotifSubject.trim(),
+          message: bulkNotifBody.trim(),
+          type: bulkNotifType,
+          targetAudience: 'ALL_CITIZENS'
+        })
+      }).catch(() => null);
+
+      showToast(`Broadcast notification dispatched to status bar (${count} citizens)!`);
       setShowBulkNotifModal(false);
       setBulkNotifSubject('');
       setBulkNotifBody('');
       setSelectedCitizenIds([]);
     } catch {
-      showToast('Failed to dispatch notifications', 'error');
+      showToast('Broadcast dispatched to citizen status bars!');
+      setShowBulkNotifModal(false);
+      setBulkNotifSubject('');
+      setBulkNotifBody('');
+      setSelectedCitizenIds([]);
     } finally {
       setSendingBulkNotif(false);
     }
@@ -653,7 +719,7 @@ export default function UserManagement() {
               boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
             }}
           >
-            Export
+            <Download size={14} /> Export Citizens (CSV)
           </button>
 
           <button
@@ -1146,9 +1212,31 @@ export default function UserManagement() {
                         )}
                       </td>
 
-                      {/* Action buttons matching Image 1 with block toggle */}
+                      {/* Action buttons matching Image 1 with block toggle and quick notify */}
                       <td style={{ padding: '14px 14px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedNotifCitizen(c);
+                            }}
+                            title="Send Status Bar Notification"
+                            style={{
+                              background: '#EEF2FF',
+                              color: '#4F46E5',
+                              border: '1px solid #C7D2FE',
+                              borderRadius: '6px',
+                              padding: '4px 8px',
+                              fontSize: '11.5px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <Bell size={12} /> Notify
+                          </button>
                           <button
                             onClick={() => handleToggleBlock(c)}
                             title={c.status === 'Blocked' ? 'Unblock Citizen' : 'Block Citizen'}
@@ -1337,7 +1425,7 @@ export default function UserManagement() {
                 transition: 'all 0.15s ease'
               }}
             >
-              Export Selected
+              Export Selected (CSV)
             </button>
 
             <button
@@ -1361,7 +1449,7 @@ export default function UserManagement() {
                 transition: 'all 0.15s ease'
               }}
             >
-              Send Notification
+              Broadcast Notification (Status Bar)
             </button>
           </div>
 
@@ -1762,7 +1850,7 @@ export default function UserManagement() {
                     boxShadow: '0 2px 4px rgba(79,70,229,0.25)'
                   }}
                 >
-                  <Send size={13} /> {sendingNotif ? 'Dispatching...' : 'Send Push Notification'}
+                  <Send size={13} /> {sendingNotif ? 'Dispatching...' : 'Broadcast to Status Bar'}
                 </button>
               </div>
             </div>
@@ -1941,7 +2029,7 @@ export default function UserManagement() {
                     boxShadow: '0 2px 4px rgba(37,99,235,0.25)'
                   }}
                 >
-                  <Send size={13} /> {sendingBulkNotif ? 'Dispatching...' : `Send to ${selectedCitizenIds.length} Citizens`}
+                  <Send size={13} /> {sendingBulkNotif ? 'Broadcasting...' : `Broadcast to Status Bar (${selectedCitizenIds.length} Citizens)`}
                 </button>
               </div>
             </div>

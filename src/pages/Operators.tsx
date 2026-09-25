@@ -222,14 +222,16 @@ export default function Operators() {
       `"${op.joinedDate || ''}"`
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `cybersave_operators_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.href = url;
+    link.download = `cybersave_operators_report_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 
     window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Exported ${filteredOperators.length} operator records to CSV` } }));
   };
@@ -244,7 +246,7 @@ export default function Operators() {
         </div>
         <div style={{display: 'flex', gap: 12}}>
           <button className="date-picker-btn" onClick={handleExportCSV} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
-            <Download size={14} /> Export Report
+            <Download size={14} /> Export Report (CSV)
           </button>
           <button className="action-btn" onClick={() => setShowAddOpModal(true)}>+ Add New Operator</button>
         </div>

@@ -751,13 +751,14 @@ export default function ApplicationDetail() {
   const isApproved = statusUpper === 'APPROVED' || statusUpper === 'COMPLETED';
   const isRejected = statusUpper === 'REJECTED';
   const isInProgress = statusUpper === 'IN_PROGRESS';
-  const timeline = buildTimeline(app, checklist);
+  const paidDate = app?.submittedAt ? new Date(app.submittedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
+  const txnId = app?.razorpayPaymentId || `TXN-${(app?.refNumber || '').slice(-4)}-${(app?.rawId || app?.id || '').slice(-4)}`;
 
   const handleDownloadReceipt = () => {
     if (!app) return;
-    const refNum = app.refNumber || app.id || 'RECEIPT';
-    const applicantName = applicant?.name || 'Citizen Applicant';
-    const serviceName = app.serviceName || 'Citizen Service';
+    const refNum = String(app.refNumber || app.id || 'RECEIPT');
+    const applicantName = applicant?.name || (typeof app.citizenName === 'string' ? app.citizenName : 'Citizen Applicant');
+    const serviceName = app.serviceName || app.serviceTitle || 'Citizen Service';
     const amount = app.feePaid || 50;
     const paymentStatus = app.paymentStatus || 'COMPLETED';
     const paymentMode = 'UPI / Online Gateway';
@@ -770,6 +771,7 @@ export default function ApplicationDetail() {
       ['Application Reference', refNum],
       ['Applicant Name', applicantName],
       ['Citizen Contact', applicant?.phone || 'N/A'],
+      ['Citizen Email', applicant?.email || 'N/A'],
       ['Service Name', serviceName],
       ['Processing Centre', app.centre || 'CyberSave Regional Hub'],
       ['Assigned Officer', typeof app.assignedTo === 'object' ? (app.assignedTo?.name || 'VLE Officer') : (app.assignedTo || app.officialOfficer || 'Auto Assigned')],
@@ -779,20 +781,23 @@ export default function ApplicationDetail() {
       ['Payment Method', paymentMode],
       ['Transaction Reference ID', transactionId],
       ['Payment & Submission Timestamp', dateStr],
-      ['Issuing Authority', 'CyberSave Digital Governance Portal'],
+      ['Issuing Authority', 'CyberSave Digital Governance Portal (Official Receipt)'],
     ];
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [receiptHeaders.join(','), ...receiptRows.map(r => `"${r[0]}","${(r[1] || '').toString().replace(/"/g, '""')}"`)].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = '\uFEFF' + [receiptHeaders.join(','), ...receiptRows.map(r => `"${r[0]}","${(r[1] || '').toString().replace(/"/g, '""')}"`)].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `CyberSave_Receipt_${refNum}.csv`);
+    link.href = url;
+    const cleanRef = refNum.replace(/[^a-zA-Z0-9_-]/g, '_');
+    link.download = `CyberSave_Receipt_${cleanRef}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 
     window.dispatchEvent(new CustomEvent('cybersave_toast', {
-      detail: { message: `Payment receipt downloaded for #${refNum}`, type: 'success' }
+      detail: { message: `Payment receipt (CSV) downloaded for #${refNum}`, type: 'success' }
     }));
   };
 
@@ -801,8 +806,6 @@ export default function ApplicationDetail() {
   const statusBg = isApproved ? '#d1fae5' : isRejected ? '#fee2e2' : isInProgress ? '#dbeafe' : '#fef3c7';
 
   const priorityLabel = 'High Priority';
-  const paidDate = app.submittedAt ? new Date(app.submittedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
-  const txnId = app.razorpayPaymentId || `TXN-${(app.refNumber || '').slice(-4)}-${(app.rawId || '').slice(-4)}`;
 
   // SLA progress (mock: based on status)
   const slaPercent = isApproved ? 100 : isRejected ? 100 : isInProgress ? 60 : 40;
@@ -1554,7 +1557,7 @@ export default function ApplicationDetail() {
                 padding: '10px 16px', fontSize: 13, cursor: 'pointer'
               }}
             >
-              <Download size={14} /> Download Receipt
+              <Download size={14} /> Download Receipt (CSV)
             </button>
           </div>
 

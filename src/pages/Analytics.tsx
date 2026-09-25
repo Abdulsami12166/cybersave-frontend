@@ -415,7 +415,7 @@ export default function Analytics() {
               boxShadow: '0 2px 4px rgba(15,23,42,0.15)'
             }}
           >
-            <Download size={14} /> Export Audit Log (CSV)
+            <Download size={14} /> Export SLA & Analytics (CSV)
           </button>
         </div>
       </div>
