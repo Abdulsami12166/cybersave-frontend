@@ -230,8 +230,10 @@ export default function AuditLogs() {
           if (!action.includes('OPERATOR')) return false;
         } else if (categoryFilter === 'SERVICES') {
           if (!action.includes('SERVICE')) return false;
+        } else if (categoryFilter === 'CAMPAIGNS') {
+          if (!action.includes('CAMPAIGN') && !action.includes('BROADCAST') && !action.includes('NOTIF')) return false;
         } else if (categoryFilter === 'GOVERNANCE') {
-          if (!action.includes('SETTING') && !action.includes('PROFILE') && !action.includes('PASSWORD')) return false;
+          if (!action.includes('SETTING') && !action.includes('PROFILE') && !action.includes('PASSWORD') && !action.includes('CAMPAIGN') && !action.includes('BROADCAST')) return false;
         } else if (categoryFilter === 'SECURITY') {
           if (!action.includes('LOGIN') && !action.includes('AUTH') && !action.includes('PASSWORD')) return false;
         }
@@ -298,6 +300,9 @@ export default function AuditLogs() {
 
   const getActionBadgeStyle = (action: string, status: string) => {
     const act = (action || '').toUpperCase();
+    if (act.includes('CAMPAIGN') || act.includes('BROADCAST')) {
+      return { bg: '#E0E7FF', text: '#3730A3', border: '#C7D2FE', icon: <Activity size={12} /> };
+    }
     if (act.includes('APPROV') || act === 'OPERATOR_CREATED' || act === 'SERVICE_SCHEME_CREATED' || act === 'APPLICATION_COMPLETED') {
       return { bg: '#DCFCE7', text: '#15803D', border: '#BBF7D0', icon: <CheckCircle2 size={12} /> };
     }
@@ -485,6 +490,7 @@ export default function AuditLogs() {
                 <option value="APPLICATIONS">Application Decisions (Approve/Reject)</option>
                 <option value="OPERATORS">Operator Management</option>
                 <option value="SERVICES">Service Schemes</option>
+                <option value="CAMPAIGNS">Campaigns & Broadcasts</option>
                 <option value="GOVERNANCE">System Governance & Policy</option>
                 <option value="SECURITY">Security & Authentication</option>
               </select>

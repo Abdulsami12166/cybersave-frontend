@@ -168,6 +168,8 @@ export default function UserManagement() {
       socket.on('user_status_changed', handleStatusChange);
       socket.on('user_activity_updated', handleRefresh);
       socket.on('new_user_feedback', handleRefresh);
+      socket.on('applications_updated', handleRefresh);
+      socket.on('application_status_changed', handleRefresh);
       socket.on('response_push_sent', handlePushSent);
       socket.on('add_citizen_success', () => {
         showToast('Citizen successfully registered in database');
@@ -186,6 +188,8 @@ export default function UserManagement() {
         socket.off('user_status_changed', handleStatusChange);
         socket.off('user_activity_updated', handleRefresh);
         socket.off('new_user_feedback', handleRefresh);
+        socket.off('applications_updated', handleRefresh);
+        socket.off('application_status_changed', handleRefresh);
         socket.off('response_push_sent', handlePushSent);
         socket.off('add_citizen_success');
         socket.off('block_citizen_success');

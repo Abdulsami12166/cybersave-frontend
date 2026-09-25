@@ -436,11 +436,10 @@ export default function Layout() {
       }}>
         {/* Portal Branding matching CyberSave Logo */}
         <div style={{
-          padding: isCollapsed ? '20px 8px' : '18px 20px',
-          borderBottom: '1px solid #F1F5F9',
+          padding: isCollapsed ? '20px 8px' : '22px 20px 14px 20px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: isCollapsed ? 'center' : 'flex-start',
+          justifyContent: 'center',
         }}>
           {isCollapsed ? (
             <div style={{
@@ -459,13 +458,14 @@ export default function Layout() {
               CS
             </div>
           ) : (
-            <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+            <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
               <img
                 src="/cybersave-logo.png"
                 alt="CyberSave — Digital Services • Trusted Always"
                 style={{
-                  height: '38px',
-                  maxWidth: '200px',
+                  height: '42px',
+                  width: 'auto',
+                  maxWidth: '190px',
                   objectFit: 'contain',
                   display: 'block'
                 }}
@@ -474,8 +474,8 @@ export default function Layout() {
           )}
         </div>
 
-        {/* Flat Navigation Item List matching Image 1 */}
-        <div style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+        {/* Flat Navigation Item List matching Reference Image */}
+        <div style={{ padding: '8px 12px 16px 12px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
           {navItems.filter(item => hasAccess(item.requiredPermission)).map((item, idx) => (
             <NavLink
               key={idx}
@@ -488,11 +488,11 @@ export default function Layout() {
                 gap: '12px',
                 padding: isCollapsed ? '10px 0' : '10px 14px',
                 borderRadius: '8px',
-                fontSize: '13.5px',
+                fontSize: '14px',
                 fontWeight: isActive ? 700 : 500,
                 color: isActive ? '#2563EB' : '#475569',
                 background: isActive ? '#EFF6FF' : 'transparent',
-                border: isActive ? '1px solid #BFDBFE' : '1px solid transparent',
+                border: isActive ? '1.5px solid #2563EB' : '1.5px solid transparent',
                 textDecoration: 'none',
                 transition: 'all 0.15s ease',
                 justifyContent: isCollapsed ? 'center' : 'flex-start',

@@ -185,29 +185,37 @@ export default function Applications() {
         if (Array.isArray(list)) {
           const formatted = list.map((item, idx) => formatApplication(item, idx));
           const totalApps = formatted.length;
-          const pending = formatted.filter(a => a.rawStatus === 'SUBMITTED' || a.rawStatus === 'VERIFYING' || a.rawStatus === 'PENDING').length;
-          const processing = formatted.filter(a => a.rawStatus === 'IN_PROGRESS').length;
-          const completed = formatted.filter(a => a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
           const todayApps = formatted.filter(a => {
             const sub = new Date(a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
             const today = new Date();
             return sub.toDateString() === today.toDateString();
           }).length;
+          const submittedCount = formatted.filter(a => a.rawStatus === 'SUBMITTED').length;
+          const underReviewCount = formatted.filter(a => a.rawStatus === 'VERIFYING' || a.rawStatus === 'PENDING').length;
+          const processingCount = formatted.filter(a => a.rawStatus === 'IN_PROGRESS' || a.rawStatus === 'PROCESSING').length;
+          const approvedCount = formatted.filter(a => a.rawStatus === 'APPROVED').length;
+          const completedCount = formatted.filter(a => a.rawStatus === 'COMPLETED').length;
+          const completedTodayCount = formatted.filter(a => {
+            const isDone = a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED';
+            if (!isDone) return false;
+            const upd = new Date(a.rawApp?.updatedAt || a.rawApp?.submittedAt || Date.now());
+            return upd.toDateString() === new Date().toDateString();
+          }).length;
 
           const freshData = {
             stats: { 
-              totalApps: totalApps || 12847, 
-              todayApps: todayApps || 1247, 
-              pending: pending || 342, 
-              processing: processing || 189, 
-              completed: completed || 856 
+              totalApps, 
+              todayApps, 
+              pending: submittedCount + underReviewCount, 
+              processing: processingCount, 
+              completed: completedTodayCount 
             },
             pipeline: {
-              submitted: formatted.filter(a => a.rawStatus === 'SUBMITTED').length || 428,
-              underReview: pending || 342,
-              processing: processing || 189,
-              approved: formatted.filter(a => a.rawStatus === 'APPROVED').length || 156,
-              completed: completed || 856
+              submitted: submittedCount,
+              underReview: underReviewCount,
+              processing: processingCount,
+              approved: approvedCount,
+              completed: completedCount
             },
             applications: formatted,
           };
@@ -246,14 +254,38 @@ export default function Applications() {
         }
         const rawList = Array.isArray(resData.applications) ? resData.applications : [];
         const formatted = rawList.map((item: any, idx: number) => formatApplication(item, idx));
-        const stats = resData.stats || {
-          totalApps: formatted.length || 12847,
-          todayApps: 1247,
-          pending: 342,
-          processing: 189,
-          completed: 856,
+        const totalApps = formatted.length;
+        const todayApps = formatted.filter(a => {
+          const sub = new Date(a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
+          return sub.toDateString() === new Date().toDateString();
+        }).length;
+        const submittedCount = formatted.filter(a => a.rawStatus === 'SUBMITTED').length;
+        const underReviewCount = formatted.filter(a => a.rawStatus === 'VERIFYING' || a.rawStatus === 'PENDING').length;
+        const processingCount = formatted.filter(a => a.rawStatus === 'IN_PROGRESS' || a.rawStatus === 'PROCESSING').length;
+        const approvedCount = formatted.filter(a => a.rawStatus === 'APPROVED').length;
+        const completedCount = formatted.filter(a => a.rawStatus === 'COMPLETED').length;
+        const completedTodayCount = formatted.filter(a => {
+          const isDone = a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED';
+          if (!isDone) return false;
+          const upd = new Date(a.rawApp?.updatedAt || a.rawApp?.submittedAt || Date.now());
+          return upd.toDateString() === new Date().toDateString();
+        }).length;
+
+        const stats = {
+          totalApps: resData.stats?.totalApps ?? totalApps,
+          todayApps: resData.stats?.todayApps ?? todayApps,
+          pending: resData.stats?.pending ?? (submittedCount + underReviewCount),
+          processing: resData.stats?.processing ?? processingCount,
+          completed: resData.stats?.completed ?? completedTodayCount,
         };
-        setData({ stats, applications: formatted });
+        const pipeline = resData.pipeline || {
+          submitted: submittedCount,
+          underReview: underReviewCount,
+          processing: processingCount,
+          approved: approvedCount,
+          completed: completedCount,
+        };
+        setData({ stats, pipeline, applications: formatted });
         setLoading(false);
       };
 
@@ -880,7 +912,7 @@ export default function Applications() {
           </div>
           <div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', marginTop: '6px' }}>
-              {(stats?.totalApps || 12847).toLocaleString('en-IN')}
+              {(stats?.totalApps ?? 0).toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '4px' }}>
               All-time received
@@ -912,15 +944,15 @@ export default function Applications() {
               padding: '2px 6px',
               borderRadius: '6px'
             }}>
-              +8.2%
+              Live
             </span>
           </div>
           <div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', marginTop: '6px' }}>
-              {(stats?.todayApps || 1247).toLocaleString('en-IN')}
+              {(stats?.todayApps ?? 0).toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '4px' }}>
-              vs 1,151 yesterday
+              Received today
             </div>
           </div>
         </div>
@@ -945,10 +977,10 @@ export default function Applications() {
           </div>
           <div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', marginTop: '6px' }}>
-              {(stats?.pending || 342).toLocaleString('en-IN')}
+              {(stats?.pending ?? 0).toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '4px' }}>
-              Awaiting VLE check
+              Awaiting review
             </div>
           </div>
         </div>
@@ -973,7 +1005,7 @@ export default function Applications() {
           </div>
           <div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', marginTop: '6px' }}>
-              {(stats?.processing || 189).toLocaleString('en-IN')}
+              {(stats?.processing ?? 0).toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '4px' }}>
               Sent to department
@@ -1001,10 +1033,10 @@ export default function Applications() {
           </div>
           <div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', marginTop: '6px' }}>
-              {(stats?.completed || 856).toLocaleString('en-IN')}
+              {(stats?.completed ?? 0).toLocaleString('en-IN')}
             </div>
             <div style={{ fontSize: '11.5px', color: '#16A34A', fontWeight: 600, marginTop: '4px' }}>
-              68.6% completion rate
+              Approved / Completed today
             </div>
           </div>
         </div>
@@ -1035,7 +1067,7 @@ export default function Applications() {
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
               <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
-                {(data?.pipeline?.submitted || 428).toLocaleString()}
+                {(data?.pipeline?.submitted ?? 0).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 500 }}>Active</span>
             </div>
@@ -1049,7 +1081,7 @@ export default function Applications() {
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
               <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
-                {(data?.pipeline?.underReview || 342).toLocaleString()}
+                {(data?.pipeline?.underReview ?? 0).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#D97706', fontWeight: 500 }}>Needs VLE</span>
             </div>
@@ -1063,7 +1095,7 @@ export default function Applications() {
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
               <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
-                {(data?.pipeline?.processing || 189).toLocaleString()}
+                {(data?.pipeline?.processing ?? 0).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#2563EB', fontWeight: 500 }}>At Dept</span>
             </div>
@@ -1077,7 +1109,7 @@ export default function Applications() {
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
               <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
-                {(data?.pipeline?.approved || 156).toLocaleString()}
+                {(data?.pipeline?.approved ?? 0).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#059669', fontWeight: 500 }}>Ready</span>
             </div>
@@ -1091,7 +1123,7 @@ export default function Applications() {
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
               <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
-                {(data?.pipeline?.completed || 856).toLocaleString()}
+                {(data?.pipeline?.completed ?? 0).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 500 }}>Archived</span>
             </div>

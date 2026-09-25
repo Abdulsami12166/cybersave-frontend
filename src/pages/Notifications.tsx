@@ -101,6 +101,18 @@ export default function Notifications() {
           setData({ ...resData, stats: calculatedStats });
         }
       });
+      socket.on('notifications_updated', () => {
+        fetchNotificationsRest();
+      });
+      socket.on('new_notification', (newNotif: any) => {
+        fetchNotificationsRest();
+        if (newNotif?.title) {
+          showToast(`New Notification: ${newNotif.title}`);
+        }
+      });
+      socket.on('campaign_broadcast', () => {
+        fetchNotificationsRest();
+      });
       socket.on('send_global_push_success', (res: any) => {
         showToast(`Global Push Notification Sent to ${res?.count || 'all'} devices!`);
       });
@@ -109,6 +121,9 @@ export default function Notifications() {
       clearInterval(pollInterval);
       if (socket) {
         socket.off('response_notifications');
+        socket.off('notifications_updated');
+        socket.off('new_notification');
+        socket.off('campaign_broadcast');
         socket.off('send_global_push_success');
       }
     };
@@ -261,7 +276,7 @@ export default function Notifications() {
               <div style={{flex: 1}}>
                 <div style={{fontSize: 11, color: '#6b7280', fontWeight: 600, letterSpacing: 0.5, marginBottom: 4}}>NTF-2024-{81-i} • <span style={{color}}>{notif.type}</span></div>
                 <h4 style={{fontSize: 15, fontWeight: 700, color: '#111827', marginBottom: 4}}>{notif.title}</h4>
-                <p style={{fontSize: 13, color: '#6b7280'}}>{notif.message}</p>
+                <p style={{fontSize: 13, color: '#6b7280'}}>{notif.message || notif.body || notif.title}</p>
               </div>
               <div style={{color: '#6b7280', fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap'}}>
                 {notif.time}
