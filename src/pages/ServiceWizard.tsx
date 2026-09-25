@@ -324,6 +324,124 @@ export default function ServiceWizard() {
     }));
   };
 
+  // Smart Cross-Section Auto-Fill Engine
+  const autoFillSection = (targetStep: number) => {
+    const sName = (serviceData.name || '').trim() || 'Citizen Digital Service';
+    const sCat = serviceData.category || 'Identity Services';
+    const sDesc = (serviceData.description || '').trim() || `Official government citizen service portal for ${sName}.`;
+    const abbr = sName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'SRV';
+    const baseFee = serviceData.pricing.fee || 50;
+
+    setServiceData(prev => {
+      const updated = { ...prev };
+
+      // Step 2: Sub-Services auto-fill
+      if (targetStep === 2) {
+        updated.subServices = [
+          { name: `${sName} - Standard Application`, code: `CS-${abbr}-STD`, status: 'Active', fee: baseFee, sla: '3-5 business days' },
+          { name: `${sName} - Correction & Update`, code: `CS-${abbr}-UPD`, status: 'Active', fee: baseFee, sla: '2-3 business days' },
+          { name: `${sName} - Duplicate / Re-issue`, code: `CS-${abbr}-DUP`, status: 'Active', fee: Math.max(30, Math.round(baseFee * 0.6)), sla: '1-2 business days' }
+        ];
+      }
+
+      // Step 3: Overview auto-fill
+      if (targetStep === 3) {
+        const words = sName.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        const catWords = sCat.toLowerCase().replace(' services', '').split(/\s+/).filter(w => w.length > 2);
+        const tags = Array.from(new Set([...words, ...catWords, 'csc', 'portal', 'verification', 'official'])).slice(0, 6);
+
+        updated.displayName = `${sName} Official Processing Flow`;
+        updated.shortDescription = `Direct online submission, automated verification, and issuance for ${sName}.`;
+        updated.detailedDescription = `${sDesc} Applicants must submit valid supporting identity credentials and residential proof in accordance with national e-governance standards.`;
+        updated.departmentRole = `Department of ${sCat.replace(/Services/i, '')} & Verification Authority`;
+        updated.serviceType = 'Online Only';
+        updated.tat = '3-5 business days';
+        updated.assignedTeams = [`${sCat} Verification Desk`, 'SDM Level-1 Review', 'Field Compliance Desk'];
+        updated.searchTags = tags;
+      }
+
+      // Step 4: Form Builder auto-fill
+      if (targetStep === 4) {
+        const isAddrOrLand = /address|land|property|domicile|caste|birth|death/i.test(sName + ' ' + sCat);
+        const isFinancial = /banking|insurance|tax|pan|income|pension/i.test(sName + ' ' + sCat);
+
+        const fields: FormElementItem[] = [
+          { label: 'Citizen Full Name', type: 'Text Input', placeholder: 'Enter official name per Aadhaar', required: true, validationRule: 'None' },
+          { label: 'Mobile Number', type: 'Number Input', placeholder: '10-digit registered mobile', required: true, validationRule: 'Exact 10 Digit Phone' },
+          { label: 'Date of Birth', type: 'Date Picker', placeholder: 'DD/MM/YYYY', required: true, validationRule: 'Date in Past' },
+          { label: 'Aadhaar / National ID', type: 'Number Input', placeholder: '12-digit UIDAI Aadhaar', required: true, validationRule: 'Exact 12 Digit Number' },
+        ];
+
+        if (isAddrOrLand) {
+          fields.push(
+            { label: 'Current Residential Address', type: 'Text Area', placeholder: 'Complete house no., street, locality, landmark', required: true, validationRule: 'None' },
+            { label: 'District / Tehsil', type: 'Text Input', placeholder: 'e.g. South Delhi / Central', required: true, validationRule: 'None' },
+            { label: 'Postal Pin Code', type: 'Number Input', placeholder: '6-digit postal code', required: true, validationRule: 'Exact 6 Digit Number' }
+          );
+        } else if (isFinancial) {
+          fields.push(
+            { label: 'PAN or Account Identifier', type: 'Text Input', placeholder: 'Enter alphanumeric reference', required: true, validationRule: 'None' },
+            { label: 'Annual Income Range', type: 'Text Input', placeholder: 'e.g. ₹2,50,000 to ₹5,00,000', required: true, validationRule: 'None' }
+          );
+        } else {
+          fields.push(
+            { label: 'Application Details / Remarks', type: 'Text Area', placeholder: 'Specify purpose of application or remarks', required: true, validationRule: 'None' },
+            { label: 'Residential District', type: 'Text Input', placeholder: 'e.g. New Delhi', required: true, validationRule: 'None' }
+          );
+        }
+
+        updated.formElements = fields;
+      }
+
+      // Step 5: Documents auto-fill
+      if (targetStep === 5) {
+        updated.documents = [
+          { type: 'Proof of Identity (Aadhaar / Voter ID / Passport)', formats: 'PDF, JPG, PNG', size: '2 MB', req: 'Required' },
+          { type: 'Proof of Address (Utility Bill / Rent Agreement)', formats: 'PDF, JPG, PNG', size: '5 MB', req: 'Required' },
+          { type: 'Recent Passport Size Photograph', formats: 'JPG, PNG', size: '1 MB', req: 'Required' },
+          { type: 'Self Declaration Affidavit', formats: 'PDF', size: '2 MB', req: 'Optional' }
+        ];
+      }
+
+      // Step 6: Pricing auto-fill
+      if (targetStep === 6) {
+        const fee = prev.pricing.fee || 50;
+        const total = Math.round(fee * 1.18);
+        updated.pricing = {
+          ...prev.pricing,
+          fee,
+          applyGst: true,
+          total,
+          paymentMethods: ['Online Payment', 'UPI', 'CyberSave Wallet', 'Net Banking'],
+          refundPolicy: '100% full refund credited to CyberSave citizen wallet if cancelled or rejected prior to field officer inspection.',
+          charges: [
+            { name: 'Fast-Track Tatkal / Express Verification', amount: '₹100', condition: 'Optional 24-hour priority turnaround' },
+            { name: 'Document Correction Resubmission', amount: '₹25', condition: 'Applicable after 2nd rejection notice' }
+          ]
+        };
+      }
+
+      // Step 7: Publish auto-fill
+      if (targetStep === 7) {
+        updated.portalVisibility = 'All Citizens (Public Access)';
+        updated.effectiveDate = 'Immediately upon publishing';
+        updated.notifyCitizens = true;
+        updated.targetEnv = 'Production (Live Portal)';
+      }
+
+      return updated;
+    });
+
+    showToast(`✨ Auto-filled section using intelligent template for "${sName}"!`);
+  };
+
+  const handleNextStep = (currentStep: number) => {
+    const nextStep = currentStep + 1;
+    autoFillSection(nextStep);
+    setActiveStep(nextStep);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Calculate pricing
   const updateFee = (fee: number, applyGst = serviceData.pricing.applyGst) => {
     const total = applyGst ? Math.round(fee * 1.18) : fee;
@@ -793,25 +911,76 @@ export default function ServiceWizard() {
       </div>
 
       {/* Page Title Row */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
-          {activeStep === 1 && 'Main Service Configuration'}
-          {activeStep === 2 && 'Sub-Service Association'}
-          {activeStep === 3 && 'Service Overview & Information'}
-          {activeStep === 4 && 'Interface Form Builder'}
-          {activeStep === 5 && 'Required Documents Configuration'}
-          {activeStep === 6 && 'Service Pricing Configuration'}
-          {activeStep === 7 && 'Publish Service'}
-        </h1>
-        <p style={{ color: '#64748b', fontSize: 13.5, margin: 0 }}>
-          {activeStep === 1 && 'Select or create the foundational parent category for this service.'}
-          {activeStep === 2 && 'Group granular update flows and procedures under the master parent service.'}
-          {activeStep === 3 && 'Document external public descriptors and metrics for end-users.'}
-          {activeStep === 4 && 'Formulate and sequence data capture inputs required from applicants.'}
-          {activeStep === 5 && 'Identify physical file attachments applicants must upload.'}
-          {activeStep === 6 && 'Configure base fee, regional taxes, and additional processing charges for the service.'}
-          {activeStep === 7 && 'Validate final system checks, set release parameters, and push the service to citizen portal.'}
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
+            {activeStep === 1 && 'Main Service Configuration'}
+            {activeStep === 2 && 'Sub-Service Association'}
+            {activeStep === 3 && 'Service Overview & Information'}
+            {activeStep === 4 && 'Interface Form Builder'}
+            {activeStep === 5 && 'Required Documents Configuration'}
+            {activeStep === 6 && 'Service Pricing Configuration'}
+            {activeStep === 7 && 'Publish Service'}
+          </h1>
+          <p style={{ color: '#64748b', fontSize: 13.5, margin: 0 }}>
+            {activeStep === 1 && 'Select or create the foundational parent category for this service.'}
+            {activeStep === 2 && 'Group granular update flows and procedures under the master parent service.'}
+            {activeStep === 3 && 'Document external public descriptors and metrics for end-users.'}
+            {activeStep === 4 && 'Formulate and sequence data capture inputs required from applicants.'}
+            {activeStep === 5 && 'Identify physical file attachments applicants must upload.'}
+            {activeStep === 6 && 'Configure base fee, regional taxes, and additional processing charges for the service.'}
+            {activeStep === 7 && 'Validate final system checks, set release parameters, and push the service to citizen portal.'}
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            type="button"
+            onClick={() => autoFillSection(activeStep)}
+            title="Auto-fill this section with smart template based on entered details"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid #BFDBFE',
+              background: '#EFF6FF',
+              color: '#1D4ED8',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Sparkles size={14} color="#2563EB" /> Auto-Fill This Section
+          </button>
+          {activeStep < 7 && (
+            <button
+              type="button"
+              onClick={() => handleNextStep(activeStep)}
+              title="Automatically populate the next section and advance"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 16px',
+                borderRadius: 8,
+                border: 'none',
+                background: '#2563EB',
+                color: '#FFFFFF',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Sparkles size={14} /> Auto-Fill Next &rarr;
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stepper Wizard Indicator (Matching Screenshots) */}
@@ -1143,11 +1312,18 @@ export default function ServiceWizard() {
           </div>
 
           {/* Step 1 Footer */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 20, borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 20, borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 12 }}>
             <span style={{ fontSize: 12.5, color: '#64748b' }}>
-              Step 1 of 9: Establish primary service container attributes.
+              Step 1 of 7: Establish primary service container attributes.
             </span>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => autoFillSection(1)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <Sparkles size={14} /> Auto-Fill Section
+              </button>
               <button
                 type="button"
                 onClick={() => handleSave(false)}
@@ -1157,10 +1333,10 @@ export default function ServiceWizard() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveStep(2)}
-                style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                onClick={() => handleNextStep(1)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 22px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
               >
-                Save & Continue
+                <Sparkles size={14} /> Save & Auto-Fill Next &rarr;
               </button>
             </div>
           </div>
@@ -1312,17 +1488,24 @@ export default function ServiceWizard() {
           </table>
 
           {/* Step 2 Footer */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 20, borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 20, borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 12 }}>
             <span style={{ fontSize: 12.5, color: '#64748b' }}>
-              Step 2 of 9: Bind child actions to parent container.
+              Step 2 of 7: Bind child actions to parent container.
             </span>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button
                 type="button"
                 onClick={() => setActiveStep(1)}
                 style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >
                 Back
+              </button>
+              <button
+                type="button"
+                onClick={() => autoFillSection(2)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <Sparkles size={14} /> Auto-Fill Section
               </button>
               <button
                 type="button"
@@ -1333,10 +1516,10 @@ export default function ServiceWizard() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveStep(3)}
-                style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                onClick={() => handleNextStep(2)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 22px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
               >
-                Save & Continue
+                <Sparkles size={14} /> Save & Auto-Fill Next &rarr;
               </button>
             </div>
           </div>
@@ -1545,17 +1728,24 @@ export default function ServiceWizard() {
           </div>
 
           {/* Step 3 Footer */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 20, borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 20, borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 12 }}>
             <span style={{ fontSize: 12.5, color: '#64748b' }}>
-              Step 3 of 9: Establish core service details and tagging.
+              Step 3 of 7: Establish core service details and tagging.
             </span>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button
                 type="button"
                 onClick={() => setActiveStep(2)}
                 style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >
                 Back
+              </button>
+              <button
+                type="button"
+                onClick={() => autoFillSection(3)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <Sparkles size={14} /> Auto-Fill Section
               </button>
               <button
                 type="button"
@@ -1566,10 +1756,10 @@ export default function ServiceWizard() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveStep(4)}
-                style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                onClick={() => handleNextStep(3)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 22px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
               >
-                Save & Continue
+                <Sparkles size={14} /> Save & Auto-Fill Next &rarr;
               </button>
             </div>
           </div>
@@ -1921,17 +2111,24 @@ export default function ServiceWizard() {
           </div>
 
           {/* Step 4 Footer */}
-          <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <span style={{ fontSize: 12.5, color: '#64748b' }}>
-              Step 4 of 9: Establish input form design variables.
+              Step 4 of 7: Establish input form design variables.
             </span>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button
                 type="button"
                 onClick={() => setActiveStep(3)}
                 style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >
                 Back
+              </button>
+              <button
+                type="button"
+                onClick={() => autoFillSection(4)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <Sparkles size={14} /> Auto-Fill Section
               </button>
               <button
                 type="button"
@@ -1942,10 +2139,10 @@ export default function ServiceWizard() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveStep(5)}
-                style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                onClick={() => handleNextStep(4)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 22px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
               >
-                Save & Continue
+                <Sparkles size={14} /> Save & Auto-Fill Next &rarr;
               </button>
             </div>
           </div>
@@ -2142,17 +2339,24 @@ export default function ServiceWizard() {
           </table>
 
           {/* Step 5 Footer */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 20, borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 20, borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 12 }}>
             <span style={{ fontSize: 12.5, color: '#64748b' }}>
-              Step 5 of 9: Establish applicant document file checklist.
+              Step 5 of 7: Establish applicant document file checklist.
             </span>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button
                 type="button"
                 onClick={() => setActiveStep(4)}
                 style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >
                 Back
+              </button>
+              <button
+                type="button"
+                onClick={() => autoFillSection(5)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <Sparkles size={14} /> Auto-Fill Section
               </button>
               <button
                 type="button"
@@ -2163,10 +2367,10 @@ export default function ServiceWizard() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveStep(6)}
-                style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                onClick={() => handleNextStep(5)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 22px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
               >
-                Save & Continue
+                <Sparkles size={14} /> Save & Auto-Fill Next &rarr;
               </button>
             </div>
           </div>
@@ -2380,6 +2584,43 @@ export default function ServiceWizard() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Step 6 Footer */}
+          <div style={{ gridColumn: '1 / -1', background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+            <span style={{ fontSize: 12.5, color: '#64748b' }}>
+              Step 6 of 7: Configure base fee, regional taxes, and additional charges.
+            </span>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setActiveStep(5)}
+                style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => autoFillSection(6)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <Sparkles size={14} /> Auto-Fill Section
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave(false)}
+                style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Save as Draft
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNextStep(6)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 22px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
+              >
+                <Sparkles size={14} /> Save & Review &rarr;
+              </button>
+            </div>
           </div>
         </div>
       )}

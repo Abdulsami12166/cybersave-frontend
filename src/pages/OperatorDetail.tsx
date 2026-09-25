@@ -1256,22 +1256,42 @@ export default function OperatorDetail() {
                             boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
                           }}
                         >
-                          {/* Icon Card Box */}
-                          <div style={{
-                            width: 64, 
-                            height: 64, 
-                            borderRadius: 12, 
-                            background: isImage ? '#f0fdf4' : '#fef2f2',
-                            color: isImage ? '#16a34a' : '#ef4444',
-                            border: `1px solid ${isImage ? '#dcfce7' : '#fee2e2'}`,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            marginBottom: 12
-                          }}>
-                            {isImage ? <FileImage size={24} /> : <FileText size={24} />}
-                            <span style={{ fontSize: 10, fontWeight: 800, marginTop: 2 }}>{doc.type}</span>
+                          {/* Thumbnail / Icon Card Box */}
+                          <div 
+                            onClick={() => doc.fileUrl && setPreviewDoc({ url: doc.fileUrl, title: doc.fileName })}
+                            style={{
+                              width: '100%', 
+                              height: 110, 
+                              borderRadius: 10, 
+                              background: isImage ? '#f8fafc' : '#fef2f2',
+                              color: isImage ? '#16a34a' : '#ef4444',
+                              border: `1px solid ${isImage ? '#e2e8f0' : '#fee2e2'}`,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              marginBottom: 12,
+                              overflow: 'hidden',
+                              position: 'relative',
+                              cursor: doc.fileUrl ? 'pointer' : 'default',
+                              transition: 'box-shadow 0.15s ease'
+                            }}
+                          >
+                            {isImage && doc.fileUrl ? (
+                              <img 
+                                src={doc.fileUrl} 
+                                alt={doc.fileName} 
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <>
+                                {isImage ? <FileImage size={28} /> : <FileText size={28} />}
+                                <span style={{ fontSize: 10, fontWeight: 800, marginTop: 4 }}>{doc.type}</span>
+                              </>
+                            )}
                           </div>
 
                           {/* Title */}
@@ -1589,12 +1609,27 @@ export default function OperatorDetail() {
               <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
                 🔍 Document Inspection: {previewDoc.title}
               </div>
-              <button onClick={() => setPreviewDoc(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
-                <X size={20} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <a 
+                  href={previewDoc.url} 
+                  download={previewDoc.title} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '6px 12px', borderRadius: 8 }}
+                >
+                  <Download size={14} /> Download
+                </a>
+                <button onClick={() => setPreviewDoc(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex' }}>
+                  <X size={20} />
+                </button>
+              </div>
             </div>
-            <div style={{ padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', minHeight: 300 }}>
-              <img src={previewDoc.url} alt={previewDoc.title} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 8 }} />
+            <div style={{ padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a15', minHeight: 380, overflowY: 'auto' }}>
+              {previewDoc.url.match(/\.(jpeg|jpg|png|webp|gif)($|\?)/i) || previewDoc.url.includes('cloudinary') || previewDoc.url.startsWith('data:image') ? (
+                <img src={previewDoc.url} alt={previewDoc.title} style={{ maxWidth: '100%', maxHeight: '72vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }} />
+              ) : (
+                <iframe src={previewDoc.url} title={previewDoc.title} style={{ width: '100%', height: '70vh', border: 'none', borderRadius: 8 }} />
+              )}
             </div>
           </div>
         </div>

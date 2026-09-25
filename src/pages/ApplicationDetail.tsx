@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 // ponytail: derive timeline from real application data, no new tables
-function buildTimeline(app: any) {
+function buildTimeline(app: any, checklist?: any[]) {
   const events: Array<{ t: string; d: string; color: string }> = [];
   const submitted = app.submittedAt ? new Date(app.submittedAt) : null;
   const updated = app.updatedAt ? new Date(app.updatedAt) : null;
@@ -25,56 +25,56 @@ function buildTimeline(app: any) {
       color: '#10b981',
     });
 
-    // Auto-assignment event (a few seconds after submission)
     const assignTime = new Date(submitted.getTime() + 60000);
+    const officerName = typeof app.assignedTo === 'object'
+      ? (app.assignedTo?.name || 'Assigned Officer')
+      : (app.assignedTo || app.officialOfficer || 'Principal Officer');
     events.push({
-      t: `Auto-Assigned to ${(app.assignedTo || 'Officer').split('(')[0].trim()}`,
-      d: `${app.assignedTo || 'VLE'} based on location • ${fmt(assignTime)}`,
+      t: `Assigned to ${officerName.split('(')[0].trim()}`,
+      d: `${officerName} • ${fmt(assignTime)}`,
       color: '#2563eb',
     });
   }
 
-  const docs = app.documents || [];
-  if (docs.length > 0 && submitted) {
-    const checkTime = new Date(submitted.getTime() + 900000);
-    events.push({
-      t: 'Document Check Started',
-      d: `Verification session initiated • ${fmt(checkTime)}`,
-      color: '#2563eb',
+  // Dynamic verification checklist steps
+  if (checklist && checklist.length > 0) {
+    checklist.forEach((item: any) => {
+      events.push({
+        t: item.checked ? `✓ ${item.label}` : `Pending: ${item.label}`,
+        d: item.checked ? 'Verification check passed & verified' : 'Awaiting officer field inspection',
+        color: item.checked ? '#10b981' : '#f59e0b',
+      });
     });
-
-    const verifiedTime = new Date(submitted.getTime() + 3600000);
-    events.push({
-      t: `${docs.length} Document${docs.length > 1 ? 's' : ''} Verified`,
-      d: `${docs.map((d: any) => d.label || d.fileName || 'Document').slice(0, 2).join(' & ')} approved • ${fmt(verifiedTime)}`,
-      color: '#10b981',
-    });
+  } else {
+    const docs = app.documents || [];
+    if (docs.length > 0 && submitted) {
+      const verifiedTime = new Date(submitted.getTime() + 3600000);
+      events.push({
+        t: `${docs.length} Document${docs.length > 1 ? 's' : ''} Verified`,
+        d: `${docs.map((d: any) => d.label || d.fileName || 'Document').slice(0, 2).join(' & ')} approved • ${fmt(verifiedTime)}`,
+        color: '#10b981',
+      });
+    }
   }
 
   const status = (app.status || '').toUpperCase();
   if (status === 'APPROVED' || status === 'COMPLETED') {
     events.push({
       t: 'Application Approved',
-      d: `Certificate issued • ${updated ? fmt(updated) : 'Recently'}`,
+      d: `Certificate issued • ${updated ? fmt(updated) : 'Approved'}`,
       color: '#10b981',
     });
   } else if (status === 'REJECTED') {
     events.push({
       t: 'Application Rejected',
-      d: `${app.rejectionReason || 'Verification failed'} • ${updated ? fmt(updated) : 'Recently'}`,
+      d: `${app.rejectionReason || 'Verification requirements not satisfied'} • ${updated ? fmt(updated) : 'Rejected'}`,
       color: '#ef4444',
     });
   } else if (status === 'IN_PROGRESS') {
     events.push({
       t: 'Processing: Under Review',
-      d: `Officer reviewing application • ${updated ? fmt(updated) : 'Now'}`,
+      d: `Officer reviewing application data • ${updated ? fmt(updated) : 'Now'}`,
       color: '#2563eb',
-    });
-  } else {
-    events.push({
-      t: 'Pending: Address Field Visit',
-      d: 'Operator scheduling geo-check • Now',
-      color: '#f59e0b',
     });
   }
 
@@ -531,6 +531,18 @@ export default function ApplicationDetail() {
           adminRole,
         }),
       });
+
+      if (newStatus === 'APPROVED' || newStatus === 'REJECTED') {
+        window.dispatchEvent(new CustomEvent('cybersave_toast', {
+          detail: { 
+            message: `Application #${app.refNumber || app.id} marked as ${newStatus} and removed from queue!`,
+            type: newStatus === 'APPROVED' ? 'success' : 'info'
+          }
+        }));
+        setTimeout(() => {
+          navigate('/applications');
+        }, 600);
+      }
     } catch (e) {
       console.warn('REST status update error:', e);
     } finally {
@@ -739,7 +751,50 @@ export default function ApplicationDetail() {
   const isApproved = statusUpper === 'APPROVED' || statusUpper === 'COMPLETED';
   const isRejected = statusUpper === 'REJECTED';
   const isInProgress = statusUpper === 'IN_PROGRESS';
-  const timeline = buildTimeline(app);
+  const timeline = buildTimeline(app, checklist);
+
+  const handleDownloadReceipt = () => {
+    if (!app) return;
+    const refNum = app.refNumber || app.id || 'RECEIPT';
+    const applicantName = applicant?.name || 'Citizen Applicant';
+    const serviceName = app.serviceName || 'Citizen Service';
+    const amount = app.feePaid || 50;
+    const paymentStatus = app.paymentStatus || 'COMPLETED';
+    const paymentMode = 'UPI / Online Gateway';
+    const dateStr = paidDate;
+    const transactionId = txnId;
+
+    const receiptHeaders = ['RECEIPT PARAMETER', 'VERIFIED TRANSACTION RECORD'];
+    const receiptRows = [
+      ['Receipt Number', `REC-${refNum.replace(/[^A-Za-z0-9]/g, '')}`],
+      ['Application Reference', refNum],
+      ['Applicant Name', applicantName],
+      ['Citizen Contact', applicant?.phone || 'N/A'],
+      ['Service Name', serviceName],
+      ['Processing Centre', app.centre || 'CyberSave Regional Hub'],
+      ['Assigned Officer', typeof app.assignedTo === 'object' ? (app.assignedTo?.name || 'VLE Officer') : (app.assignedTo || app.officialOfficer || 'Auto Assigned')],
+      ['Application Status', app.status || 'SUBMITTED'],
+      ['Fee Paid (INR)', `Rs. ${amount}`],
+      ['Payment Status', paymentStatus],
+      ['Payment Method', paymentMode],
+      ['Transaction Reference ID', transactionId],
+      ['Payment & Submission Timestamp', dateStr],
+      ['Issuing Authority', 'CyberSave Digital Governance Portal'],
+    ];
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [receiptHeaders.join(','), ...receiptRows.map(r => `"${r[0]}","${(r[1] || '').toString().replace(/"/g, '""')}"`)].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `CyberSave_Receipt_${refNum}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Payment receipt downloaded for #${refNum}`, type: 'success' }
+    }));
+  };
 
   const statusLabel = isApproved ? 'Approved' : isRejected ? 'Rejected' : isInProgress ? 'In Progress' : 'In Review';
   const statusColor = isApproved ? '#10b981' : isRejected ? '#ef4444' : isInProgress ? '#2563eb' : '#f59e0b';
@@ -1076,7 +1131,7 @@ export default function ApplicationDetail() {
             </div>
           )}
 
-          {/* ─── Applicant Details ─── */}
+          {/* ─── Applicant Details (with Merged Dynamic Mobile Form Data) ─── */}
           <div className="table-card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Applicant Details</h3>
@@ -1141,110 +1196,95 @@ export default function ApplicationDetail() {
                 </div>
               )}
             </div>
-          </div>
 
-          {/* ─── Application & Job Form Submission Fields ─── */}
-          <div className="table-card" style={{ padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#111827' }}>
-                  Application Form & Submitted Data
-                </h3>
-                <span style={{
-                  background: '#eff6ff', color: '#2563eb', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 700, border: '1px solid #dbeafe'
+            {/* ─── Merged Dynamic Mobile Form Data ─── */}
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid #e5e7eb' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FileText size={16} color="#2563eb" />
+                  <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#111827' }}>
+                    Submitted Application & Mobile Form Data
+                  </h4>
+                  <span style={{
+                    background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, border: '1px solid #dbeafe'
+                  }}>
+                    {dynamicFormFields.length} {dynamicFormFields.length === 1 ? 'Field' : 'Fields'}
+                  </span>
+                </div>
+              </div>
+
+              {dynamicFormFields.length === 0 ? (
+                <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: 8, border: '1px dashed #cbd5e1', color: '#64748b', fontSize: 12.5 }}>
+                  No custom dynamic fields required for this service. Standard applicant credentials utilized.
+                </div>
+              ) : (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                  gap: 12,
                 }}>
-                  {dynamicFormFields.length} {dynamicFormFields.length === 1 ? 'Field' : 'Fields'}
-                </span>
-              </div>
-              <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>
-                Service: <strong style={{ color: '#1f2937' }}>{app.serviceName || 'Custom Service'}</strong>
-              </div>
-            </div>
+                  {dynamicFormFields.map((field) => {
+                    const rawVal = field.value;
+                    const isEmpty = rawVal === undefined || rawVal === null || String(rawVal).trim() === '';
+                    const displayVal = isEmpty
+                      ? '(Empty / Not Provided)'
+                      : typeof rawVal === 'boolean'
+                        ? (rawVal ? '✓ Yes / Confirmed' : '✕ No')
+                        : typeof rawVal === 'object'
+                          ? JSON.stringify(rawVal)
+                          : String(rawVal);
 
-            <p style={{ fontSize: 13, color: '#64748b', marginTop: 0, marginBottom: 20 }}>
-              All job-specific form fields and custom entries submitted by the applicant via CyberSave Mobile. Fields not provided by the citizen are displayed with keys and values marked as empty.
-            </p>
-
-            {dynamicFormFields.length === 0 ? (
-              <div style={{
-                padding: '24px 20px',
-                background: '#f8fafc',
-                borderRadius: 12,
-                border: '1px dashed #cbd5e1',
-                textAlign: 'center',
-                color: '#64748b',
-                fontSize: 13,
-              }}>
-                No dynamic form fields configured for this service. Default profile credentials used.
-              </div>
-            ) : (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: 16,
-              }}>
-                {dynamicFormFields.map((field) => {
-                  const rawVal = field.value;
-                  const isEmpty = rawVal === undefined || rawVal === null || String(rawVal).trim() === '';
-                  const displayVal = isEmpty
-                    ? '(Empty / Not Provided)'
-                    : typeof rawVal === 'boolean'
-                      ? (rawVal ? '✓ Yes / Confirmed' : '✕ No')
-                      : typeof rawVal === 'object'
-                        ? JSON.stringify(rawVal)
-                        : String(rawVal);
-
-                  return (
-                    <div
-                      key={field.key}
-                      style={{
-                        padding: '14px 16px',
-                        borderRadius: 12,
-                        background: isEmpty ? '#f8fafc' : '#ffffff',
-                        border: `1.5px solid ${isEmpty ? '#e2e8f0' : '#e0e7ff'}`,
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
-                        <div style={{
-                          fontSize: 11,
-                          color: '#4b5563',
-                          textTransform: 'uppercase',
-                          fontWeight: 700,
-                          letterSpacing: '0.04em',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}>
-                          <span>{field.label}</span>
-                          {field.required && <span style={{ color: '#ef4444', fontWeight: 800 }}>*</span>}
+                    return (
+                      <div
+                        key={field.key}
+                        style={{
+                          padding: '12px 14px',
+                          borderRadius: 10,
+                          background: isEmpty ? '#f8fafc' : '#ffffff',
+                          border: `1.5px solid ${isEmpty ? '#e2e8f0' : '#e0e7ff'}`,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 6 }}>
+                          <div style={{
+                            fontSize: 11,
+                            color: '#4b5563',
+                            textTransform: 'uppercase',
+                            fontWeight: 700,
+                            letterSpacing: '0.04em',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}>
+                            <span>{field.label}</span>
+                            {field.required && <span style={{ color: '#ef4444', fontWeight: 800 }}>*</span>}
+                          </div>
+                          <span style={{
+                            fontSize: 9.5,
+                            fontFamily: 'monospace',
+                            background: '#f1f5f9',
+                            color: '#64748b',
+                            padding: '1px 5px',
+                            borderRadius: 4,
+                          }}>
+                            {field.key}
+                          </span>
                         </div>
-                        <span style={{
-                          fontSize: 10,
-                          fontFamily: 'monospace',
-                          background: '#f1f5f9',
-                          color: '#64748b',
-                          padding: '1px 6px',
-                          borderRadius: 4,
+                        <div style={{
+                          fontSize: 13.5,
+                          fontWeight: isEmpty ? 500 : 700,
+                          color: isEmpty ? '#94a3b8' : '#0f172a',
+                          fontStyle: isEmpty ? 'italic' : 'normal',
+                          lineHeight: 1.4,
+                          wordBreak: 'break-word',
                         }}>
-                          {field.key}
-                        </span>
+                          {displayVal}
+                        </div>
                       </div>
-                      <div style={{
-                        fontSize: 14,
-                        fontWeight: isEmpty ? 500 : 700,
-                        color: isEmpty ? '#94a3b8' : '#0f172a',
-                        fontStyle: isEmpty ? 'italic' : 'normal',
-                        lineHeight: 1.4,
-                        wordBreak: 'break-word',
-                      }}>
-                        {displayVal}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ─── Supporting Documents ─── */}
@@ -1437,6 +1477,40 @@ export default function ApplicationDetail() {
                 ))}
               </div>
             </div>
+
+            {/* ─── Bottom Decision & Queue Action Bar ─── */}
+            <div style={{
+              marginTop: 24,
+              paddingTop: 18,
+              borderTop: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12
+            }}>
+              <div style={{ fontSize: 12.5, color: '#64748b' }}>
+                Review complete? Taking action will update the citizen status and remove this application from the pending queue.
+              </div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button
+                  className="date-picker-btn"
+                  style={{ color: '#ef4444', borderColor: '#fee2e2', opacity: actionLoading ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  onClick={() => handleStatusChange('REJECTED')}
+                  disabled={actionLoading}
+                >
+                  <X size={15} /> Reject & Remove from Queue
+                </button>
+                <button
+                  className="action-btn"
+                  style={{ background: '#10b981', color: '#fff', opacity: actionLoading ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 22px', fontSize: 13, borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}
+                  onClick={() => handleStatusChange('APPROVED')}
+                  disabled={actionLoading}
+                >
+                  <Check size={16} /> ✓ Approve & Remove from Queue
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1472,10 +1546,14 @@ export default function ApplicationDetail() {
               <span style={{ fontWeight: 600, fontSize: 13 }}>{paidDate}</span>
             </div>
 
-            <button className="date-picker-btn" style={{
-              width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6,
-              padding: '10px 16px', fontSize: 13,
-            }}>
+            <button 
+              className="date-picker-btn" 
+              onClick={handleDownloadReceipt}
+              style={{
+                width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6,
+                padding: '10px 16px', fontSize: 13, cursor: 'pointer'
+              }}
+            >
               <Download size={14} /> Download Receipt
             </button>
           </div>

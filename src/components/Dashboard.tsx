@@ -484,8 +484,21 @@ export default function Dashboard() {
 
   const pendingCount = normalizedApplications.filter(a => a.status === 'In Review' || a.status === 'Pending' || a.status === 'Processing' || a.rawStatus === 'SUBMITTED' || a.rawStatus === 'VERIFYING' || a.rawStatus === 'IN_PROGRESS').length;
   const totalApprovedCount = normalizedApplications.filter(a => a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
-  const approvedTodayCount = todayApps.filter(a => a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
-  const rejectedTodayCount = todayApps.filter(a => a.status === 'Rejected' || a.rawStatus === 'REJECTED').length;
+  
+  // Real-time daily completed & rejected counts — strictly from today (starts at 0 each day)
+  const approvedTodayCount = normalizedApplications.filter(a => {
+    const isApproved = a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED';
+    if (!isApproved) return false;
+    const updDate = a.rawApp?.updatedAt || a.rawApp?.submittedAt;
+    return updDate ? new Date(updDate) >= today : false;
+  }).length;
+
+  const rejectedTodayCount = normalizedApplications.filter(a => {
+    const isRejected = a.status === 'Rejected' || a.rawStatus === 'REJECTED';
+    if (!isRejected) return false;
+    const updDate = a.rawApp?.updatedAt || a.rawApp?.submittedAt;
+    return updDate ? new Date(updDate) >= today : false;
+  }).length;
 
   const totalRejectedCount = normalizedApplications.filter(a => a.status === 'Rejected' || a.rawStatus === 'REJECTED').length;
 
@@ -508,17 +521,14 @@ export default function Dashboard() {
         ? Number(data.stats.pendingApps)
         : 9);
 
-  const displayCompletedToday = normalizedApplications.length > 0
-    ? (approvedTodayCount > 0 ? approvedTodayCount : totalApprovedCount)
-    : ((data?.stats?.completedAppsToday !== undefined && data?.stats?.completedAppsToday !== null)
-        ? Number(data.stats.completedAppsToday)
-        : 12);
+  // Daily counters start from 0 each day and increment dynamically when an admin approves or rejects
+  const displayCompletedToday = (data?.stats?.completedAppsToday !== undefined && data?.stats?.completedAppsToday !== null)
+    ? Number(data.stats.completedAppsToday)
+    : approvedTodayCount;
 
-  const displayRejectedToday = normalizedApplications.length > 0
-    ? (rejectedTodayCount > 0 ? rejectedTodayCount : totalRejectedCount)
-    : ((data?.stats?.rejectedAppsToday !== undefined && data?.stats?.rejectedAppsToday !== null)
-        ? Number(data.stats.rejectedAppsToday)
-        : 6);
+  const displayRejectedToday = (data?.stats?.rejectedAppsToday !== undefined && data?.stats?.rejectedAppsToday !== null)
+    ? Number(data.stats.rejectedAppsToday)
+    : rejectedTodayCount;
 
   const displayActiveCentres = (operatorCount !== null && operatorCount !== undefined)
     ? operatorCount

@@ -168,6 +168,8 @@ export default function UserManagementDetail() {
           setUser(data);
           populateEditForm(data);
           setLoading(false);
+          // Also fetch dedicated feedback records to guarantee 100% sync
+          fetchUserFeedbacks(data.dbId || data.id || id);
           return;
         }
       }
@@ -179,6 +181,7 @@ export default function UserManagementDetail() {
           setUser(data);
           populateEditForm(data);
           setLoading(false);
+          fetchUserFeedbacks(data.dbId || data.id || id);
         }
       }
     } catch (err) {
@@ -186,6 +189,23 @@ export default function UserManagementDetail() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchUserFeedbacks = async (targetUserId?: string) => {
+    const uid = targetUserId || id;
+    if (!uid) return;
+    try {
+      const res = await apiFetch(`/api/v1/users/${uid}/feedbacks`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.feedbacks)) {
+          setUser((prev: any) => {
+            if (!prev) return prev;
+            return { ...prev, feedbacks: data.feedbacks };
+          });
+        }
+      }
+    } catch (_) {}
   };
 
   const populateEditForm = (userData: any) => {
@@ -264,6 +284,18 @@ export default function UserManagementDetail() {
 
       const handleFeedbackEvent = (eventData: any) => {
         showToast(`★ New ${eventData?.feedback?.rating || 5}-Star Citizen Feedback received!`);
+        if (eventData?.feedback) {
+          setUser((prev: any) => {
+            if (!prev) return prev;
+            const currentFeedbacks = Array.isArray(prev.feedbacks) ? prev.feedbacks : [];
+            const exists = currentFeedbacks.some((f: any) => f.id === eventData.feedback.id);
+            if (exists) return prev;
+            return {
+              ...prev,
+              feedbacks: [eventData.feedback, ...currentFeedbacks]
+            };
+          });
+        }
         handleRefresh();
       };
 
@@ -2010,6 +2042,27 @@ export default function UserManagementDetail() {
                   ★ {safeData.feedbacks.length > 0 ? (safeData.feedbacks.reduce((acc: number, f: any) => acc + (f.rating || 5), 0) / safeData.feedbacks.length).toFixed(1) : '5.0'} / 5.0
                 </span>
               </div>
+              <button
+                onClick={() => {
+                  fetchUserFeedbacks(safeData.dbId || id);
+                  showToast('Checking for latest citizen feedback...');
+                }}
+                style={{
+                  background: '#FFFFFF',
+                  color: '#475569',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '6px',
+                  padding: '7px 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+              >
+                <RefreshCw size={13} color="#2563EB" /> Refresh
+              </button>
               <button onClick={() => setActiveTab('Overview')} style={{ background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
                 &larr; Back to Overview
               </button>

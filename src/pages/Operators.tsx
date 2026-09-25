@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
-import { UserCheck, ShieldCheck, Clock, UserX, Search, X } from 'lucide-react';
+import { UserCheck, ShieldCheck, Clock, UserX, Search, X, Download } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
 import { apiFetch } from '../utils/apiConfig';
 
@@ -168,9 +168,73 @@ export default function Operators() {
     }
   };
 
-  if (loading) return <div>Loading operators...</div>;
+  const operatorsList = data?.operators || [];
+  const stats = data?.stats;
 
-  const { stats, operators } = data || {};
+  const filteredOperators = useMemo(() => {
+    return operatorsList.filter((op: any) => {
+      if (departmentFilter !== 'All' && op.department !== departmentFilter) return false;
+      if (statusFilter !== 'All' && op.status !== statusFilter) return false;
+      if (searchFilter.trim()) {
+        const q = searchFilter.toLowerCase();
+        const matchName = op.name?.toLowerCase().includes(q);
+        const matchEmail = op.email?.toLowerCase().includes(q);
+        const matchEmpId = op.employeeId?.toLowerCase().includes(q);
+        if (!matchName && !matchEmail && !matchEmpId) return false;
+      }
+      return true;
+    });
+  }, [operatorsList, departmentFilter, statusFilter, searchFilter]);
+
+  const handleExportCSV = () => {
+    if (!filteredOperators || filteredOperators.length === 0) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'No operator records found to export', type: 'error' } }));
+      return;
+    }
+
+    const headers = [
+      'Operator ID',
+      'Employee ID',
+      'Full Name',
+      'Email Address',
+      'Phone Number',
+      'Designation / Role',
+      'Department',
+      'Status',
+      'Tasks Completed',
+      'Feature Permissions Count',
+      'Permissions List',
+      'Joined Date'
+    ];
+
+    const rows = filteredOperators.map((op: any) => [
+      `"${op.id || ''}"`,
+      `"${op.employeeId || ''}"`,
+      `"${(op.name || '').replace(/"/g, '""')}"`,
+      `"${(op.email || '').replace(/"/g, '""')}"`,
+      `"${(op.phone || '').replace(/"/g, '""')}"`,
+      `"${(op.role || '').replace(/"/g, '""')}"`,
+      `"${(op.department || '').replace(/"/g, '""')}"`,
+      `"${(op.status || '').replace(/"/g, '""')}"`,
+      op.tasksCompleted || 0,
+      Array.isArray(op.permissions) ? op.permissions.length : 0,
+      `"${(Array.isArray(op.permissions) ? op.permissions.join('; ') : '').replace(/"/g, '""')}"`,
+      `"${op.joinedDate || ''}"`
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `cybersave_operators_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Exported ${filteredOperators.length} operator records to CSV` } }));
+  };
+
+  if (loading) return <div>Loading operators...</div>;
 
   return (
     <>
@@ -181,7 +245,9 @@ export default function Operators() {
           <p>Manage, monitor and track all platform operators and their access levels.</p>
         </div>
         <div style={{display: 'flex', gap: 12}}>
-          <button className="date-picker-btn">Export Report</button>
+          <button className="date-picker-btn" onClick={handleExportCSV} style={{display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer'}}>
+            <Download size={14} /> Export Report
+          </button>
           <button className="action-btn" onClick={() => setShowAddOpModal(true)}>+ Add New Operator</button>
         </div>
       </div>
@@ -247,26 +313,13 @@ export default function Operators() {
               </select>
             </div>
             <div style={{fontSize: 13, color: '#6b7280', marginLeft: 16}}>
-              Showing {(operators || []).length} of {stats?.totalOps || 0}
+              Showing {filteredOperators.length} of {stats?.totalOps || 0}
             </div>
           </div>
         </div>
 
         <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24}}>
-          {(operators || [])
-            .filter((op: any) => {
-              if (departmentFilter !== 'All' && op.department !== departmentFilter) return false;
-              if (statusFilter !== 'All' && op.status !== statusFilter) return false;
-              if (searchFilter.trim()) {
-                const q = searchFilter.toLowerCase();
-                const matchName = op.name?.toLowerCase().includes(q);
-                const matchEmail = op.email?.toLowerCase().includes(q);
-                const matchEmpId = op.employeeId?.toLowerCase().includes(q);
-                if (!matchName && !matchEmail && !matchEmpId) return false;
-              }
-              return true;
-            })
-            .map((op: any, i: number) => (
+          {filteredOperators.map((op: any, i: number) => (
             <div 
               key={i} 
               style={{background: 'white', borderRadius: 12, padding: 24, border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s'}}
@@ -444,7 +497,7 @@ export default function Operators() {
         )}
 
         <div style={{padding: '24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <div style={{fontSize: 13, color: '#6b7280'}}>Showing {operators?.length} active operators</div>
+          <div style={{fontSize: 13, color: '#6b7280'}}>Showing {filteredOperators.length} active operators</div>
           <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
             <button className="date-picker-btn">Previous</button>
             <button className="action-btn" style={{padding: '4px 12px'}}>1</button>

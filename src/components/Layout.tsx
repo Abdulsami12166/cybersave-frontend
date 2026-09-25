@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, FileText, Grid, UserSquare2, 
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
@@ -434,9 +434,9 @@ export default function Layout() {
         top: 0,
         flexShrink: 0
       }}>
-        {/* Portal Branding matching Image 1 */}
+        {/* Portal Branding matching CyberSave Logo */}
         <div style={{
-          padding: isCollapsed ? '20px 8px' : '20px 22px 18px 22px',
+          padding: isCollapsed ? '20px 8px' : '18px 20px',
           borderBottom: '1px solid #F1F5F9',
           display: 'flex',
           alignItems: 'center',
@@ -447,26 +447,30 @@ export default function Layout() {
               width: '38px',
               height: '38px',
               borderRadius: '10px',
-              background: '#2563EB',
+              background: '#0B2B82',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#FFFFFF',
               fontWeight: 900,
               fontSize: '18px',
-              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)'
+              boxShadow: '0 2px 6px rgba(11, 43, 130, 0.3)'
             }}>
               CS
             </div>
           ) : (
-            <div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: '#2563EB', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-                Cybersave
-              </div>
-              <div style={{ fontSize: '9px', color: '#94A3B8', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: '4px' }}>
-                DIGITAL SERVICES • POWERED BY Seva Kendra
-              </div>
-            </div>
+            <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+              <img
+                src="/cybersave-logo.png"
+                alt="CyberSave — Digital Services • Trusted Always"
+                style={{
+                  height: '38px',
+                  maxWidth: '200px',
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+              />
+            </Link>
           )}
         </div>
 
@@ -556,38 +560,54 @@ export default function Layout() {
           top: 0,
           zIndex: 40
         }}>
-          {/* Universal Search Input matching Reference */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '10px',
-            padding: '8px 14px',
-            width: '380px',
-            gap: '10px',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-          }}>
-            <Search size={16} color="#64748B" />
-            <input
-              type="text"
-              placeholder={currentTranslations.searchPlaceholder}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchQuery.trim()) {
-                  navigate(`/applications?q=${encodeURIComponent(searchQuery.trim())}`);
-                }
-              }}
-              style={{
-                border: 'none',
-                outline: 'none',
-                background: 'transparent',
-                fontSize: '13px',
-                color: '#0F172A',
-                width: '100%'
-              }}
-            />
+          {/* Header Left: CyberSave Brand Logo & Search */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+            <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }} title="CyberSave Admin Portal">
+              <img
+                src="/cybersave-logo.png"
+                alt="CyberSave — Digital Services • Trusted Always"
+                style={{
+                  height: '36px',
+                  width: 'auto',
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+              />
+            </Link>
+            <div style={{ height: '24px', width: '1px', background: '#E2E8F0' }} />
+            {/* Universal Search Input matching Reference */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+              borderRadius: '10px',
+              padding: '8px 14px',
+              width: '360px',
+              gap: '10px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+            }}>
+              <Search size={16} color="#64748B" />
+              <input
+                type="text"
+                placeholder={currentTranslations.searchPlaceholder}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchQuery.trim()) {
+                    navigate(`/applications?q=${encodeURIComponent(searchQuery.trim())}`);
+                  }
+                }}
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  fontSize: '13px',
+                  color: '#0F172A',
+                  width: '100%'
+                }}
+              />
+            </div>
           </div>
 
           {/* Header Right Actions matching Reference */}

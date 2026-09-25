@@ -125,6 +125,22 @@ export default function Applications() {
       slaType = 'green';
     }
 
+    // Refund Request detection
+    const refundRequests = Array.isArray(raw.refundRequests) ? raw.refundRequests : (Array.isArray(a.refundRequests) ? a.refundRequests : []);
+    const activeRefund = refundRequests.find((r: any) => {
+      const s = String(r.status || '').toUpperCase();
+      return s === 'PENDING' || s === 'REQUESTED';
+    }) || refundRequests[0] || null;
+    const isRefundPending = !!activeRefund && ['PENDING', 'REQUESTED'].includes(String(activeRefund.status || '').toUpperCase());
+    const isRefundApproved = (String(activeRefund?.status || raw.refundStatus || a.refundStatus || '').toUpperCase() === 'APPROVED');
+    const isRefundRejected = (String(activeRefund?.status || raw.refundStatus || a.refundStatus || '').toUpperCase() === 'REJECTED');
+    const hasRefundRequest = isRefundPending || isRefundApproved || isRefundRejected ||
+      String(raw.refundStatus || a.refundStatus || '').toUpperCase() === 'REQUESTED' ||
+      String(raw.status || a.status || '').toUpperCase() === 'REFUND_REQUESTED';
+    const refundAmount = activeRefund?.amount ?? raw.refundAmount ?? a.refundAmount ?? feeAmount;
+    const refundReason = activeRefund?.reason || raw.refundReason || a.refundReason || 'Citizen requested cancellation & refund';
+    const refundId = activeRefund?.id || null;
+
     return {
       id: refNumber,
       rawId: mongoId,
@@ -147,6 +163,14 @@ export default function Applications() {
       razorpayPaymentId: raw.razorpayPaymentId || a.razorpayPaymentId || '',
       razorpayOrderId: raw.razorpayOrderId || a.razorpayOrderId || '',
       rejectionReason: raw.rejectionReason || a.rejectionReason || '',
+      hasRefundRequest,
+      isRefundPending,
+      isRefundApproved,
+      isRefundRejected,
+      refundAmount,
+      refundReason,
+      refundId,
+      refundRequests,
       formData,
       documents: cleanedDocs,
       rawApp: raw,
@@ -357,6 +381,133 @@ export default function Applications() {
     }
   };
 
+  // Handle direct Refund Approval from Application Queue
+  const handleApproveRefundFromQueue = async (app: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const targetId = app.refundId || app.rawId || app.id;
+    const refNum = app.refNumber || app.id;
+    const refundAmt = Number(app.refundAmount || app.amount || 50);
+
+    if (!window.confirm(`Approve refund for Application #${refNum} and credit ₹${refundAmt.toFixed(2)} to citizen wallet?`)) {
+      return;
+    }
+
+    setActionInProgressId(app.rawId || app.id);
+    setActiveMenuAppId(null);
+
+    // Optimistically update applications state
+    setData((prev: any) => {
+      if (!prev || !prev.applications) return prev;
+      const updated = prev.applications.map((a: any) => {
+        if (a.rawId === app.rawId || a.id === app.id || a.refNumber === refNum) {
+          return {
+            ...a,
+            hasRefundRequest: true,
+            isRefundPending: false,
+            isRefundApproved: true,
+            refundStatus: 'APPROVED',
+            status: 'Refund Approved',
+            rawStatus: 'REFUND_APPROVED',
+            paymentStatus: 'Refunded to Wallet'
+          };
+        }
+        return a;
+      });
+      return { ...prev, applications: updated };
+    });
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Refund Approved! ₹${refundAmt} credited to citizen wallet. ✓`, type: 'success' }
+    }));
+
+    if (socket) {
+      socket.emit('approve_refund', {
+        id: targetId,
+        applicationId: app.rawId || app.id,
+        refNumber: refNum,
+        amount: refundAmt
+      });
+    }
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await apiFetch(`/api/v1/refunds/${targetId}/approve`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ applicationId: app.rawId || app.id, adminNotes: 'Approved from Application Queue' })
+      });
+    } catch (err) {
+      console.warn('Queue refund approve error:', err);
+    } finally {
+      setActionInProgressId(null);
+      fetchApplicationsRest();
+    }
+  };
+
+  // Handle direct Refund Rejection from Application Queue
+  const handleRejectRefundFromQueue = async (app: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const targetId = app.refundId || app.rawId || app.id;
+    const refNum = app.refNumber || app.id;
+    const reason = window.prompt(`Enter reason for declining refund on #${refNum}:`, 'Refund request declined after administrative review');
+    if (reason === null) return;
+
+    setActionInProgressId(app.rawId || app.id);
+    setActiveMenuAppId(null);
+
+    // Optimistically update
+    setData((prev: any) => {
+      if (!prev || !prev.applications) return prev;
+      const updated = prev.applications.map((a: any) => {
+        if (a.rawId === app.rawId || a.id === app.id || a.refNumber === refNum) {
+          return {
+            ...a,
+            hasRefundRequest: true,
+            isRefundPending: false,
+            isRefundApproved: false,
+            isRefundRejected: true,
+            refundStatus: 'REJECTED'
+          };
+        }
+        return a;
+      });
+      return { ...prev, applications: updated };
+    });
+
+    window.dispatchEvent(new CustomEvent('cybersave_toast', {
+      detail: { message: `Refund for #${refNum} declined. ✕`, type: 'error' }
+    }));
+
+    if (socket) {
+      socket.emit('reject_refund', {
+        id: targetId,
+        applicationId: app.rawId || app.id,
+        refNumber: refNum,
+        reason
+      });
+    }
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await apiFetch(`/api/v1/refunds/${targetId}/reject`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ applicationId: app.rawId || app.id, rejectionReason: reason })
+      });
+    } catch (err) {
+      console.warn('Queue refund reject error:', err);
+    } finally {
+      setActionInProgressId(null);
+      fetchApplicationsRest();
+    }
+  };
+
   // Handle Batch Actions: Bulk Approve
   const handleBulkApprove = async () => {
     if (selectedAppIds.length === 0) return;
@@ -505,7 +656,9 @@ export default function Applications() {
   const filteredApplications = useMemo(() => {
     return (applications as any[]).filter(app => {
       // Category Filter Pills
-      if (selectedCategory !== 'All Applications') {
+      if (selectedCategory.includes('Refund Requests')) {
+        if (!app.hasRefundRequest) return false;
+      } else if (selectedCategory !== 'All Applications') {
         const cat = selectedCategory.toLowerCase().replace(' services', '');
         const matchCat = (app.serviceCategory || '').toLowerCase().includes(cat) ||
                          (app.serviceType || '').toLowerCase().includes(cat);
@@ -515,12 +668,18 @@ export default function Applications() {
       // Status Dropdown Filter
       if (filterStatus !== 'All') {
         const s = filterStatus.toLowerCase();
-        if (s === 'pending' && !['pending', 'submitting'].includes(app.status.toLowerCase())) return false;
-        if (s === 'in review' && app.status.toLowerCase() !== 'in review') return false;
-        if (s === 'processing' && app.status.toLowerCase() !== 'processing') return false;
-        if (s === 'approved' && app.status.toLowerCase() !== 'approved') return false;
-        if (s === 'completed' && app.status.toLowerCase() !== 'completed') return false;
-        if (s === 'rejected' && app.status.toLowerCase() !== 'rejected') return false;
+        if (s === 'refund requested') {
+          if (!app.hasRefundRequest || app.isRefundApproved) return false;
+        } else if (s === 'refund approved') {
+          if (!app.isRefundApproved) return false;
+        } else {
+          if (s === 'pending' && !['pending', 'submitting'].includes(app.status.toLowerCase())) return false;
+          if (s === 'in review' && app.status.toLowerCase() !== 'in review') return false;
+          if (s === 'processing' && app.status.toLowerCase() !== 'processing') return false;
+          if (s === 'approved' && app.status.toLowerCase() !== 'approved') return false;
+          if (s === 'completed' && app.status.toLowerCase() !== 'completed') return false;
+          if (s === 'rejected' && app.status.toLowerCase() !== 'rejected') return false;
+        }
       }
 
       // Priority Dropdown Filter
@@ -608,8 +767,13 @@ export default function Applications() {
     }));
   };
 
+  const pendingRefundsCount = useMemo(() => {
+    return (applications as any[]).filter(a => a.hasRefundRequest && !a.isRefundApproved).length;
+  }, [applications]);
+
   const categoryPills = [
     'All Applications',
+    pendingRefundsCount > 0 ? `⚠️ Refund Requests (${pendingRefundsCount})` : 'Refund Requests',
     'Aadhaar Services',
     'PAN Card',
     'Certificates',
@@ -1040,6 +1204,8 @@ export default function Applications() {
               <option value="Approved">Status: Approved</option>
               <option value="Completed">Status: Completed</option>
               <option value="Rejected">Status: Rejected</option>
+              <option value="Refund Requested">Status: ⚠️ Refund Requested</option>
+              <option value="Refund Approved">Status: ✓ Refund Approved</option>
             </select>
 
             {/* Priority Dropdown */}
@@ -1250,6 +1416,62 @@ export default function Applications() {
                         }}>
                           {app.status}
                         </span>
+
+                        {/* Prominent Refund Status Badges */}
+                        {app.isRefundPending && (
+                          <div style={{
+                            marginTop: '5px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: '#FEF2F2',
+                            color: '#B91C1C',
+                            border: '1px solid #FECACA',
+                            borderRadius: '5px',
+                            padding: '2px 7px',
+                            fontSize: '10.5px',
+                            fontWeight: 800,
+                            whiteSpace: 'nowrap'
+                          }}>
+                            ⚠️ Refund Requested: ₹{Number(app.refundAmount || 0).toLocaleString('en-IN')}
+                          </div>
+                        )}
+                        {app.isRefundApproved && (
+                          <div style={{
+                            marginTop: '5px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: '#ECFDF5',
+                            color: '#047857',
+                            border: '1px solid #A7F3D0',
+                            borderRadius: '5px',
+                            padding: '2px 7px',
+                            fontSize: '10.5px',
+                            fontWeight: 800,
+                            whiteSpace: 'nowrap'
+                          }}>
+                            ✓ Refund Approved (₹{Number(app.refundAmount || 0).toLocaleString('en-IN')})
+                          </div>
+                        )}
+                        {app.isRefundRejected && (
+                          <div style={{
+                            marginTop: '5px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: '#F8FAFC',
+                            color: '#64748B',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '5px',
+                            padding: '2px 7px',
+                            fontSize: '10.5px',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap'
+                          }}>
+                            ✕ Refund Declined
+                          </div>
+                        )}
                       </td>
 
                       {/* ASSIGNED */}
@@ -1274,21 +1496,84 @@ export default function Applications() {
 
                       {/* ACTION (...) */}
                       <td style={{ padding: '14px', textAlign: 'center', position: 'relative' }}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveMenuAppId(isMenuOpen ? null : (app.rawId || app.id));
-                          }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: '#64748B',
-                            padding: '4px'
-                          }}
-                        >
-                          <MoreHorizontal size={18} />
-                        </button>
+                        {app.hasRefundRequest && !app.isRefundApproved ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                            <button
+                              onClick={(e) => handleApproveRefundFromQueue(app, e)}
+                              disabled={actionInProgressId === (app.rawId || app.id)}
+                              title="Approve refund and immediately credit citizen wallet"
+                              style={{
+                                background: '#059669',
+                                color: '#FFFFFF',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '5px 10px',
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                boxShadow: '0 1px 3px rgba(5,150,105,0.3)'
+                              }}
+                            >
+                              <Check size={13} /> Approve Refund
+                            </button>
+
+                            <button
+                              onClick={(e) => handleRejectRefundFromQueue(app, e)}
+                              disabled={actionInProgressId === (app.rawId || app.id)}
+                              title="Decline this refund request"
+                              style={{
+                                background: '#FFFFFF',
+                                color: '#DC2626',
+                                border: '1px solid #FCA5A5',
+                                borderRadius: '6px',
+                                padding: '5px 8px',
+                                fontSize: '11.5px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}
+                            >
+                              <X size={12} /> Reject
+                            </button>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuAppId(isMenuOpen ? null : (app.rawId || app.id));
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#64748B',
+                                padding: '4px'
+                              }}
+                            >
+                              <MoreHorizontal size={17} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuAppId(isMenuOpen ? null : (app.rawId || app.id));
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: '#64748B',
+                              padding: '4px'
+                            }}
+                          >
+                            <MoreHorizontal size={18} />
+                          </button>
+                        )}
 
                         {/* Floating Action Menu Popover */}
                         {isMenuOpen && (
@@ -1303,7 +1588,7 @@ export default function Applications() {
                               boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
                               border: '1px solid #E2E8F0',
                               zIndex: 100,
-                              minWidth: '160px',
+                              minWidth: '170px',
                               display: 'flex',
                               flexDirection: 'column',
                               padding: '4px 0',
@@ -1329,6 +1614,47 @@ export default function Applications() {
                               <Eye size={13} color="#2563EB" /> View Details
                             </button>
 
+                            {app.hasRefundRequest && !app.isRefundApproved && (
+                              <>
+                                <button
+                                  onClick={(e) => handleApproveRefundFromQueue(app, e)}
+                                  style={{
+                                    padding: '8px 14px',
+                                    border: 'none',
+                                    background: '#F0FDF4',
+                                    fontSize: '12.5px',
+                                    color: '#059669',
+                                    fontWeight: 700,
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                  }}
+                                >
+                                  <Check size={13} color="#059669" /> Approve Refund (₹{app.refundAmount})
+                                </button>
+                                <button
+                                  onClick={(e) => handleRejectRefundFromQueue(app, e)}
+                                  style={{
+                                    padding: '8px 14px',
+                                    border: 'none',
+                                    background: 'none',
+                                    fontSize: '12.5px',
+                                    color: '#DC2626',
+                                    fontWeight: 600,
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                  }}
+                                >
+                                  <X size={13} color="#DC2626" /> Decline Refund
+                                </button>
+                              </>
+                            )}
+
                             {app.status !== 'Approved' && (
                               <button
                                 onClick={(e) => handleQuickApprove(app, e)}
@@ -1346,7 +1672,7 @@ export default function Applications() {
                                   gap: '8px'
                                 }}
                               >
-                                <Check size={13} color="#059669" /> Approve
+                                <Check size={13} color="#059669" /> Approve Application
                               </button>
                             )}
 
@@ -1371,7 +1697,7 @@ export default function Applications() {
                                   gap: '8px'
                                 }}
                               >
-                                <X size={13} color="#DC2626" /> Reject
+                                <X size={13} color="#DC2626" /> Reject Application
                               </button>
                             )}
                           </div>

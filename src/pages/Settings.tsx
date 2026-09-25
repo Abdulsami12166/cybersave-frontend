@@ -426,17 +426,23 @@ export default function Settings() {
       if (admin?.id) payload.userId = admin.id;
       if (admin?.email) payload.email = admin.email;
 
-      let res = await axios.post(`${BACKEND_BASE}/api/admin/change-password`, payload).catch(() => null);
-      if (!res && BACKEND_BASE !== API_BASE_URL) {
-        res = await axios.post(`${API_BASE_URL}/api/admin/change-password`, payload);
+      let res;
+      try {
+        res = await axios.post(`${BACKEND_BASE}/api/admin/change-password`, payload);
+      } catch (firstErr) {
+        if (BACKEND_BASE !== API_BASE_URL) {
+          res = await axios.post(`${API_BASE_URL}/api/admin/change-password`, payload);
+        } else {
+          throw firstErr;
+        }
       }
 
       setCurrentPass('');
       setNewPass('');
       setConfirmPass('');
-      showToast(res?.data?.message || 'Password credentials updated & secured successfully');
+      showToast(res?.data?.message || 'Password updated and secured successfully!');
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || 'Failed to update password. Please check your current password.';
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to update password. Please check your current password.';
       showToast(errorMsg, 'error');
     } finally {
       setUpdatingPassword(false);

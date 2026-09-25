@@ -327,8 +327,9 @@ export default function SupportTicketDetail() {
             {/* Messages Stream */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
               {(ticket.messages || []).map((msg: any, i: number) => {
-                const isAgent = msg.role === 'AGENT';
+                const isAgent = msg.role === 'AGENT' || msg.role === 'OFFICIAL';
                 const isResolution = msg.isResolution || (msg.text && msg.text.includes('marked as RESOLVED'));
+                const senderDispName = msg.senderName || msg.sender || (isAgent ? 'Support Desk Officer' : reporterName);
                 return (
                   <div 
                     key={i} 
@@ -354,11 +355,11 @@ export default function SupportTicketDetail() {
                           fontWeight: 700,
                           fontSize: 13
                         }}>
-                          {isResolution ? '✓' : (msg.senderName || 'U').charAt(0).toUpperCase()}
+                          {isResolution ? '✓' : senderDispName.charAt(0).toUpperCase()}
                         </div>
                         <div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <span style={{ fontWeight: 700, fontSize: 13.5, color: '#0F172A' }}>{msg.senderName}</span>
+                            <span style={{ fontWeight: 700, fontSize: 13.5, color: '#0F172A' }}>{senderDispName}</span>
                             <span style={{
                               background: isResolution ? '#10B981' : isAgent ? '#22C55E' : '#3B82F6',
                               color: 'white',

@@ -20,6 +20,7 @@ import {
   Copy,
   Calendar,
   ListChecks,
+  Download,
 } from 'lucide-react';
 
 interface TabItem {
@@ -421,6 +422,59 @@ export default function Refunds() {
     { id: 'REJECTED', label: 'Declined', count: rejectedCount },
   ];
 
+  const handleExportCSV = () => {
+    const exportData = filteredRefunds.length > 0 ? filteredRefunds : refunds;
+    if (!exportData.length) {
+      showToast('No refund claim records available to export', 'error');
+      return;
+    }
+
+    const headers = [
+      'Refund ID',
+      'Reference Number',
+      'Application Reference',
+      'Service Title',
+      'Citizen Name',
+      'Citizen Email',
+      'Citizen Phone',
+      'Refund Amount (INR)',
+      'Reason',
+      'Status',
+      'Processed By',
+      'Admin Notes',
+      'Requested Date'
+    ];
+
+    const rows = exportData.map((r) => [
+      `"${r.id || ''}"`,
+      `"${r.refNumber || ''}"`,
+      `"${r.application?.refNumber || ''}"`,
+      `"${(r.serviceTitle || r.application?.serviceTitle || '').replace(/"/g, '""')}"`,
+      `"${(r.user?.profile?.fullName || r.userName || '').replace(/"/g, '""')}"`,
+      `"${(r.user?.email || '').replace(/"/g, '""')}"`,
+      `"${(r.user?.phone || '').replace(/"/g, '""')}"`,
+      Number(r.amount || 0).toFixed(2),
+      `"${(r.reason || '').replace(/"/g, '""')}"`,
+      `"${r.status || 'PENDING'}"`,
+      `"${(r.processedBy || '').replace(/"/g, '""')}"`,
+      `"${(r.adminNotes || '').replace(/"/g, '""')}"`,
+      `"${r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : ''}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((row) => row.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cybersave_refunds_ledger_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`Exported ${rows.length} refund claims to CSV!`, 'success');
+  };
+
   return (
     <>
       {/* ─── 1. Breadcrumbs ─── */}
@@ -468,6 +522,23 @@ export default function Refunds() {
         </div>
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button
+            onClick={handleExportCSV}
+            className="date-picker-btn"
+            style={{
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+              background: '#FFFFFF',
+            }}
+          >
+            <Download size={14} color="#2563EB" />
+            Export Claims (CSV)
+          </button>
           <button
             onClick={fetchRefunds}
             className="date-picker-btn"
