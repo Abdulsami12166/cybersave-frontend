@@ -427,6 +427,7 @@ export default function Layout() {
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
+        padding: 0,
         transition: 'width 0.2s ease, min-width 0.2s ease',
         overflowY: 'auto',
         overflowX: 'hidden',
@@ -434,12 +435,13 @@ export default function Layout() {
         top: 0,
         flexShrink: 0
       }}>
-        {/* Portal Branding matching CyberSave Logo */}
+        {/* Portal Branding matching CyberSave Logo from inspect reference */}
         <div style={{
-          padding: isCollapsed ? '20px 8px' : '22px 20px 14px 20px',
+          padding: isCollapsed ? '18px 8px' : '20px 16px 14px 16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          boxSizing: 'border-box'
         }}>
           {isCollapsed ? (
             <div style={{
@@ -463,9 +465,9 @@ export default function Layout() {
                 src="/cybersave-logo.png"
                 alt="CyberSave — Digital Services • Trusted Always"
                 style={{
-                  height: '42px',
+                  height: '38px',
                   width: 'auto',
-                  maxWidth: '190px',
+                  maxWidth: '180px',
                   objectFit: 'contain',
                   display: 'block'
                 }}
@@ -560,21 +562,25 @@ export default function Layout() {
           top: 0,
           zIndex: 40
         }}>
-          {/* Header Left: CyberSave Brand Logo & Search */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-            <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }} title="CyberSave Admin Portal">
-              <img
-                src="/cybersave-logo.png"
-                alt="CyberSave — Digital Services • Trusted Always"
-                style={{
-                  height: '36px',
-                  width: 'auto',
-                  objectFit: 'contain',
-                  display: 'block'
-                }}
-              />
-            </Link>
-            <div style={{ height: '24px', width: '1px', background: '#E2E8F0' }} />
+          {/* Header Left: Search & Optional Brand Logo when collapsed */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {isCollapsed && (
+              <>
+                <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }} title="CyberSave Admin Portal">
+                  <img
+                    src="/cybersave-logo.png"
+                    alt="CyberSave — Digital Services • Trusted Always"
+                    style={{
+                      height: '32px',
+                      width: 'auto',
+                      objectFit: 'contain',
+                      display: 'block'
+                    }}
+                  />
+                </Link>
+                <div style={{ height: '24px', width: '1px', background: '#E2E8F0' }} />
+              </>
+            )}
             {/* Universal Search Input matching Reference */}
             <div style={{
               display: 'flex',

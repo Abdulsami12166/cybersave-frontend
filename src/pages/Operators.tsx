@@ -234,8 +234,6 @@ export default function Operators() {
     window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Exported ${filteredOperators.length} operator records to CSV` } }));
   };
 
-  if (loading) return <div>Loading operators...</div>;
-
   return (
     <>
       <div style={{fontSize: '13px', color: '#6b7280', marginBottom: 8}}>Dashboard &rarr; <span style={{color: '#2563eb'}}>Operators</span></div>
