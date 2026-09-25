@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,9 @@ export default function SupportTicketDetail() {
   const [resolvingInline, setResolvingInline] = useState(false);
   const [inlineSummary, setInlineSummary] = useState('Grievance verification completed. Issue marked as resolved.');
   const [inlineCategory, setInlineCategory] = useState('Configuration Fix');
+  const [userTyping, setUserTyping] = useState(false);
+  const [userTypingName, setUserTypingName] = useState('Citizen');
+  const adminTypingTimerRef = useRef<any>(null);
 
   const fetchTicketData = useCallback(async () => {
     if (!id) return;
@@ -79,6 +82,29 @@ export default function SupportTicketDetail() {
           setTicket(data);
         }
       });
+      socket.on('new_ticket_message', (data: any) => {
+        if (!isMounted || !data) return;
+        if (data.ticketId === ticket?.refNumber || data.id === id || data.ticketId === id || data.id === ticket?.id) {
+          if (data.ticket) {
+            setTicket(data.ticket);
+          } else if (data.message) {
+            setTicket((prev: any) => prev ? {
+              ...prev,
+              messages: [...(prev.messages || []), data.message]
+            } : prev);
+          }
+          setUserTyping(false);
+        }
+      });
+      socket.on('user_typing', (data: any) => {
+        if (!isMounted || !data) return;
+        const matches = !data.ticketId || data.ticketId === 'all' || 
+          data.ticketId === ticket?.refNumber || data.ticketId === id || data.ticketId === ticket?.id;
+        if (matches) {
+          setUserTyping(Boolean(data.isTyping));
+          if (data.userName) setUserTypingName(data.userName);
+        }
+      });
       socket.on('support_tickets_updated', () => {
         socket.emit('request_ticket_thread', { id });
         fetchTicketData();
@@ -88,6 +114,8 @@ export default function SupportTicketDetail() {
         isMounted = false;
         socket.off('response_ticket_thread', handleThread);
         socket.off('response_ticket_detail', handleThread);
+        socket.off('new_ticket_message');
+        socket.off('user_typing');
       };
     } else {
       const timer = setTimeout(() => {
@@ -163,6 +191,15 @@ export default function SupportTicketDetail() {
       adminRole,
     };
 
+    if (adminTypingTimerRef.current) clearTimeout(adminTypingTimerRef.current);
+    if (socket && connected) {
+      socket.emit('admin_typing', {
+        ticketId: ticket?.refNumber || id,
+        adminName,
+        isTyping: false
+      });
+    }
+
     // 1. WebSocket real-time dispatch
     if (socket && connected) {
       socket.emit('send_ticket_reply', payload);
@@ -188,6 +225,33 @@ export default function SupportTicketDetail() {
         socket.emit('request_ticket_thread', { id });
       }
       fetchTicketData();
+    }
+  };
+
+  const handleAdminTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setReplyText(val);
+
+    const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
+    const officerName = currentAdminUser.name || (currentAdminUser.email ? currentAdminUser.email.split('@')[0] : 'Support Officer');
+
+    if (socket && connected) {
+      socket.emit('admin_typing', {
+        ticketId: ticket?.refNumber || id,
+        adminName: officerName,
+        isTyping: val.trim().length > 0
+      });
+
+      if (adminTypingTimerRef.current) clearTimeout(adminTypingTimerRef.current);
+      adminTypingTimerRef.current = setTimeout(() => {
+        if (socket && connected) {
+          socket.emit('admin_typing', {
+            ticketId: ticket?.refNumber || id,
+            adminName: officerName,
+            isTyping: false
+          });
+        }
+      }, 2500);
     }
   };
 
@@ -386,13 +450,32 @@ export default function SupportTicketDetail() {
 
             {/* Write a Response Box */}
             <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: 16 }}>
-              <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#0F172A' }}>
-                Write Official Response to Citizen
-              </h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: '#0F172A' }}>
+                  Write Official Response to Citizen
+                </h4>
+                {userTyping && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: '#EFF6FF',
+                    border: '1px solid #BFDBFE',
+                    borderRadius: 12,
+                    padding: '2px 10px',
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    color: '#2563EB'
+                  }}>
+                    <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#2563EB', animation: 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
+                    💬 {userTypingName} is typing...
+                  </div>
+                )}
+              </div>
               <textarea 
                 rows={4} 
                 value={replyText} 
-                onChange={e => setReplyText(e.target.value)}
+                onChange={handleAdminTextChange}
                 placeholder={`Type your official response to ${reporterName} here...`}
                 style={{
                   width: '100%',
