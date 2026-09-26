@@ -85,8 +85,20 @@ export default function Operators() {
         fetchOperatorsRest();
       });
     }
+
+    const handleOpenModal = () => setShowAddOpModal(true);
+    const handleHeaderSearch = (e: any) => {
+      if (e.detail?.query !== undefined) {
+        setSearchTerm(e.detail.query);
+      }
+    };
+    window.addEventListener('cybersave_open_add_operator', handleOpenModal);
+    window.addEventListener('cybersave_operator_search', handleHeaderSearch);
+
     return () => {
       clearTimeout(safetyTimer);
+      window.removeEventListener('cybersave_open_add_operator', handleOpenModal);
+      window.removeEventListener('cybersave_operator_search', handleHeaderSearch);
       if (socket) {
         socket.off('response_operators_data');
         socket.off('operators_updated');

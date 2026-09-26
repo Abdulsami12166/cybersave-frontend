@@ -79,17 +79,28 @@ export default function SupportTickets() {
         fetchTicketsRest();
         socket.emit('request_support_tickets');
       });
-
-      return () => {
-        clearInterval(pollInterval);
-        socket.off('response_support_tickets', handleResponse);
-        socket.off('new_support_ticket', handleNew);
-        socket.off('support_tickets_updated', handleNew);
-        socket.off('create_support_ticket_success');
-      };
     }
 
-    return () => clearInterval(pollInterval);
+    const handleOpenModal = () => setShowCreateModal(true);
+    const handleTicketSearch = (e: any) => {
+      if (e.detail?.query !== undefined) {
+        setSearchTerm(e.detail.query);
+      }
+    };
+    window.addEventListener('cybersave_open_create_ticket', handleOpenModal);
+    window.addEventListener('cybersave_ticket_search', handleTicketSearch);
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('cybersave_open_create_ticket', handleOpenModal);
+      window.removeEventListener('cybersave_ticket_search', handleTicketSearch);
+      if (socket) {
+        socket.off('response_support_tickets');
+        socket.off('new_support_ticket');
+        socket.off('support_tickets_updated');
+        socket.off('create_support_ticket_success');
+      }
+    };
   }, [socket, connected, fetchTicketsRest]);
 
   const handleCreateTicket = async () => {

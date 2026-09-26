@@ -672,12 +672,28 @@ export default function Layout() {
               <Search size={16} color="#64748B" />
               <input
                 type="text"
-                placeholder={currentTranslations.searchPlaceholder}
+                placeholder={
+                  location.pathname.startsWith('/notifications')
+                    ? 'Search notifications by keyword, action...'
+                    : location.pathname.startsWith('/operators')
+                    ? 'Search operators by name, ID, department...'
+                    : location.pathname.startsWith('/support')
+                    ? 'Search tickets by ID, subject, assignee...'
+                    : location.pathname.startsWith('/services')
+                    ? 'Search services by name, ID, category...'
+                    : currentTranslations.searchPlaceholder
+                }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && searchQuery.trim()) {
-                    navigate(`/applications?q=${encodeURIComponent(searchQuery.trim())}`);
+                    if (location.pathname.startsWith('/operators')) {
+                      window.dispatchEvent(new CustomEvent('cybersave_operator_search', { detail: { query: searchQuery.trim() } }));
+                    } else if (location.pathname.startsWith('/support')) {
+                      window.dispatchEvent(new CustomEvent('cybersave_ticket_search', { detail: { query: searchQuery.trim() } }));
+                    } else {
+                      navigate(`/applications?q=${encodeURIComponent(searchQuery.trim())}`);
+                    }
                   }
                 }}
                 style={{
@@ -894,14 +910,14 @@ export default function Layout() {
               )}
             </div>
 
-            {/* Blue Quick Actions Button matching Reference Image */}
-            <div style={{ position: 'relative' }}>
+            {/* Contextual Action Button based on Current Route matching Screenshots */}
+            {location.pathname.startsWith('/notifications') ? (
               <button
                 type="button"
                 onClick={() => {
-                  setShowQuickActions(!showQuickActions);
-                  setShowLangMenu(false);
-                  setShowNotifMenu(false);
+                  setNotifCount(0);
+                  window.dispatchEvent(new CustomEvent('cybersave_mark_all_read'));
+                  showToast('All notifications marked as read');
                 }}
                 style={{
                   background: '#2563EB',
@@ -912,16 +928,85 @@ export default function Layout() {
                   fontSize: '13px',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
                   boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
-                  transition: 'background 0.15s ease'
+                  whiteSpace: 'nowrap'
                 }}
               >
-                <span>{currentTranslations.quickActions}</span>
-                <ChevronDown size={14} color="#FFFFFF" />
+                Mark All as Read
               </button>
+            ) : location.pathname.startsWith('/operators') ? (
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('cybersave_open_add_operator'));
+                }}
+                style={{
+                  background: '#2563EB',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '9px',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Add New Operator
+              </button>
+            ) : location.pathname.startsWith('/support') ? (
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('cybersave_open_create_ticket'));
+                  if (!location.pathname.startsWith('/support')) {
+                    navigate('/support');
+                  }
+                }}
+                style={{
+                  background: '#2563EB',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '9px',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Create New Ticket
+              </button>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowQuickActions(!showQuickActions);
+                    setShowLangMenu(false);
+                    setShowNotifMenu(false);
+                  }}
+                  style={{
+                    background: '#2563EB',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '9px',
+                    padding: '8px 18px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
+                    transition: 'background 0.15s ease'
+                  }}
+                >
+                  <span>{currentTranslations.quickActions}</span>
+                  <ChevronDown size={14} color="#FFFFFF" />
+                </button>
 
               {/* Quick Actions Dropdown Menu matching Screenshot */}
               {showQuickActions && (
@@ -1055,6 +1140,7 @@ export default function Layout() {
                 </div>
               )}
             </div>
+            )}
 
             <div 
               onClick={() => navigate('/settings')}

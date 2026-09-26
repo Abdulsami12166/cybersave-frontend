@@ -117,8 +117,36 @@ export default function Notifications() {
         showToast(`Global Push Notification Sent to ${res?.count || 'all'} devices!`);
       });
     }
+
+    const handleMarkAll = async () => {
+      setData((prev: any) => {
+        const notifList = (prev.notifications || []).map((n: any) => ({ ...n, read: true, status: 'VERIFIED' }));
+        return {
+          ...prev,
+          notifications: notifList,
+          stats: {
+            ...(prev.stats || {}),
+            unreadAlerts: 0,
+            pendingChecks: 0
+          }
+        };
+      });
+
+      try {
+        await apiFetch('/api/v1/notifications/mark-all-read', { method: 'POST' }).catch(() => null);
+        if (socket) {
+          socket.emit('mark_all_notifications_read');
+        }
+      } catch (_) {}
+
+      showToast('All notifications marked as read');
+    };
+
+    window.addEventListener('cybersave_mark_all_read', handleMarkAll);
+
     return () => {
       clearInterval(pollInterval);
+      window.removeEventListener('cybersave_mark_all_read', handleMarkAll);
       if (socket) {
         socket.off('response_notifications');
         socket.off('notifications_updated');
