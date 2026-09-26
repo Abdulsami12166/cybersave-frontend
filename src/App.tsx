@@ -86,6 +86,8 @@ function App() {
                   <Route path="applications/:id" element={<ApplicationDetail />} />
                   <Route path="services" element={<Services />} />
                   <Route path="services/create" element={<ServiceWizard />} />
+                  <Route path="services/new" element={<ServiceWizard />} />
+                  <Route path="services/edit/:id" element={<ServiceWizard />} />
                   <Route path="operators" element={<Operators />} />
                   <Route path="operators/:id" element={<OperatorDetail />} />
                   <Route path="notifications" element={<Notifications />} />

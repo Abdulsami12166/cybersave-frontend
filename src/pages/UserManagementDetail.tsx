@@ -1667,25 +1667,52 @@ export default function UserManagementDetail() {
                 </tr>
               </thead>
               <tbody>
-                {safeData.recentServices.map((s: any, idx: number) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                    <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0F172A' }}>{s.name || s.serviceTitle}</td>
-                    <td style={{ padding: '12px 14px', color: '#64748B' }}>{s.date || s.appliedAt || 'Recently'}</td>
-                    <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0F172A' }}>{s.amount || s.fee || '₹0'}</td>
-                    <td style={{ padding: '12px 14px' }}>
-                      <span style={{
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        background: s.status === 'COMPLETED' ? '#DCFCE7' : s.status === 'REJECTED' ? '#FEE2E2' : '#FEF3C7',
-                        color: s.status === 'COMPLETED' ? '#16A34A' : s.status === 'REJECTED' ? '#DC2626' : '#D97706'
-                      }}>
-                        {s.status || 'PENDING'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {safeData.recentServices.map((s: any, idx: number) => {
+                  const appId = s.id || s.applicationId || s.refNumber;
+                  return (
+                    <tr
+                      key={idx}
+                      style={{
+                        borderBottom: '1px solid #F1F5F9',
+                        cursor: appId ? 'pointer' : 'default',
+                        transition: 'background-color 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (appId) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                      onClick={() => {
+                        if (appId) navigate(`/applications/${encodeURIComponent(appId)}`);
+                      }}
+                      title={appId ? `Click to inspect application #${appId}` : undefined}
+                    >
+                      <td style={{ padding: '12px 14px', fontWeight: 600, color: appId ? '#2563EB' : '#0F172A' }}>
+                        {s.name || s.serviceTitle}
+                        {appId && (
+                          <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 400, marginTop: '2px' }}>
+                            Ref: {appId}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '12px 14px', color: '#64748B' }}>{s.date || s.appliedAt || 'Recently'}</td>
+                      <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0F172A' }}>{s.amount || s.fee || '₹0'}</td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          background: s.status === 'COMPLETED' ? '#DCFCE7' : s.status === 'REJECTED' ? '#FEE2E2' : '#FEF3C7',
+                          color: s.status === 'COMPLETED' ? '#16A34A' : s.status === 'REJECTED' ? '#DC2626' : '#D97706'
+                        }}>
+                          {s.status || 'PENDING'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

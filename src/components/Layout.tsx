@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { apiFetch } from '../utils/apiConfig';
+import ErrorBoundary from './ErrorBoundary';
 
 export const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message, type } }));
@@ -519,46 +520,42 @@ export default function Layout() {
         top: 0,
         flexShrink: 0
       }}>
-        {/* Portal Branding matching CyberSave Logo from inspect reference */}
+        {/* Portal Branding matching CyberSave Logo from user reference */}
         <div style={{
-          padding: isCollapsed ? '18px 8px' : '22px 14px 18px 14px',
+          padding: isCollapsed ? '16px 8px' : '16px 14px 14px 14px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          borderBottom: '1px solid #F1F5F9'
         }}>
           {isCollapsed ? (
             <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="CyberSave">
-              <div style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #082567 0%, #1668FE 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#FFFFFF',
-                fontWeight: 900,
-                fontSize: '17px',
-                boxShadow: '0 2px 8px rgba(22, 104, 254, 0.35)',
-                letterSpacing: '-0.5px'
-              }}>
-                CS
-              </div>
+              <img
+                src="/cybersave-icon.png"
+                alt="CyberSave"
+                style={{ width: '40px', height: '40px', objectFit: 'contain' }}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/cybersave-logo.png';
+                }}
+              />
             </Link>
           ) : (
-            <Link to="/" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', userSelect: 'none' }} title="CyberSave — Digital Services • Trusted Always">
-              <div style={{ display: 'flex', alignItems: 'baseline', lineHeight: 1, letterSpacing: '-0.5px' }}>
-                <span style={{ fontSize: '27px', fontWeight: 800, color: '#082567', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>Cyber</span>
-                <span style={{ fontSize: '27px', fontWeight: 800, color: '#1668FE', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>save</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '6px', width: '100%' }}>
-                <span style={{ height: '1.2px', width: '22px', background: '#64748B', opacity: 0.8, display: 'inline-block' }} />
-                <span style={{ fontSize: '7.2px', fontWeight: 800, letterSpacing: '1.2px', color: '#0F172A', textTransform: 'uppercase', whiteSpace: 'nowrap', fontFamily: "'Inter', -apple-system, sans-serif" }}>
-                  DIGITAL SERVICES • TRUSTED ALWAYS
-                </span>
-                <span style={{ height: '1.2px', width: '22px', background: '#64748B', opacity: 0.8, display: 'inline-block' }} />
-              </div>
+            <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', userSelect: 'none' }} title="CyberSave — Digital Services • Trusted Always">
+              <img
+                src="/cybersave-logo-horizontal.png"
+                alt="CyberSave — Digital Services • Trusted Always"
+                style={{
+                  maxHeight: '48px',
+                  maxWidth: '215px',
+                  width: 'auto',
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/cybersave-logo.png';
+                }}
+              />
             </Link>
           )}
         </div>
@@ -653,9 +650,9 @@ export default function Layout() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {isCollapsed && (
               <>
-                <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'baseline', gap: '1px' }} title="CyberSave Admin Portal">
-                  <span style={{ fontSize: '20px', fontWeight: 800, color: '#082567', fontFamily: "'Inter', -apple-system, sans-serif" }}>Cyber</span>
-                  <span style={{ fontSize: '20px', fontWeight: 800, color: '#1668FE', fontFamily: "'Inter', -apple-system, sans-serif" }}>save</span>
+                <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }} title="CyberSave Admin Portal">
+                  <img src="/cybersave-icon.png" alt="CyberSave" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+                  <span style={{ fontSize: '18px', fontWeight: 800, color: '#082567', fontFamily: "'Inter', -apple-system, sans-serif" }}>Cyber<span style={{ color: '#1668FE' }}>save</span></span>
                 </Link>
                 <div style={{ height: '24px', width: '1px', background: '#E2E8F0' }} />
               </>
@@ -1123,9 +1120,11 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Page Content Viewport */}
+        {/* Page Content Viewport with Route-Aware ErrorBoundary Protection */}
         <main style={{ padding: '24px 28px', flex: 1 }}>
-          <Outlet />
+          <ErrorBoundary key={location.pathname} fallbackTitle="CyberSave Admin Console Error">
+            <Outlet />
+          </ErrorBoundary>
         </main>
 
         {/* Portal Footer */}

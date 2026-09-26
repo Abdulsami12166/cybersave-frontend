@@ -753,6 +753,7 @@ export default function ApplicationDetail() {
   const isInProgress = statusUpper === 'IN_PROGRESS';
   const paidDate = app?.submittedAt ? new Date(app.submittedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
   const txnId = app?.razorpayPaymentId || `TXN-${(app?.refNumber || '').slice(-4)}-${(app?.rawId || app?.id || '').slice(-4)}`;
+  const timeline = buildTimeline(app, checklist);
 
   const handleDownloadReceipt = () => {
     if (!app) return;

@@ -28,6 +28,28 @@ export default class ErrorBoundary extends Component<Props, State> {
     this.setState({ error, errorInfo });
   }
 
+  public componentDidMount() {
+    window.addEventListener('popstate', this.handleSilentReset);
+    window.addEventListener('cybersave_route_change', this.handleSilentReset);
+  }
+
+  public componentWillUnmount() {
+    window.removeEventListener('popstate', this.handleSilentReset);
+    window.removeEventListener('cybersave_route_change', this.handleSilentReset);
+  }
+
+  public componentDidUpdate(prevProps: Props) {
+    if (prevProps.children !== this.props.children && this.state.hasError) {
+      this.setState({ hasError: false, error: null, errorInfo: null });
+    }
+  }
+
+  private handleSilentReset = () => {
+    if (this.state.hasError) {
+      this.setState({ hasError: false, error: null, errorInfo: null });
+    }
+  };
+
   public handleReset = () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
     window.location.reload();

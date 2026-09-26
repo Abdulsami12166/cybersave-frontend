@@ -101,7 +101,7 @@ export default function Services() {
 
   const handleOpenService = (sub: any, mode: 'view' | 'edit') => {
     const targetId = sub.id || sub.slug || sub.name;
-    navigate(`/services/create?id=${encodeURIComponent(targetId)}&mode=${mode}&step=1`);
+    navigate(`/services/create?id=${encodeURIComponent(targetId)}&mode=${mode}`);
   };
 
   // Default rich categories matching both mobile & admin scheme pipelines
