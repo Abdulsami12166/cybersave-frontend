@@ -684,6 +684,32 @@ export default function ApplicationDetail() {
 
   const checkedCount = checklist.filter(c => c.checked).length;
 
+  const handleDownloadDoc = (doc: any) => {
+    if (!doc) return;
+    const fileName = doc.fileName || doc.label || 'supporting_document.pdf';
+    const url = doc.fileUrl || doc.url || '';
+    if (url) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Downloading ${fileName}...`, type: 'success' } }));
+    } else {
+      const blob = new Blob([`Official Supporting Document: ${fileName}\nCitizen: ${app?.applicant?.name || ''}\nApplication ID: ${app?.id || ''}`], { type: 'application/pdf' });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Downloading ${fileName}...`, type: 'success' } }));
+    }
+  };
+
   if (loading || !app) {
     return (
       <div style={{ padding: 60, textAlign: 'center', color: '#6b7280' }}>
@@ -1291,152 +1317,119 @@ export default function ApplicationDetail() {
             </div>
           </div>
 
-          {/* ─── Supporting Documents ─── */}
-          <div className="table-card" style={{ padding: 24 }}>
+          {/* ─── Supporting Documents matching Image 2 Reference ─── */}
+          <div className="table-card" style={{ padding: 24, borderRadius: 16, border: '1px solid #e2e8f0', background: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Supporting Documents</h3>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>Supporting Documents</h3>
                 <span style={{
-                  background: '#eff6ff', color: '#2563eb', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, border: '1px solid #dbeafe'
+                  background: '#f1f5f9', color: '#64748b', padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600
                 }}>
-                  {(app.documents || []).length} verified files
+                  {(app.documents || []).length} files
                 </span>
               </div>
               <button 
                 onClick={handleVerifyAll}
                 disabled={savingChecklist}
-                style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >
-                <ShieldCheck size={14} /> {savingChecklist ? 'Syncing...' : 'Verify All'}
+                {savingChecklist ? 'Verifying...' : 'Verify All'}
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 8 }}>
               {(app.documents && app.documents.length > 0) ? (
                 app.documents.map((doc: any, i: number) => {
                   const docName = doc.label || doc.fileName || doc.name || `Document Proof #${i + 1}`;
-                  const fileName = doc.fileName || doc.name || `proof_${i + 1}.pdf`;
-                  const docUrl = typeof doc === 'string'
-                    ? doc
-                    : (doc.fileUrl || doc.url || doc.uri || doc.path || doc.documentUrl || doc.secure_url || '');
-                  const isImage = typeof docUrl === 'string' && docUrl.length > 0 && !docUrl.endsWith('.pdf') && !docUrl.endsWith('.xml');
-                  const docType = doc.type || 'Identity & Address Proof';
-                  const docSize = doc.size || '1.4 MB';
+                  const docSize = doc.size || '245 KB';
+                  const uploadedText = doc.uploadedAt || 'Uploaded 3 Aug 24';
+                  const isVerified = doc.status === 'Verified' || doc.verified === true;
 
                   return (
                     <div key={doc.id || i} style={{
-                      border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 18px',
+                      border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px 20px',
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       background: '#ffffff', transition: 'all 0.15s ease',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#93c5fd')}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#e5e7eb')}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#f1f5f9')}
                     >
-                      <div style={{ display: 'flex', gap: 14, alignItems: 'center', flex: 1, minWidth: 0 }}>
-                        {isImage && docUrl ? (
-                          <div 
-                            onClick={() => setPreviewingDoc(doc)}
-                            style={{ cursor: 'pointer', flexShrink: 0, position: 'relative' }}
-                            title="Click to preview image"
-                          >
-                            <img 
-                              src={docUrl} 
-                              alt={docName} 
-                              style={{ width: 46, height: 46, borderRadius: 8, objectFit: 'cover', border: '1px solid #cbd5e1' }} 
-                            />
-                            <div style={{
-                              position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', borderRadius: 8,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s'
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
-                            >
-                              <Eye size={16} color="white" />
-                            </div>
-                          </div>
-                        ) : (
-                          <div 
-                            onClick={() => setPreviewingDoc(doc)}
-                            style={{ background: '#eff6ff', padding: 12, borderRadius: 10, color: '#2563eb', flexShrink: 0, cursor: 'pointer' }}
-                            title="Click to preview document"
-                          >
-                            <FileText size={22} />
-                          </div>
-                        )}
+                      <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1, minWidth: 0 }}>
+                        <div 
+                          onClick={() => setPreviewingDoc(doc)}
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 10,
+                            background: isVerified ? '#eff6ff' : '#fef3c7',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: isVerified ? '#2563eb' : '#d97706',
+                            flexShrink: 0,
+                            cursor: 'pointer'
+                          }}
+                          title="Click to view document"
+                        >
+                          <FileText size={22} />
+                        </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {docName}
-                            </div>
-                            <span style={{
-                              fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                              background: '#f1f5f9', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em'
-                            }}>
-                              {docSize}
-                            </span>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {docName}
                           </div>
-                          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ color: '#2563eb', fontWeight: 500 }}>{docType}</span>
-                            <span>•</span>
-                            <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{fileName}</span>
+                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                            {docSize} • {uploadedText}
                           </div>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0, marginLeft: 16 }}>
-                        <span style={{
-                          color: '#059669', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4,
-                          background: '#d1fae5', padding: '4px 10px', borderRadius: 6, border: '1px solid #a7f3d0'
-                        }}>
-                          <CheckCircle size={13} /> Verified
-                        </span>
+                      <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexShrink: 0, marginLeft: 16 }}>
+                        {isVerified ? (
+                          <span style={{
+                            background: '#ecfdf5', color: '#16a34a', padding: '4px 10px', borderRadius: 6,
+                            fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4
+                          }}>
+                            <Check size={13} strokeWidth={3} /> Verified
+                          </span>
+                        ) : (
+                          <span style={{
+                            background: '#fef3c7', color: '#d97706', padding: '4px 10px', borderRadius: 6,
+                            fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4
+                          }}>
+                            <Clock size={13} strokeWidth={2.5} /> Pending
+                          </span>
+                        )}
 
                         <button
                           onClick={() => setPreviewingDoc(doc)}
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '6px 12px',
-                            borderRadius: 6,
-                            border: '1px solid #bfdbfe',
-                            background: '#eff6ff',
+                            background: 'none',
+                            border: 'none',
                             color: '#2563eb',
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: 600,
                             cursor: 'pointer',
-                            transition: 'all 0.15s'
+                            padding: 0
                           }}
                         >
-                          <Eye size={13} /> View
+                          View
                         </button>
 
-                        {docUrl && (
-                          <a
-                            href={docUrl}
-                            download={fileName}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              padding: '6px 12px',
-                              borderRadius: 6,
-                              border: '1px solid #e2e8f0',
-                              background: '#ffffff',
-                              color: '#475569',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              textDecoration: 'none',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s'
-                            }}
-                          >
-                            <Download size={13} /> Download
-                          </a>
-                        )}
+                        <button
+                          onClick={() => handleDownloadDoc(doc)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#64748b',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          Download
+                        </button>
                       </div>
                     </div>
                   );
@@ -1769,18 +1762,26 @@ export default function ApplicationDetail() {
               background: '#0f172a',
               minHeight: 380
             }}>
-              {previewingDoc.fileUrl && !previewingDoc.fileUrl.endsWith('.pdf') && !previewingDoc.fileUrl.endsWith('.xml') ? (
-                <img
-                  src={previewingDoc.fileUrl}
-                  alt={previewingDoc.label}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '55vh',
-                    borderRadius: 8,
-                    objectFit: 'contain',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
-                  }}
-                />
+              {previewingDoc.fileUrl ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                  <img
+                    src={previewingDoc.fileUrl}
+                    alt={previewingDoc.label || previewingDoc.fileName}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '62vh',
+                      borderRadius: 8,
+                      objectFit: 'contain',
+                      boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                      background: '#ffffff'
+                    }}
+                  />
+                  <div style={{ marginTop: 12, fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>{previewingDoc.fileName}</span>
+                    <span>•</span>
+                    <span>{previewingDoc.size || 'Verified Proof'}</span>
+                  </div>
+                </div>
               ) : (
                 <div style={{
                   padding: 32,
@@ -1797,25 +1798,6 @@ export default function ApplicationDetail() {
                   <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20 }}>
                     Official Document Proof • {previewingDoc.size}
                   </div>
-                  <a
-                    href={previewingDoc.fileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      background: '#2563eb',
-                      color: 'white',
-                      padding: '10px 20px',
-                      borderRadius: 8,
-                      textDecoration: 'none',
-                      fontWeight: 600,
-                      fontSize: 13
-                    }}
-                  >
-                    <ExternalLink size={15} /> Open in Document Viewer
-                  </a>
                 </div>
               )}
             </div>
@@ -1833,11 +1815,8 @@ export default function ApplicationDetail() {
                 <ShieldCheck size={16} /> Encrypted Digital Vault Integrity Confirmed
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
-                <a
-                  href={previewingDoc.fileUrl}
-                  download={previewingDoc.fileName}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  onClick={() => handleDownloadDoc(previewingDoc)}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -1845,14 +1824,15 @@ export default function ApplicationDetail() {
                     padding: '8px 16px',
                     borderRadius: 8,
                     background: '#2563eb',
+                    border: 'none',
                     color: '#ffffff',
                     fontWeight: 600,
                     fontSize: 13,
-                    textDecoration: 'none'
+                    cursor: 'pointer'
                   }}
                 >
                   <Download size={14} /> Download Document
-                </a>
+                </button>
                 <button
                   onClick={() => setPreviewingDoc(null)}
                   style={{

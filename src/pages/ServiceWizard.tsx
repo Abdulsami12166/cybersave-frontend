@@ -160,9 +160,9 @@ export default function ServiceWizard() {
       paymentMethods: ['Online Payment', 'UPI'],
       refundPolicy: 'Non-refundable after processing starts',
       charges: [
-        { name: 'Late Submission Fee', amount: 'Γé╣50', condition: 'After due date' },
-        { name: 'Express Processing', amount: 'Γé╣300', condition: 'Optional upgrade' },
-        { name: 'Re-submission Fee', amount: 'Γé╣75', condition: 'Document rejection' }
+        { name: 'Late Submission Fee', amount: '₹50', condition: 'After due date' },
+        { name: 'Express Processing', amount: '₹300', condition: 'Optional upgrade' },
+        { name: 'Re-submission Fee', amount: '₹75', condition: 'Document rejection' }
       ]
     },
     portalVisibility: 'All Citizens (Public Access)',
@@ -196,7 +196,7 @@ export default function ServiceWizard() {
   // Additional charge add modal
   const [showAddChargeModal, setShowAddChargeModal] = useState(false);
   const [newChargeName, setNewChargeName] = useState('');
-  const [newChargeAmount, setNewChargeAmount] = useState('Γé╣50');
+  const [newChargeAmount, setNewChargeAmount] = useState('₹50');
   const [newChargeCondition, setNewChargeCondition] = useState('Standard condition');
 
   // Fetch existing service data if ID is passed
@@ -381,7 +381,7 @@ export default function ServiceWizard() {
         } else if (isFinancial) {
           fields.push(
             { label: 'PAN or Account Identifier', type: 'Text Input', placeholder: 'Enter alphanumeric reference', required: true, validationRule: 'None' },
-            { label: 'Annual Income Range', type: 'Text Input', placeholder: 'e.g. Γé╣2,50,000 to Γé╣5,00,000', required: true, validationRule: 'None' }
+            { label: 'Annual Income Range', type: 'Text Input', placeholder: 'e.g. ₹2,50,000 to ₹5,00,000', required: true, validationRule: 'None' }
           );
         } else {
           fields.push(
@@ -415,8 +415,8 @@ export default function ServiceWizard() {
           paymentMethods: ['Online Payment', 'UPI', 'CyberSave Wallet', 'Net Banking'],
           refundPolicy: '100% full refund credited to CyberSave citizen wallet if cancelled or rejected prior to field officer inspection.',
           charges: [
-            { name: 'Fast-Track Tatkal / Express Verification', amount: 'Γé╣100', condition: 'Optional 24-hour priority turnaround' },
-            { name: 'Document Correction Resubmission', amount: 'Γé╣25', condition: 'Applicable after 2nd rejection notice' }
+            { name: 'Fast-Track Tatkal / Express Verification', amount: '₹100', condition: 'Optional 24-hour priority turnaround' },
+            { name: 'Document Correction Resubmission', amount: '₹25', condition: 'Applicable after 2nd rejection notice' }
           ]
         };
       }
@@ -703,19 +703,19 @@ export default function ServiceWizard() {
         { label: 'Bank IFSC Code', type: 'Text Input', placeholder: 'e.g. SBIN0001234', required: true, validationRule: 'Alphanumeric Only' },
         { label: 'Land Ownership Khasra / Khatauni Number', type: 'Text Input', placeholder: 'Revenue record survey number', required: true, validationRule: 'None' },
         { label: 'Total Cultivable Land Area (Acres)', type: 'Number Input', placeholder: 'e.g. 2.5', required: true, validationRule: 'None' },
-        { label: 'Annual Household Farm Income (Γé╣)', type: 'Number Input', placeholder: 'e.g. 120000', required: true, validationRule: 'None' }
+        { label: 'Annual Household Farm Income (₹)', type: 'Number Input', placeholder: 'e.g. 120000', required: true, validationRule: 'None' }
       ]
     },
     certificate: {
       name: 'Certificates (Income / Caste / Domicile)',
-      icon: '≡ƒô£',
+      icon: '📜',
       description: 'Government certified proof request and family details',
       fields: [
         { label: 'Applicant Full Name', type: 'Text Input', placeholder: 'Full legal name', required: true, validationRule: 'None' },
         { label: "Father's / Guardian's Name", type: 'Text Input', placeholder: "Father's full name", required: true, validationRule: 'None' },
         { label: "Mother's Name", type: 'Text Input', placeholder: "Mother's full name", required: true, validationRule: 'None' },
         { label: 'Category / Community', type: 'Dropdown Select', placeholder: 'Select social category', required: true, validationRule: 'None', options: 'General, OBC, SC, ST, EWS' },
-        { label: 'Annual Gross Family Income (Γé╣)', type: 'Number Input', placeholder: 'Total family income per year', required: true, validationRule: 'None' },
+        { label: 'Annual Gross Family Income (₹)', type: 'Number Input', placeholder: 'Total family income per year', required: true, validationRule: 'None' },
         { label: 'Purpose of Certificate', type: 'Dropdown Select', placeholder: 'Select primary purpose', required: true, validationRule: 'None', options: 'Higher Education, Government Employment, Subsidy Scheme, Legal / Banking' },
         { label: 'Permanent Residential Address', type: 'Text Area / Multi-line', placeholder: 'Complete village/town address', required: true, validationRule: 'None' },
         { label: 'Tehsil / Revenue Block', type: 'Text Input', placeholder: 'Administrative revenue block', required: true, validationRule: 'None' }
@@ -836,13 +836,25 @@ export default function ServiceWizard() {
 
   // Add Document
   const handleAddDocument = () => {
-    if (!newDocType.trim()) return;
+    if (!newDocType.trim()) {
+      setToastMessage('Please enter a document type name');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+    const newDoc = {
+      type: newDocType.trim(),
+      formats: newDocFormat || 'PDF, JPG, PNG',
+      size: newDocSize || '2 MB',
+      req: newDocReq || 'Required'
+    };
     setServiceData(prev => ({
       ...prev,
-      documents: [...prev.documents, { type: newDocType.trim(), formats: newDocFormat, size: newDocSize, req: newDocReq }]
+      documents: [...prev.documents, newDoc]
     }));
     setNewDocType('');
     setShowAddDocModal(false);
+    setToastMessage(`Document requirement added: "${newDoc.type}"`);
+    setTimeout(() => setToastMessage(null), 3000);
   };
 
   // Remove Document
@@ -903,15 +915,15 @@ export default function ServiceWizard() {
         </div>
       )}
 
-      {/* Breadcrumb Navigation */}
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Link to="/" style={{ color: '#64748b', textDecoration: 'none' }}>Dashboard</Link>
+      {/* Breadcrumb Navigation matching Image 5 */}
+      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Link to="/" style={{ color: '#64748b', textDecoration: 'none' }} className="hover:underline">Dashboard</Link>
         <span>&gt;</span>
-        <Link to="/services" style={{ color: '#64748b', textDecoration: 'none' }}>Services</Link>
+        <Link to="/services" style={{ color: '#64748b', textDecoration: 'none' }} className="hover:underline">Services</Link>
         <span>&gt;</span>
-        <span style={{ color: '#0f172a', fontWeight: 600 }}>{serviceData.name || 'Create New Service'}</span>
+        <span style={{ color: '#64748b' }}>Create New Service</span>
         <span>&gt;</span>
-        <span style={{ color: '#2563eb', fontWeight: 600 }}>{steps.find(s => s.id === activeStep)?.name}</span>
+        <span style={{ color: '#0f172a', fontWeight: 600 }}>{steps.find(s => s.id === activeStep)?.name}</span>
       </div>
 
       {/* Page Title Row */}
@@ -1051,9 +1063,7 @@ export default function ServiceWizard() {
         })}
       </div>
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
-      {/* STEP 1: Main Service Configuration */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ─── STEP 1: Main Service Configuration ─── */}
       {activeStep === 1 && (
         <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 32, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 24px 0' }}>
@@ -1341,9 +1351,7 @@ export default function ServiceWizard() {
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
-      {/* STEP 2: Sub-Service Association */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ─── STEP 2: Sub-Service Association ─── */}
       {activeStep === 2 && (
         <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 32, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -1390,7 +1398,7 @@ export default function ServiceWizard() {
                 />
                 <input
                   type="number"
-                  placeholder="Fee (Γé╣)"
+                  placeholder="Fee (₹)"
                   value={newSubFee}
                   onChange={e => setNewSubFee(e.target.value)}
                   style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13, fontWeight: 600 }}
@@ -1433,7 +1441,7 @@ export default function ServiceWizard() {
               <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
                 <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>SUB SERVICE NAME</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>CODE</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>FEE (Γé╣)</th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>FEE (₹)</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>SLA / TAT</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>STATUS</th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', color: '#64748b', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em' }}>ACTIONS</th>
@@ -1449,7 +1457,7 @@ export default function ServiceWizard() {
                     {sub.code}
                   </td>
                   <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 700, color: '#2563eb' }}>
-                    Γé╣{sub.fee !== undefined ? sub.fee : serviceData.pricing.fee}
+                    ₹{sub.fee !== undefined ? sub.fee : serviceData.pricing.fee}
                   </td>
                   <td style={{ padding: '14px 16px', fontSize: 12.5, color: '#64748b' }}>
                     {sub.sla || serviceData.tat || '3-5 Days'}
@@ -1520,9 +1528,7 @@ export default function ServiceWizard() {
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
-      {/* STEP 3: Service Overview & Information */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ─── STEP 3: Service Overview & Information ─── */}
       {activeStep === 3 && (
         <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 32, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 24px 0' }}>
@@ -1756,9 +1762,7 @@ export default function ServiceWizard() {
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
-      {/* STEP 4: Interface Form Builder */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ─── STEP 4: Interface Form Builder ─── */}
       {activeStep === 4 && (
         <div>
           {/* Form Templates Quick Selector Banner */}
@@ -2135,9 +2139,7 @@ export default function ServiceWizard() {
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
-      {/* STEP 5: Required Documents Configuration */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ─── STEP 5: Required Documents Configuration ─── */}
       {activeStep === 5 && (
         <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 32, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -2359,9 +2361,7 @@ export default function ServiceWizard() {
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
-      {/* STEP 6: Pricing Configuration */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ─── STEP 6: Pricing Configuration ─── */}
       {activeStep === 6 && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: 24 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -2372,10 +2372,10 @@ export default function ServiceWizard() {
               </h3>
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Service Fee (Γé╣)
+                  Service Fee (₹)
                 </label>
                 <div style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: 12, top: 10, color: '#64748b', fontWeight: 600 }}>Γé╣</span>
+                  <span style={{ position: 'absolute', left: 12, top: 10, color: '#64748b', fontWeight: 600 }}>₹</span>
                   <input
                     type="number"
                     value={serviceData.pricing.fee}
@@ -2417,7 +2417,7 @@ export default function ServiceWizard() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#eff6ff', padding: '12px 16px', borderRadius: 8, border: '1px solid #bfdbfe' }}>
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: '#1e3a8a' }}>Total Citizen Price</span>
-                <span style={{ fontSize: 18, fontWeight: 800, color: '#2563eb' }}>Γé╣{serviceData.pricing.total}</span>
+                <span style={{ fontSize: 18, fontWeight: 800, color: '#2563eb' }}>₹{serviceData.pricing.total}</span>
               </div>
             </div>
 
@@ -2522,7 +2522,7 @@ export default function ServiceWizard() {
                   />
                   <input
                     type="text"
-                    placeholder="Γé╣ Amount"
+                    placeholder="₹ Amount"
                     value={newChargeAmount}
                     onChange={e => setNewChargeAmount(e.target.value)}
                     style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }}
@@ -2603,9 +2603,7 @@ export default function ServiceWizard() {
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
-      {/* STEP 7 / 9: Publish Service */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ─── STEP 7: Publish Service ─── */}
       {activeStep === 7 && (
         <div style={{ background: '#f8fafc', border: '1px solid #3b82f6', borderRadius: 12, padding: 32, boxShadow: '0 4px 12px -2px rgba(59, 130, 246, 0.08)' }}>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: '0 0 6px 0' }}>
@@ -2638,7 +2636,7 @@ export default function ServiceWizard() {
                   <CheckCircle size={17} color="#10b981" /> Attachment requirements assigned ({serviceData.documents.length} files)
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#334155' }}>
-                  <CheckCircle size={17} color="#10b981" /> Base pricing & tax configurations complete (Γé╣{serviceData.pricing.total})
+                  <CheckCircle size={17} color="#10b981" /> Base pricing & tax configurations complete (₹{serviceData.pricing.total})
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#334155' }}>
                   <CheckCircle size={17} color="#10b981" /> Approval routing workflow compiled (CSC & Admin nodes)

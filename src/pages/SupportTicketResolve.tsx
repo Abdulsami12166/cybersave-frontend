@@ -16,14 +16,12 @@ export default function SupportTicketResolve() {
   const [resolving, setResolving] = useState(false);
   const [resolvedSuccess, setResolvedSuccess] = useState(false);
 
-  // Form Fields matching Image 5
-  const [summary, setSummary] = useState(
-    'Google OAuth endpoint redirect URI mismatch identified and corrected. Client credentials updated in Google Cloud Console. Temporary direct portal redirect provided during investigation.'
-  );
+  // Form Fields matching Image 5 (real data populated from ticket or empty)
+  const [summary, setSummary] = useState('');
   const [category, setCategory] = useState('Configuration Fix');
   const [rootCause, setRootCause] = useState('Third-Party Service Misconfiguration');
-  const [timeToResolution, setTimeToResolution] = useState('2 days, 4 hours');
-  const [internalTags, setInternalTags] = useState<string[]>(['OAuth', 'Google SSO', '502-error']);
+  const [timeToResolution, setTimeToResolution] = useState('');
+  const [internalTags, setInternalTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [showAddTag, setShowAddTag] = useState(false);
   const [notifyCitizen, setNotifyCitizen] = useState(true);
@@ -99,6 +97,40 @@ export default function SupportTicketResolve() {
     }
   }, [socket, connected, id, fetchTicketData]);
 
+  useEffect(() => {
+    if (ticket) {
+      if (ticket.resolutionSummary) {
+        setSummary(ticket.resolutionSummary);
+      } else if (ticket.description) {
+        setSummary(ticket.description);
+      } else {
+        setSummary('');
+      }
+      if (ticket.resolutionCategory) setCategory(ticket.resolutionCategory);
+      if (ticket.rootCause) setRootCause(ticket.rootCause);
+      if (Array.isArray(ticket.internalTags) && ticket.internalTags.length > 0) {
+        setInternalTags(ticket.internalTags);
+      } else if (Array.isArray(ticket.tags) && ticket.tags.length > 0) {
+        setInternalTags(ticket.tags);
+      } else {
+        setInternalTags([]);
+      }
+      if (ticket.createdAt) {
+        const diffMs = Math.max(0, Date.now() - new Date(ticket.createdAt).getTime());
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffHours / 24);
+        const remHours = diffHours % 24;
+        if (diffDays > 0) {
+          setTimeToResolution(`${diffDays} day${diffDays > 1 ? 's' : ''}, ${remHours} hour${remHours !== 1 ? 's' : ''}`);
+        } else {
+          setTimeToResolution(`${Math.max(1, diffHours)} hour${diffHours !== 1 ? 's' : ''}`);
+        }
+      } else {
+        setTimeToResolution('');
+      }
+    }
+  }, [ticket]);
+
   const handleAddTag = () => {
     if (newTagInput.trim() && !internalTags.includes(newTagInput.trim())) {
       setInternalTags([...internalTags, newTagInput.trim()]);
@@ -163,26 +195,16 @@ export default function SupportTicketResolve() {
     }
   };
 
-  const safeTicket = ticket || {
-    id: id || 'TK-0045',
-    refNumber: id || 'TK-0045',
-    title: 'Login Authentication Issue',
-    status: 'Open',
-    priority: 'High',
-    category: 'Technical',
-    createdOn: '10/01/2024',
-    reporter: 'John Smith',
-    assignedTo: 'Amit S.',
-  };
-
-  const ticketDisplayId = safeTicket.refNumber || safeTicket.id || 'TK-0045';
-  const reporterName = typeof safeTicket.reporter === 'object'
-    ? (safeTicket.reporter?.name || safeTicket.reporter?.email || 'John Smith')
-    : (safeTicket.user?.profile?.fullName || safeTicket.user?.email || safeTicket.reporter || 'John Smith');
-  const assignedName = typeof safeTicket.assignedTo === 'object'
-    ? (safeTicket.assignedTo?.name || 'Amit S.')
-    : (safeTicket.assignedTo || 'Amit S.');
-  const subjectTitle = safeTicket.title || 'Login Authentication Issue';
+  const ticketDisplayId = ticket?.refNumber || ticket?.id || id || '';
+  const reporterName = typeof ticket?.reporter === 'object'
+    ? (ticket?.reporter?.name || ticket?.reporter?.email || '')
+    : (ticket?.user?.profile?.fullName || ticket?.user?.fullName || ticket?.user?.name || ticket?.user?.email || (typeof ticket?.reporter === 'string' ? ticket.reporter : ''));
+  const assignedName = typeof ticket?.assignedTo === 'object'
+    ? (ticket?.assignedTo?.name || '')
+    : (typeof ticket?.assignedTo === 'string' ? ticket.assignedTo : (ticket?.officialOfficer || ''));
+  const subjectTitle = ticket?.title || ticket?.subject || '';
+  const createdDateStr = ticket?.createdAt || ticket?.createdOn || ticket?.submittedAt;
+  const formattedCreated = createdDateStr ? new Date(createdDateStr).toLocaleDateString('en-GB') : '';
 
   if (loading && !ticket) {
     return (
@@ -636,73 +658,85 @@ export default function SupportTicketResolve() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '13px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#64748B' }}>Ticket ID</span>
-                <span style={{ fontWeight: 700, color: '#0F172A' }}>TKT-2024-001</span>
+                <span style={{ fontWeight: 700, color: '#0F172A' }}>{ticketDisplayId || '—'}</span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#64748B' }}>Priority</span>
-                <span style={{
-                  background: '#FEE2E2',
-                  color: '#DC2626',
-                  padding: '2px 8px',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                  fontWeight: 700
-                }}>
-                  {safeTicket.priority || 'High'}
-                </span>
+                {ticket?.priority ? (
+                  <span style={{
+                    background: ticket.priority === 'High' || ticket.priority === 'Critical' ? '#FEE2E2' : '#EFF6FF',
+                    color: ticket.priority === 'High' || ticket.priority === 'Critical' ? '#DC2626' : '#2563EB',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 700
+                  }}>
+                    {ticket.priority}
+                  </span>
+                ) : (
+                  <span style={{ color: '#94A3B8' }}>—</span>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#64748B' }}>Category</span>
-                <span style={{ color: '#0F172A', fontWeight: 500 }}>{safeTicket.category || 'Technical'}</span>
+                <span style={{ color: '#0F172A', fontWeight: 500 }}>{ticket?.category || '—'}</span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#64748B' }}>Reporter</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    background: '#E0E7FF',
-                    color: '#4338CA',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {reporterName.charAt(0)}
+                {reporterName ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      background: '#E0E7FF',
+                      color: '#4338CA',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {reporterName.charAt(0).toUpperCase()}
+                    </div>
+                    <span style={{ fontWeight: 600, color: '#0F172A' }}>{reporterName}</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: '#0F172A' }}>{reporterName}</span>
-                </div>
+                ) : (
+                  <span style={{ color: '#94A3B8' }}>—</span>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#64748B' }}>Assigned To</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    background: '#DCFCE7',
-                    color: '#15803D',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {assignedName.charAt(0)}
+                {assignedName ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      background: '#DCFCE7',
+                      color: '#15803D',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {assignedName.charAt(0).toUpperCase()}
+                    </div>
+                    <span style={{ fontWeight: 600, color: '#0F172A' }}>{assignedName}</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: '#0F172A' }}>{assignedName}</span>
-                </div>
+                ) : (
+                  <span style={{ color: '#94A3B8' }}>Unassigned</span>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#64748B' }}>Created</span>
-                <span style={{ color: '#0F172A', fontWeight: 500 }}>10/01/2024</span>
+                <span style={{ color: '#0F172A', fontWeight: 500 }}>{formattedCreated || '—'}</span>
               </div>
             </div>
           </div>
@@ -740,11 +774,11 @@ export default function SupportTicketResolve() {
               padding: '16px'
             }}>
               <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '14px', borderBottom: '1px solid #E2E8F0', paddingBottom: '10px' }}>
-                <strong style={{ color: '#334155' }}>Subject:</strong> Resolved: {subjectTitle} (#{ticketDisplayId})
+                <strong style={{ color: '#334155' }}>Subject:</strong> Resolved: {subjectTitle || 'Support Ticket'} (#{ticketDisplayId || '—'})
               </div>
 
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
-                Hello {reporterName},
+                Hello {reporterName || 'Citizen'},
               </div>
 
               <div style={{ fontSize: '12.5px', color: '#475569', lineHeight: '1.5', marginBottom: '14px' }}>
@@ -762,8 +796,8 @@ export default function SupportTicketResolve() {
                 <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
                   Resolution Summary:
                 </div>
-                <div style={{ fontSize: '12px', color: '#64748B', lineHeight: '1.45' }}>
-                  {summary || 'Grievance verification completed. Necessary corrective configuration and status updates applied.'}
+                <div style={{ fontSize: '12px', color: summary.trim() ? '#475569' : '#94A3B8', lineHeight: '1.45', fontStyle: summary.trim() ? 'normal' : 'italic' }}>
+                  {summary.trim() ? summary.trim() : 'No resolution summary provided yet.'}
                 </div>
               </div>
 

@@ -5,7 +5,8 @@ import {
   ArrowLeftRight, Bell, HelpCircle, BarChart3, ShieldCheck, 
   Settings, Search, Sun, PanelLeftClose, LogOut, CheckCircle2, X,
   Building2, Command, Globe, RotateCcw, ChevronDown, UserPlus,
-  Download, Plus, Sliders, Shield, AlertTriangle, Send, Check
+  Download, Plus, Sliders, Shield, AlertTriangle, Send, Check,
+  MessageSquare, UploadCloud, FileUp
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -105,6 +106,92 @@ export default function Layout() {
     { id: 'n4', title: 'Refund Claim Approved', desc: 'Claim #REF-9024 processed for ₹50.00', time: '35 mins ago', read: false },
     { id: 'n5', title: 'Security Audit Log Generated', desc: 'Operator access credentials updated', time: '1 hour ago', read: false },
   ]);
+
+  // Messages State for Settings Header (Image 4)
+  const [showMessageMenu, setShowMessageMenu] = useState(false);
+  const [messageCount, setMessageCount] = useState(3);
+  const [selectedMsgForReply, setSelectedMsgForReply] = useState<any | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [messageList, setMessageList] = useState<any[]>([
+    {
+      id: 'm1',
+      sender: 'Rajesh Kumar',
+      centre: 'Centre #1024 - Mumbai South',
+      message: 'Biometric iris scanner firmware upgrade completed, pending admin verification sign-off.',
+      time: '10m ago',
+      tag: 'Hardware',
+      read: false
+    },
+    {
+      id: 'm2',
+      sender: 'Anita Deshmukh',
+      centre: 'Zone 4 CSC Hub - Pune',
+      message: 'Urgent query regarding batch clearance for pending citizen income certificate applications.',
+      time: '25m ago',
+      tag: 'Escalation',
+      read: false
+    },
+    {
+      id: 'm3',
+      sender: 'Vikram Patel',
+      centre: 'Bhopal Centre #4812',
+      message: 'Reconciliation statement for ₹4,250 offline counter fees uploaded for supervisory review.',
+      time: '1h ago',
+      tag: 'Finance',
+      read: false
+    }
+  ]);
+
+  // Upload New Document State for Analytics & Settings Headers (Images 3 & 4)
+  const [showUploadDocModal, setShowUploadDocModal] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadCategory, setUploadCategory] = useState('Operational & Analytics Report');
+  const [uploadDepartment, setUploadDepartment] = useState('Operations Desk');
+  const [uploadAccessLevel, setUploadAccessLevel] = useState('Internal');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const handleUploadDocument = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!uploadTitle.trim()) {
+      showToast('Please provide a document title', 'error');
+      return;
+    }
+    setIsUploadingDoc(true);
+    setUploadProgress(30);
+
+    setTimeout(() => {
+      setUploadProgress(75);
+      setTimeout(() => {
+        setUploadProgress(100);
+        const newDoc = {
+          id: `DOC-${Date.now().toString(36).toUpperCase()}`,
+          title: uploadTitle.trim(),
+          category: uploadCategory,
+          department: uploadDepartment,
+          accessLevel: uploadAccessLevel,
+          fileName: uploadFile ? uploadFile.name : `${uploadTitle.trim().replace(/\s+/g, '_')}.pdf`,
+          fileSize: uploadFile ? `${(uploadFile.size / (1024 * 1024)).toFixed(2)} MB` : '1.8 MB',
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: operatorProfile.name || 'Admin Officer'
+        };
+
+        try {
+          const stored = JSON.parse(localStorage.getItem('cybersave_uploaded_documents') || '[]');
+          localStorage.setItem('cybersave_uploaded_documents', JSON.stringify([newDoc, ...stored]));
+        } catch {}
+
+        window.dispatchEvent(new CustomEvent('cybersave_document_uploaded', { detail: newDoc }));
+        showToast(`Document "${newDoc.title}" uploaded and archived successfully!`, 'success');
+        setIsUploadingDoc(false);
+        setShowUploadDocModal(false);
+        setUploadTitle('');
+        setUploadFile(null);
+        setUploadProgress(0);
+      }, 350);
+    }, 350);
+  };
   const { admin, logout, updateAdmin } = useAuth();
   const { socket } = useSocket();
 
@@ -673,7 +760,11 @@ export default function Layout() {
               <input
                 type="text"
                 placeholder={
-                  location.pathname.startsWith('/notifications')
+                  location.pathname.startsWith('/analytics')
+                    ? 'Search reports, users, metrics...'
+                    : location.pathname.startsWith('/settings')
+                    ? 'Search settings, options, help guides...'
+                    : location.pathname.startsWith('/notifications')
                     ? 'Search notifications by keyword, action...'
                     : location.pathname.startsWith('/operators')
                     ? 'Search operators by name, ID, department...'
@@ -794,6 +885,171 @@ export default function Layout() {
             >
               <Sun size={18} strokeWidth={2} />
             </div>
+
+            {/* Messages Button with Red Badge 3 matching Settings Header (Image 4) */}
+            {location.pathname.startsWith('/settings') && (
+              <div style={{ position: 'relative' }}>
+                <div 
+                  onClick={() => {
+                    setShowMessageMenu(!showMessageMenu);
+                    setShowNotifMenu(false);
+                    setShowLangMenu(false);
+                    setShowQuickActions(false);
+                  }}
+                  style={{ 
+                    position: 'relative', 
+                    cursor: 'pointer', 
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  title="Operator Messages & Inquiries"
+                >
+                  <MessageSquare size={18} color="#334155" strokeWidth={2} />
+                  {messageCount > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -4,
+                      minWidth: '18px',
+                      height: '18px',
+                      borderRadius: '9px',
+                      background: '#EF4444',
+                      color: '#FFFFFF',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 4px',
+                      boxShadow: '0 1px 3px rgba(239, 68, 68, 0.4)'
+                    }}>
+                      {messageCount}
+                    </span>
+                  )}
+                </div>
+
+                {/* Message Popover */}
+                {showMessageMenu && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '140%',
+                    right: -40,
+                    background: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '12px',
+                    boxShadow: '0 12px 30px -5px rgba(0,0,0,0.15)',
+                    width: '330px',
+                    padding: '12px',
+                    zIndex: 100
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
+                        Operator Messages ({messageCount})
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setMessageCount(0);
+                          setMessageList(prev => prev.map(m => ({ ...m, read: true })));
+                          showToast('All messages marked as read');
+                        }}
+                        style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Mark all read
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+                      {messageList.map((msg) => (
+                        <div 
+                          key={msg.id} 
+                          onClick={() => {
+                            setSelectedMsgForReply(msg);
+                            setMessageList(prev => prev.map(m => m.id === msg.id ? { ...m, read: true } : m));
+                            if (!msg.read && messageCount > 0) setMessageCount(c => Math.max(0, c - 1));
+                          }}
+                          style={{ 
+                            padding: '10px', 
+                            background: msg.read ? '#FFFFFF' : '#F0F9FF', 
+                            borderRadius: '8px', 
+                            border: msg.read ? '1px solid #F1F5F9' : '1px solid #BAE6FD',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            transition: 'background 0.15s ease'
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#E0F2FE')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = msg.read ? '#FFFFFF' : '#F0F9FF')}
+                        >
+                          <div style={{ fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>{msg.sender}</span>
+                            <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 500 }}>{msg.time}</span>
+                          </div>
+                          <div style={{ fontSize: '10.5px', color: '#2563EB', fontWeight: 600, marginTop: '2px' }}>
+                            {msg.centre}
+                          </div>
+                          <div style={{ color: '#475569', fontSize: '11.5px', marginTop: '3px', lineHeight: 1.4 }}>
+                            {msg.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {selectedMsgForReply && (
+                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #F1F5F9' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', marginBottom: '4px' }}>
+                          Quick Reply to {selectedMsgForReply.sender}:
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <input
+                            type="text"
+                            placeholder="Type a response..."
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && replyText.trim()) {
+                                showToast(`Reply sent to ${selectedMsgForReply.sender}`);
+                                setReplyText('');
+                                setSelectedMsgForReply(null);
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid #CBD5E1',
+                              fontSize: '12px'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (replyText.trim()) {
+                                showToast(`Reply sent to ${selectedMsgForReply.sender}`);
+                                setReplyText('');
+                                setSelectedMsgForReply(null);
+                              }
+                            }}
+                            style={{
+                              background: '#2563EB',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              fontSize: '11.5px',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Send
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Notifications Button with Red Badge 12 */}
             <div style={{ position: 'relative' }}>
@@ -978,6 +1234,28 @@ export default function Layout() {
                 }}
               >
                 Create New Ticket
+              </button>
+            ) : (location.pathname.startsWith('/analytics') || location.pathname.startsWith('/settings')) ? (
+              <button
+                type="button"
+                onClick={() => setShowUploadDocModal(true)}
+                style={{
+                  background: '#2563EB',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '9px',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 0.15s ease'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#1D4ED8')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#2563EB')}
+              >
+                Upload New Document
               </button>
             ) : (
               <div style={{ position: 'relative' }}>
@@ -1857,6 +2135,267 @@ export default function Layout() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload New Document Modal (for Analytics and Settings headers matching Images 3 & 4) */}
+      {showUploadDocModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '540px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #E2E8F0',
+            overflow: 'hidden'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#F8FAFC'
+            }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                  Upload New Document
+                </h3>
+                <p style={{ fontSize: '12px', color: '#64748B', margin: '4px 0 0 0' }}>
+                  Upload official reports, audit guidelines, or compliance files to the secure repository
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadDocModal(false);
+                  setUploadFile(null);
+                  setUploadTitle('');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#94A3B8',
+                  padding: '4px',
+                  borderRadius: '6px'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body Form */}
+            <form onSubmit={handleUploadDocument} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Document Title <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Q3 FY26 Citizen Service Audit & Performance Report.pdf"
+                  value={uploadTitle}
+                  onChange={(e) => setUploadTitle(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    color: '#0F172A',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Category
+                  </label>
+                  <select
+                    value={uploadCategory}
+                    onChange={(e) => setUploadCategory(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '13px',
+                      color: '#0F172A',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="Operational & Analytics Report">Operational & Analytics Report</option>
+                    <option value="Security & Compliance Policy">Security & Compliance Policy</option>
+                    <option value="Operator Guidelines & Protocols">Operator Guidelines & Protocols</option>
+                    <option value="Citizen Welfare Scheme Documentation">Citizen Welfare Scheme Documentation</option>
+                    <option value="Financial Audit & Settlement">Financial Audit & Settlement</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Access Level
+                  </label>
+                  <select
+                    value={uploadAccessLevel}
+                    onChange={(e) => setUploadAccessLevel(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '13px',
+                      color: '#0F172A',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="Internal">Internal (All Staff)</option>
+                    <option value="Operator Desk">Operator Desk (Field CSCs)</option>
+                    <option value="Administrative / Restricted">Administrative / Restricted</option>
+                    <option value="Public">Public Access</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Drag and Drop File Area */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Document File Attachment
+                </label>
+                <div
+                  onClick={() => document.getElementById('layout-doc-upload-input')?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      const f = e.dataTransfer.files[0];
+                      setUploadFile(f);
+                      if (!uploadTitle) setUploadTitle(f.name.replace(/\.[^/.]+$/, ''));
+                    }
+                  }}
+                  style={{
+                    border: '2px dashed #CBD5E1',
+                    borderRadius: '10px',
+                    padding: '24px 16px',
+                    textAlign: 'center',
+                    background: uploadFile ? '#F0FDF4' : '#F8FAFC',
+                    borderColor: uploadFile ? '#22C55E' : '#CBD5E1',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <input
+                    id="layout-doc-upload-input"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const f = e.target.files[0];
+                        setUploadFile(f);
+                        if (!uploadTitle) setUploadTitle(f.name.replace(/\.[^/.]+$/, ''));
+                      }
+                    }}
+                  />
+                  {uploadFile ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                      <CheckCircle2 size={24} color="#16A34A" />
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>{uploadFile.name}</div>
+                        <div style={{ fontSize: '11px', color: '#64748B' }}>{(uploadFile.size / 1024).toFixed(1)} KB • Click to replace</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <UploadCloud size={28} color="#64748B" style={{ margin: '0 auto 8px auto' }} />
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                        Click to select or drag & drop document
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: '#94A3B8', marginTop: '4px' }}>
+                        Supports PDF, PNG, JPG, DOCX (Max 25MB)
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {isUploadingDoc && (
+                <div style={{ marginTop: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 600, color: '#2563EB', marginBottom: '4px' }}>
+                    <span>Encrypting & indexing into repository...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${uploadProgress}%`, height: '100%', background: '#2563EB', transition: 'width 0.3s ease' }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUploadDocModal(false);
+                    setUploadFile(null);
+                    setUploadTitle('');
+                  }}
+                  disabled={isUploadingDoc}
+                  style={{
+                    padding: '9px 16px',
+                    background: '#F1F5F9',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    color: '#475569',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploadingDoc}
+                  style={{
+                    padding: '9px 22px',
+                    background: '#2563EB',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: '#FFFFFF',
+                    cursor: isUploadingDoc ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)'
+                  }}
+                >
+                  <UploadCloud size={15} />
+                  <span>{isUploadingDoc ? 'Uploading...' : 'Upload Document'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
