@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { apiFetch } from '../utils/apiConfig';
 import ErrorBoundary from './ErrorBoundary';
-import CyberSaveLogo from './CyberSaveLogo';
+import CyberSaveLogo, { BlueShieldLogo } from './CyberSaveLogo';
 
 export const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message, type } }));
@@ -96,6 +96,25 @@ export default function Layout() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentLang, setCurrentLang] = useState<string>(() => localStorage.getItem('cybersave_admin_lang') || 'EN');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [headerLogoVariant, setHeaderLogoVariant] = useState<'traditional' | 'shield'>('traditional');
+
+  useEffect(() => {
+    const handleLogoEvent = (e: any) => {
+      if (e.detail?.variant) {
+        setHeaderLogoVariant(e.detail.variant);
+      }
+    };
+    window.addEventListener('cybersave_header_logo', handleLogoEvent);
+    return () => window.removeEventListener('cybersave_header_logo', handleLogoEvent);
+  }, []);
+
+  useEffect(() => {
+    const path = location.pathname;
+    if (!path.startsWith('/services/new') && !path.startsWith('/services/wizard') && !path.startsWith('/operators/')) {
+      setHeaderLogoVariant('traditional');
+    }
+  }, [location.pathname]);
+
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
@@ -619,11 +638,11 @@ export default function Layout() {
         }}>
           {isCollapsed ? (
             <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="CyberSave">
-              <CyberSaveLogo collapsed={true} size="small" />
+              {headerLogoVariant === 'shield' ? <BlueShieldLogo size="small" /> : <CyberSaveLogo collapsed={true} size="small" />}
             </Link>
           ) : (
             <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', userSelect: 'none' }} title="CyberSave — Digital Services • Trusted Always">
-              <CyberSaveLogo collapsed={false} size="medium" />
+              {headerLogoVariant === 'shield' ? <BlueShieldLogo size="medium" /> : <CyberSaveLogo collapsed={false} size="medium" />}
             </Link>
           )}
         </div>
@@ -719,7 +738,7 @@ export default function Layout() {
             {isCollapsed && (
               <>
                 <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }} title="CyberSave Admin Portal">
-                  <CyberSaveLogo collapsed={false} size="small" />
+                  {headerLogoVariant === 'shield' ? <BlueShieldLogo size="small" /> : <CyberSaveLogo collapsed={false} size="small" />}
                 </Link>
                 <div style={{ height: '24px', width: '1px', background: '#E2E8F0' }} />
               </>

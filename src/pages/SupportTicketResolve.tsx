@@ -195,13 +195,14 @@ export default function SupportTicketResolve() {
     }
   };
 
+  const safeTicket = ticket || {};
   const ticketDisplayId = ticket?.refNumber || ticket?.id || id || '';
   const reporterName = typeof ticket?.reporter === 'object'
     ? (ticket?.reporter?.name || ticket?.reporter?.email || '')
     : (ticket?.user?.profile?.fullName || ticket?.user?.fullName || ticket?.user?.name || ticket?.user?.email || (typeof ticket?.reporter === 'string' ? ticket.reporter : ''));
   const assignedName = typeof ticket?.assignedTo === 'object'
     ? (ticket?.assignedTo?.name || '')
-    : (typeof ticket?.assignedTo === 'string' ? ticket.assignedTo : (ticket?.officialOfficer || ''));
+    : (typeof ticket?.assignedTo === 'string' && ticket.assignedTo.trim() ? ticket.assignedTo : (ticket?.officialOfficer || ''));
   const subjectTitle = ticket?.title || ticket?.subject || '';
   const createdDateStr = ticket?.createdAt || ticket?.createdOn || ticket?.submittedAt;
   const formattedCreated = createdDateStr ? new Date(createdDateStr).toLocaleDateString('en-GB') : '';

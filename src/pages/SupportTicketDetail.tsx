@@ -20,19 +20,29 @@ export default function SupportTicketDetail() {
   const [inlineCategory, setInlineCategory] = useState('Configuration Fix');
   const [userTyping, setUserTyping] = useState(false);
   const [userTypingName, setUserTypingName] = useState('Citizen');
+  const [processingRefund, setProcessingRefund] = useState(false);
   const adminTypingTimerRef = useRef<any>(null);
 
   const fetchTicketData = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(id)}`).catch(() => null);
-      if (res && res.ok) {
-        const json = await res.json().catch(() => null);
-        if (json && (json.id || json.refNumber || json.title)) {
-          setTicket(json);
-          setLoading(false);
-          return;
-        }
+      const endpoints = [
+        `/api/v1/support/tickets/${encodeURIComponent(id)}`,
+        `/api/support/tickets/${encodeURIComponent(id)}`,
+        `/api/admin/support/tickets/${encodeURIComponent(id)}`
+      ];
+      for (const ep of endpoints) {
+        try {
+          const res = await apiFetch(ep).catch(() => null);
+          if (res && res.ok) {
+            const json = await res.json().catch(() => null);
+            if (json && (json.id || json.refNumber || json.title)) {
+              setTicket(json);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (_) {}
       }
 
       // Fallback: search in all tickets
@@ -44,7 +54,8 @@ export default function SupportTicketDetail() {
           String(t.id).toLowerCase() === id.toLowerCase() ||
           String(t.refNumber).toLowerCase() === id.toLowerCase() ||
           String(t.rawId).toLowerCase() === id.toLowerCase() ||
-          String(t.id).includes(id)
+          String(t.id).includes(id) ||
+          (t.refNumber && id.toLowerCase().includes(String(t.refNumber).toLowerCase()))
         );
         if (match) {
           setTicket(match);
@@ -182,8 +193,12 @@ export default function SupportTicketDetail() {
     const adminId = currentAdminUser.id || '';
     const adminRole = currentAdminUser.role || (adminEmail === 'admin@cybersave.com' ? 'Super Administrator' : 'Sub-Admin / Operator');
 
+    const targetLookupId = ticket?.rawId || ticket?.refNumber || ticket?.id || id;
     const payload = {
-      id,
+      id: targetLookupId,
+      rawId: ticket?.rawId,
+      ticketId: ticket?.id || id,
+      refNumber: ticket?.refNumber,
       text: replyText.trim(),
       adminId,
       adminName,
@@ -207,11 +222,27 @@ export default function SupportTicketDetail() {
 
     // 2. REST dispatch for guaranteed database persistence
     try {
-      await apiFetch(`/api/v1/support/tickets/${id}/reply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const endpoints = [
+        `/api/v1/support/tickets/${encodeURIComponent(targetLookupId)}/reply`,
+        `/api/v1/support/tickets/${encodeURIComponent(id)}/reply`,
+        `/api/support/tickets/${encodeURIComponent(targetLookupId)}/reply`
+      ];
+      for (const ep of endpoints) {
+        try {
+          const replyRes = await apiFetch(ep, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (replyRes && replyRes.ok) {
+            const data = await replyRes.json().catch(() => null);
+            if (data?.ticket) {
+              setTicket(data.ticket);
+            }
+            break;
+          }
+        } catch (_) {}
+      }
 
       window.dispatchEvent(new CustomEvent('cybersave_toast', {
         detail: { message: `Official response dispatched to citizen successfully!` }
@@ -223,6 +254,9 @@ export default function SupportTicketDetail() {
       setReplyText('');
       if (socket && connected) {
         socket.emit('request_ticket_thread', { id });
+        if (targetLookupId !== id) {
+          socket.emit('request_ticket_thread', { id: targetLookupId });
+        }
       }
       fetchTicketData();
     }
@@ -255,6 +289,143 @@ export default function SupportTicketDetail() {
     }
   };
 
+  const handleApproveRefund = async () => {
+    if (processingRefund) return;
+    const targetRefundId = ticket.refundId || ticket.rawId || ticket.id || id;
+    const amount = Number(ticket.refundAmount || 50);
+    const refNum = ticket.applicationRef || ticket.refNumber || ticket.id;
+
+    if (!window.confirm(`Approve refund of ₹${amount.toFixed(2)} and credit to citizen wallet for Application #${refNum}?`)) {
+      return;
+    }
+
+    setProcessingRefund(true);
+    try {
+      if (socket && connected) {
+        socket.emit('approve_refund', {
+          id: targetRefundId,
+          applicationId: ticket.applicationId,
+          refNumber: ticket.refNumber || ticket.id,
+          amount
+        });
+      }
+
+      await apiFetch(`/api/v1/refunds/${encodeURIComponent(targetRefundId)}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId: ticket.applicationId,
+          notes: 'Approved via Support Ticket Management'
+        })
+      });
+
+      // Also resolve support ticket
+      await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(ticket.id || id)}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resolutionSummary: `Refund claim of ₹${amount} approved by Admin. Amount credited to citizen wallet.`
+        })
+      }).catch(() => null);
+
+      setTicket((prev: any) => prev ? {
+        ...prev,
+        status: 'RESOLVED',
+        refundStatus: 'APPROVED',
+        messages: [
+          ...(prev.messages || []),
+          {
+            id: `msg-refund-appr-${Date.now()}`,
+            senderId: 'support-desk',
+            senderName: admin?.name || 'Support Officer (SDM)',
+            role: 'AGENT',
+            text: `Refund Claim Approved! ₹${amount} has been officially re-credited to citizen digital wallet. ✓`,
+            time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+            timestamp: new Date().toISOString(),
+            isResolution: true
+          }
+        ]
+      } : prev);
+
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: `Refund of ₹${amount} approved! Credited to citizen wallet. ✓`, type: 'success' }
+      }));
+    } catch (e: any) {
+      console.warn('Approve refund error:', e);
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: 'Could not approve refund: ' + (e.message || 'Error'), type: 'error' }
+      }));
+    } finally {
+      setProcessingRefund(false);
+    }
+  };
+
+  const handleDeclineRefund = async () => {
+    if (processingRefund) return;
+    const targetRefundId = ticket.refundId || ticket.rawId || ticket.id || id;
+    const reason = window.prompt('Enter reason for declining refund request:', 'Refund request declined after administrative review.');
+    if (reason === null) return;
+
+    setProcessingRefund(true);
+    try {
+      if (socket && connected) {
+        socket.emit('reject_refund', {
+          id: targetRefundId,
+          applicationId: ticket.applicationId,
+          reason
+        });
+      }
+
+      await apiFetch(`/api/v1/refunds/${encodeURIComponent(targetRefundId)}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId: ticket.applicationId,
+          rejectionReason: reason
+        })
+      });
+
+      // Also mark support ticket resolved
+      await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(ticket.id || id)}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resolutionSummary: `Refund request declined. Reason: ${reason}`
+        })
+      }).catch(() => null);
+
+      setTicket((prev: any) => prev ? {
+        ...prev,
+        status: 'RESOLVED',
+        refundStatus: 'REJECTED',
+        messages: [
+          ...(prev.messages || []),
+          {
+            id: `msg-refund-decl-${Date.now()}`,
+            senderId: 'support-desk',
+            senderName: admin?.name || 'Support Officer (SDM)',
+            role: 'AGENT',
+            text: `Refund Claim Declined: ${reason}`,
+            time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+            timestamp: new Date().toISOString(),
+            isResolution: true
+          }
+        ]
+      } : prev);
+
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: 'Refund request declined. ✕', type: 'error' }
+      }));
+    } catch (e: any) {
+      console.warn('Decline refund error:', e);
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: 'Could not decline refund: ' + (e.message || 'Error'), type: 'error' }
+      }));
+    } finally {
+      setProcessingRefund(false);
+    }
+  };
+
   if (loading && !ticket) {
     return (
       <div style={{ padding: 32, textAlign: 'center', background: '#FFFFFF', borderRadius: 12, border: '1px solid #E2E8F0', marginTop: 24 }}>
@@ -279,7 +450,7 @@ export default function SupportTicketDetail() {
   }
 
   // Safe property extraction
-  const assignedName = typeof ticket.assignedTo === 'object' ? (ticket.assignedTo?.name || 'Support Desk Agent') : (ticket.assignedTo || 'Amit S. (Support Desk)');
+  const assignedName = typeof ticket.assignedTo === 'object' ? (ticket.assignedTo?.name || '') : (typeof ticket.assignedTo === 'string' && ticket.assignedTo.trim() ? ticket.assignedTo : '');
   const assignedId = typeof ticket.assignedTo === 'object' ? (ticket.assignedTo?.id || 'agent') : 'agent';
   const reporterName = typeof ticket.reporter === 'object' ? (ticket.reporter?.name || ticket.reporter?.email || 'Citizen User') : (ticket.user?.profile?.fullName || ticket.user?.email || ticket.reporter || 'Citizen User');
   const reporterId = typeof ticket.reporter === 'object' ? (ticket.reporter?.id || 'citizen') : (ticket.userId || 'citizen');
@@ -341,6 +512,135 @@ export default function SupportTicketDetail() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* ─── Refund Request Details & Action Banner ─── */}
+          {(ticket.category === 'Refund Request' || ticket.refundAmount) && (
+            <div style={{
+              background: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              borderRadius: 12,
+              padding: '20px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 28 }}>💰</span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 18, fontWeight: 800, color: '#92400E' }}>
+                        Refund Claim: ₹{Number(ticket.refundAmount || 50).toLocaleString('en-IN')}
+                      </span>
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        padding: '3px 10px',
+                        borderRadius: 10,
+                        background: (ticket.refundStatus === 'APPROVED' || ticket.status === 'RESOLVED') ? '#DCFCE7' : ticket.refundStatus === 'REJECTED' ? '#FEE2E2' : '#FEF3C7',
+                        color: (ticket.refundStatus === 'APPROVED' || ticket.status === 'RESOLVED') ? '#15803D' : ticket.refundStatus === 'REJECTED' ? '#B91C1C' : '#B45309',
+                        border: (ticket.refundStatus === 'APPROVED' || ticket.status === 'RESOLVED') ? '1px solid #BBF7D0' : ticket.refundStatus === 'REJECTED' ? '1px solid #FECACA' : '1px solid #FDE68A'
+                      }}>
+                        {(ticket.refundStatus === 'APPROVED' || ticket.status === 'RESOLVED') ? '✓ Refund Approved & Credited' : ticket.refundStatus === 'REJECTED' ? '✕ Refund Declined' : '⚠️ Pending Administrative Review'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, color: '#78350F', marginTop: 4 }}>
+                      Application Reference: <strong style={{ color: '#1E40AF' }}>#{ticket.applicationRef || ticket.applicationId || 'N/A'}</strong> &bull; Service: <strong>{ticket.serviceTitle || 'Government Service Fee'}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Refund Action Buttons (Only when Pending) */}
+                {!(ticket.refundStatus === 'APPROVED' || ticket.refundStatus === 'REJECTED' || ticket.status === 'RESOLVED') && (
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={handleApproveRefund}
+                      disabled={processingRefund}
+                      style={{
+                        background: '#059669',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: 8,
+                        padding: '9px 18px',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        boxShadow: '0 2px 4px rgba(5,150,105,0.25)'
+                      }}
+                    >
+                      <CheckCircle size={15} /> {processingRefund ? 'Processing...' : 'Approve Refund & Credit Wallet'}
+                    </button>
+
+                    <button
+                      onClick={handleDeclineRefund}
+                      disabled={processingRefund}
+                      style={{
+                        background: '#FFFFFF',
+                        color: '#DC2626',
+                        border: '1px solid #FCA5A5',
+                        borderRadius: 8,
+                        padding: '9px 16px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6
+                      }}
+                    >
+                      <AlertCircle size={15} /> Decline Refund
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Citizen Mobile Feedback Banner ─── */}
+          {(ticket.category === 'Citizen Feedback' || ticket.rating) && (
+            <div style={{
+              background: '#F0F9FF',
+              border: '1px solid #BAE6FD',
+              borderRadius: 12,
+              padding: '18px 22px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 24 }}>⭐</span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 17, fontWeight: 800, color: '#0369A1' }}>
+                        Citizen Rating: {'★'.repeat(ticket.rating || 5)}{'☆'.repeat(Math.max(0, 5 - (ticket.rating || 5)))} ({ticket.rating || 5}/5)
+                      </span>
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: 10,
+                        background: '#E0F2FE',
+                        color: '#0284C7',
+                        border: '1px solid #BAE6FD'
+                      }}>
+                        {ticket.feedbackCategory || 'CyberSave Mobile Feedback'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: '#0369A1', marginTop: 3 }}>
+                      Citizen satisfaction review submitted directly from CyberSave Android/iOS Mobile App.
+                    </div>
+                  </div>
+                </div>
+                <span style={{ fontSize: 11.5, color: '#0284C7', fontWeight: 700, background: '#FFFFFF', padding: '4px 10px', borderRadius: 8, border: '1px solid #BAE6FD' }}>
+                  📱 CyberSave Mobile Experience
+                </span>
+              </div>
+            </div>
+          )}
           
           {/* Conversation & Attachments Card */}
           <div className="table-card" style={{ padding: 24, borderRadius: 12, border: '1px solid #E2E8F0', background: '#FFFFFF' }}>
@@ -568,8 +868,8 @@ export default function SupportTicketDetail() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14, alignItems: 'center', borderTop: '1px solid #F1F5F9', paddingTop: 14 }}>
               <span style={{ color: '#64748B', fontSize: 13 }}>Assigned Officer</span>
-              <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A' }}>
-                {assignedName}
+              <div style={{ fontWeight: 600, fontSize: 13, color: assignedName ? '#0F172A' : '#94A3B8' }}>
+                {assignedName || '— (Unassigned)'}
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, alignItems: 'center' }}>

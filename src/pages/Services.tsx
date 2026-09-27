@@ -44,19 +44,48 @@ export default function Services() {
                 subServices: []
               };
             }
-            groups[cat].subServices.push({
-              id: s.id,
-              name: s.title,
-              title: s.title,
-              slug: s.slug,
-              category: s.category,
-              department: s.department,
-              sla: s.processingTime || '5-7 Days',
-              fee: s.fee || 50,
-              description: s.description,
-              status: s.isActive ? 'Active' : 'Inactive',
-              isActive: s.isActive
-            });
+            const iconUrl = s.iconUrl || s.imageUrl || (s.iconName?.startsWith('http') || s.iconName?.startsWith('data:') ? s.iconName : null);
+            if (Array.isArray(s.subServices) && s.subServices.length > 0) {
+              s.subServices.forEach((sub: any, sIdx: number) => {
+                groups[cat].subServices.push({
+                  id: s.id,
+                  subId: sub.id || `${s.id}_${sIdx}`,
+                  parentServiceId: s.id,
+                  name: sub.name || sub.title || `${s.title} Sub-Service`,
+                  parentTitle: s.title,
+                  category: s.category,
+                  department: s.department,
+                  sla: sub.sla || s.processingTime || '3-5 Days',
+                  fee: sub.fee !== undefined ? sub.fee : (s.fee || 50),
+                  description: sub.description || s.description,
+                  status: s.isActive ? 'Active' : 'Inactive',
+                  iconUrl: iconUrl,
+                  iconName: s.iconName,
+                  isActive: s.isActive,
+                  appliedCount: sub.appliedCount || 1,
+                  appliedText: sub.appliedText || '1 citizen applied'
+                });
+              });
+            } else {
+              groups[cat].subServices.push({
+                id: s.id,
+                subId: s.id,
+                parentServiceId: s.id,
+                name: s.title,
+                parentTitle: s.title,
+                category: s.category,
+                department: s.department,
+                sla: s.processingTime || '5-7 Days',
+                fee: s.fee || 50,
+                description: s.description,
+                status: s.isActive ? 'Active' : 'Inactive',
+                iconUrl: iconUrl,
+                iconName: s.iconName,
+                isActive: s.isActive,
+                appliedCount: 1,
+                appliedText: '1 citizen applied'
+              });
+            }
           });
           setData({
             stats: { totalServices, active, offline: 0, drafts: 0 },
@@ -100,7 +129,7 @@ export default function Services() {
   }, [socket, connected]);
 
   const handleOpenService = (sub: any, mode: 'view' | 'edit') => {
-    const targetId = sub.id || sub.slug || sub.name;
+    const targetId = sub.parentServiceId || sub.id || sub.slug || sub.name;
     navigate(`/services/create?id=${encodeURIComponent(targetId)}&mode=${mode}`);
   };
 
@@ -307,7 +336,21 @@ export default function Services() {
                     {filteredSubs.map((sub: any, j: number) => (
                       <tr key={j} style={{borderBottom: j === filteredSubs.length - 1 ? 'none' : '1px solid #f1f5f9'}}>
                         <td style={{padding: '14px 24px', fontWeight: 600, color: '#0f172a', fontSize: 13}}>
-                          {sub.name}
+                          <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                            {sub.iconUrl ? (
+                              <img src={sub.iconUrl} alt="icon" style={{width: 26, height: 26, borderRadius: 6, objectFit: 'contain'}} />
+                            ) : (
+                              <div style={{width: 26, height: 26, borderRadius: 6, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb'}}>
+                                <FileText size={15} />
+                              </div>
+                            )}
+                            <div>
+                              <div>{sub.name}</div>
+                              {sub.parentTitle && sub.parentTitle !== sub.name ? (
+                                <div style={{fontSize: 11, color: '#64748b', fontWeight: 400}}>Under: {sub.parentTitle}</div>
+                              ) : null}
+                            </div>
+                          </div>
                         </td>
                         <td>
                           <span style={{background: '#f1f5f9', color: '#334155', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600}}>

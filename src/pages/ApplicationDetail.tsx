@@ -872,12 +872,6 @@ export default function ApplicationDetail() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: '#111827' }}>
                 <FileBadge size={16} color="#2563eb" /> {app.serviceName}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#6b7280' }}>
-                <span>SLA: 4h 32m remaining</span>
-                <div style={{ width: 80, height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${slaPercent}%`, height: '100%', background: slaPercent > 70 ? '#10b981' : '#2563eb', borderRadius: 3, transition: 'width 0.5s ease' }} />
-                </div>
-              </div>
             </div>
 
             <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10, lineHeight: 1.6 }}>

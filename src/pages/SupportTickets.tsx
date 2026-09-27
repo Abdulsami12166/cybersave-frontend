@@ -221,6 +221,8 @@ export default function SupportTickets() {
                 style={{border: 'none', fontWeight: 600, outline: 'none', background: 'transparent', marginLeft: 4, cursor: 'pointer'}}
               >
                 <option>All Categories</option>
+                <option>Refund Request</option>
+                <option>Citizen Feedback</option>
                 <option>Technical Support</option>
                 <option>Document Rejection</option>
                 <option>Payment Issue</option>
@@ -314,16 +316,68 @@ export default function SupportTickets() {
               if (t.status === 'RESOLVED') { statusColor = '#10b981'; statusBg = '#d1fae5'; }
               if (t.status === 'ESCALATED') { statusColor = '#ef4444'; statusBg = '#fee2e2'; }
 
+              const isRefundTicket = t.category === 'Refund Request' || Boolean(t.refundAmount);
+              const isFeedbackTicket = t.category === 'Citizen Feedback' || Boolean(t.rating);
+
               return (
-                <div key={i} style={{background: 'white', borderRadius: 12, padding: 24, border: '1px solid #e5e7eb'}}>
-                  <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 12}}>
+                <div key={i} style={{background: 'white', borderRadius: 12, padding: 24, border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column'}}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center'}}>
                     <span style={{fontSize: 11, color: '#6b7280', fontWeight: 600}}>{t.id}</span>
                     <span style={{background: statusBg, color: statusColor, padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600}}>
                       {t.status === 'IN_PROGRESS' ? 'In Progress' : t.status === 'OPEN' ? 'Open' : t.status === 'RESOLVED' ? 'Resolved' : 'Escalated'}
                     </span>
                   </div>
+
+                  {/* Prominent Badges for Refund Request and Citizen Feedback */}
+                  {isRefundTicket && (
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: '#FEF3C7',
+                      color: '#92400E',
+                      border: '1px solid #FDE68A',
+                      borderRadius: '8px',
+                      padding: '4px 10px',
+                      fontSize: '11.5px',
+                      fontWeight: 800,
+                      marginBottom: '10px'
+                    }}>
+                      <span>💰 ₹{Number(t.refundAmount || 50).toLocaleString('en-IN')} Refund Claim</span>
+                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.85 }}>
+                        {t.refundStatus === 'APPROVED' ? '✓ Credited' : t.refundStatus === 'REJECTED' ? '✕ Declined' : 'Pending'}
+                      </span>
+                    </div>
+                  )}
+
+                  {isFeedbackTicket && (
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: '#EFF6FF',
+                      color: '#1E40AF',
+                      border: '1px solid #BFDBFE',
+                      borderRadius: '8px',
+                      padding: '4px 10px',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      marginBottom: '10px'
+                    }}>
+                      <span>⭐ {t.rating || 5}/5 Stars</span>
+                      <span style={{ fontSize: '10.5px', opacity: 0.85 }}>{t.feedbackCategory || 'CyberSave Mobile'}</span>
+                    </div>
+                  )}
+
                   <h3 style={{fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 14, minHeight: 48}}>{t.title}</h3>
                   
+                  {isRefundTicket && t.applicationRef && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', background: '#F8FAFC', padding: '6px 10px', borderRadius: '6px', marginBottom: '10px', border: '1px solid #F1F5F9' }}>
+                      <span style={{ color: '#64748B' }}>Application</span>
+                      <strong style={{ color: '#2563EB' }}>#{t.applicationRef}</strong>
+                    </div>
+                  )}
+
                   <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 10}}>
                     <span style={{color: '#6b7280'}}>Reporter</span>
                     <span style={{fontWeight: 600, color: '#1e293b'}}>{t.reporter?.name || 'Citizen User'}</span>
@@ -343,7 +397,7 @@ export default function SupportTickets() {
                   <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 16}}>
                     <span style={{color: '#6b7280'}}>Assigned To</span>
                     <span style={{fontWeight: 700}}>
-                      {typeof t.assignedTo === 'object' ? (t.assignedTo?.name || 'Support Desk Agent') : (t.assignedTo || 'Amit S. (Support Desk)')}
+                      {(typeof t.assignedTo === 'object' ? t.assignedTo?.name : t.assignedTo) || <span style={{ color: '#94a3b8', fontWeight: 400 }}>Unassigned</span>}
                     </span>
                   </div>
 
@@ -381,9 +435,11 @@ export default function SupportTickets() {
                     </div>
                   ) : null}
 
-                  <div style={{display: 'flex', gap: 12}}>
+                  <div style={{display: 'flex', gap: 12, marginTop: 'auto'}}>
                     <Link to={`/support/${t.id}`} className="date-picker-btn" style={{flex: 1, justifyContent: 'center', textDecoration: 'none'}}>View</Link>
-                    <Link to={`/support/${t.id}`} className="action-btn" style={{flex: 1, justifyContent: 'center', textDecoration: 'none'}}>Respond</Link>
+                    <Link to={`/support/${t.id}`} className="action-btn" style={{flex: 1, justifyContent: 'center', textDecoration: 'none'}}>
+                      {isRefundTicket ? 'Process' : 'Respond'}
+                    </Link>
                   </div>
                 </div>
               );
@@ -492,7 +548,11 @@ export default function SupportTickets() {
               <div>
                 <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8}}>Category</label>
                 <select value={newCat} onChange={e => setNewCat(e.target.value)} style={{width: '100%', padding: '10px', border: '1px solid #e5e7eb', borderRadius: 6}}>
-                  <option>Technical</option>
+                  <option>Technical Support</option>
+                  <option>Refund Request</option>
+                  <option>Citizen Feedback</option>
+                  <option>Document Rejection</option>
+                  <option>Payment Issue</option>
                   <option>Billing</option>
                   <option>Account</option>
                 </select>

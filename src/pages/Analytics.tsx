@@ -113,113 +113,141 @@ export default function Analytics() {
     return () => clearInterval(pollInterval);
   }, [socket, connected, fetchLiveAnalyticsRest]);
 
-  // Dynamic Category Breakdown computed from real applications and services
-  const categoryData = useMemo(() => {
-    const baseCounts: Record<string, number> = {
-      'Identity': 64,
-      'Taxation': 42,
-      'Transport': 28,
-      'Travel': 16,
-      'Residence': 12
-    };
-
-    realApps.forEach(app => {
-      const cat = (app.category || app.serviceCategory || (typeof app.service === 'object' ? app.service?.category : app.service) || 'Identity');
-      if (/tax|pan|income/i.test(cat)) {
-        baseCounts['Taxation'] = (baseCounts['Taxation'] || 0) + 1;
-      } else if (/transport|vehicle|license/i.test(cat)) {
-        baseCounts['Transport'] = (baseCounts['Transport'] || 0) + 1;
-      } else if (/travel|passport|visa/i.test(cat)) {
-        baseCounts['Travel'] = (baseCounts['Travel'] || 0) + 1;
-      } else if (/residence|domicile|address|land/i.test(cat)) {
-        baseCounts['Residence'] = (baseCounts['Residence'] || 0) + 1;
-      } else {
-        baseCounts['Identity'] = (baseCounts['Identity'] || 0) + 1;
-      }
-    });
-
-    return [
-      { name: 'Identity', count: baseCounts['Identity'] },
-      { name: 'Taxation', count: baseCounts['Taxation'] },
-      { name: 'Transport', count: baseCounts['Transport'] },
-      { name: 'Travel', count: baseCounts['Travel'] },
-      { name: 'Residence', count: baseCounts['Residence'] }
-    ];
-  }, [realApps]);
-
-  // Aggregate Top Statistics dynamically
-  const totalUploaded = useMemo(() => {
-    return categoryData.reduce((acc, c) => acc + c.count, 0);
-  }, [categoryData]);
-
-  const verifiedCount = useMemo(() => {
-    const ratio = 98 / 156;
-    return Math.round(totalUploaded * ratio);
-  }, [totalUploaded]);
-
-  const pendingCount = useMemo(() => {
-    const ratio = 23 / 156;
-    return Math.round(totalUploaded * ratio);
-  }, [totalUploaded]);
-
-  const expiredCount = useMemo(() => {
-    return Math.max(1, totalUploaded - verifiedCount - pendingCount);
-  }, [totalUploaded, verifiedCount, pendingCount]);
-
-  // Donut chart status distribution
-  const statusPieData = useMemo(() => [
-    { name: 'Verified', value: verifiedCount, color: '#10b981' },
-    { name: 'Pending', value: pendingCount, color: '#f59e0b' },
-    { name: 'Expired', value: expiredCount, color: '#ef4444' }
-  ], [verifiedCount, pendingCount, expiredCount]);
-
-  // Document Activity Trends (Jan to Sep) matching Image 1
-  const trendsData = useMemo(() => {
-    const base = [
-      { month: 'Jan', uploads: 32, verifications: 28 },
-      { month: 'Feb', uploads: 54, verifications: 46 },
-      { month: 'Mar', uploads: 45, verifications: 38 },
-      { month: 'Apr', uploads: 68, verifications: 60 },
-      { month: 'May', uploads: 52, verifications: 44 },
-      { month: 'Jun', uploads: 72, verifications: 65 },
-      { month: 'Jul', uploads: 65, verifications: 58 },
-      { month: 'Aug', uploads: 82, verifications: 75 },
-      { month: 'Sep', uploads: 78, verifications: 70 },
-    ];
+  // Real Document Statistics derived directly from database applications & analytics endpoint
+  const docStats = useMemo(() => {
+    let totalDocs = 0;
+    let verified = 0;
+    let pending = 0;
+    let expired = 0;
 
     if (realApps.length > 0) {
-      const added = Math.min(20, realApps.length * 2);
-      base[base.length - 1].uploads += added;
-      base[base.length - 1].verifications += Math.round(added * 0.85);
+      realApps.forEach((app: any) => {
+        const docCount = Array.isArray(app.documents) && app.documents.length > 0 
+          ? app.documents.length 
+          : 1; // Each verified citizen application represents at least 1 verified primary document
+        totalDocs += docCount;
+
+        const st = String(app.status || app.rawStatus || '').toUpperCase();
+        if (['APPROVED', 'COMPLETED'].includes(st)) {
+          verified += docCount;
+        } else if (['REJECTED'].includes(st)) {
+          expired += docCount;
+        } else {
+          pending += docCount;
+        }
+      });
+    } else if (analyticsData?.stats) {
+      totalDocs = analyticsData.stats.totalUploads || analyticsData.stats.totalSubmissions || 0;
+      verified = analyticsData.stats.verifiedCount || 0;
+      pending = analyticsData.stats.pendingCount || 0;
+      expired = analyticsData.stats.rejectedCount || 0;
     }
 
-    return base;
-  }, [realApps]);
+    return { totalDocs, verified, pending, expired };
+  }, [realApps, analyticsData]);
+
+  const totalUploaded = docStats.totalDocs;
+  const verifiedCount = docStats.verified;
+  const pendingCount = docStats.pending;
+  const expiredCount = docStats.expired;
+
+  // Real Category Breakdown computed dynamically from applications and backend schemes
+  const categoryData = useMemo(() => {
+    const counts: Record<string, number> = {};
+
+    if (realApps.length > 0) {
+      realApps.forEach(app => {
+        let cat = (app.category || app.serviceCategory || (typeof app.service === 'object' ? app.service?.category : app.service) || 'Identity Services');
+        if (!cat || cat === 'All' || cat === 'Default') cat = 'Identity Services';
+        counts[cat] = (counts[cat] || 0) + 1;
+      });
+    } else if (analyticsData?.categories && Array.isArray(analyticsData.categories)) {
+      analyticsData.categories.forEach((c: any) => {
+        counts[c.name] = c.count;
+      });
+    }
+
+    const entries = Object.entries(counts).map(([name, count]) => ({ name, count }));
+    if (entries.length === 0) {
+      return [
+        { name: 'Identity Services', count: 0 },
+        { name: 'Government Schemes', count: 0 },
+        { name: 'Revenue & Land Records', count: 0 }
+      ];
+    }
+    return entries.sort((a, b) => b.count - a.count);
+  }, [realApps, analyticsData]);
+
+  // Donut chart status distribution matching real counts
+  const statusPieData = useMemo(() => [
+    { name: 'Verified', value: verifiedCount, color: '#10B981' },
+    { name: 'Pending Review', value: pendingCount, color: '#F59E0B' },
+    { name: 'Expired / Rejected', value: expiredCount, color: '#EF4444' }
+  ], [verifiedCount, pendingCount, expiredCount]);
+
+  // Real Document Activity Trends from backend chartDays or realApps timeline
+  const trendsData = useMemo(() => {
+    if (analyticsData?.chartDays && Array.isArray(analyticsData.chartDays) && analyticsData.chartDays.length > 0) {
+      return analyticsData.chartDays.map((d: any) => ({
+        month: d.date || d.day,
+        uploads: d.submissions || 0,
+        verifications: d.verified || 0,
+      }));
+    }
+
+    if (realApps.length > 0) {
+      const monthMap: Record<string, { uploads: number; verifications: number }> = {};
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      realApps.forEach((app: any) => {
+        const dt = app.submittedAt ? new Date(app.submittedAt) : new Date();
+        const mKey = monthNames[dt.getMonth()] || 'Recent';
+        if (!monthMap[mKey]) monthMap[mKey] = { uploads: 0, verifications: 0 };
+        monthMap[mKey].uploads += 1;
+        const st = String(app.status || '').toUpperCase();
+        if (['APPROVED', 'COMPLETED'].includes(st)) {
+          monthMap[mKey].verifications += 1;
+        }
+      });
+
+      return Object.entries(monthMap).map(([month, data]) => ({
+        month,
+        uploads: data.uploads,
+        verifications: data.verifications
+      }));
+    }
+
+    return [
+      { month: 'Mon', uploads: 0, verifications: 0 },
+      { month: 'Tue', uploads: 0, verifications: 0 },
+      { month: 'Wed', uploads: 0, verifications: 0 },
+      { month: 'Thu', uploads: 0, verifications: 0 },
+      { month: 'Fri', uploads: 0, verifications: 0 },
+      { month: 'Sat', uploads: 0, verifications: 0 },
+      { month: 'Sun', uploads: 0, verifications: 0 },
+    ];
+  }, [analyticsData, realApps]);
 
   // Max category value for calculating progress bar width
   const maxCategoryCount = useMemo(() => {
     return Math.max(...categoryData.map(c => c.count), 1);
   }, [categoryData]);
 
-  // Recent Activity Log list matching Image 1
+  // Recent Activity Log list derived 100% from real database applications
   const recentActivityLogs = useMemo(() => {
-    const defaultLogs = [
-      { id: 'DOC-AADHAAR-01', name: 'Aadhaar Card', category: 'Identity', user: 'Rajesh Kumar', uploaded: '12/01/2024', status: 'Verified' },
-      { id: 'DOC-VOTER-06', name: 'Voter ID Card', category: 'Identity', user: 'Sarah Chen', uploaded: '20/03/2024', status: 'Pending' },
-      { id: 'DOC-RATION-09', name: 'Ration Card', category: 'Social Welfare', user: 'Michael Torres', uploaded: '22/04/2024', status: 'Expired' },
-      { id: 'DOC-DRIVING-04', name: 'Driving License', category: 'Transport', user: 'James Park', uploaded: '05/03/2024', status: 'Verified' },
-    ];
+    if (realApps.length === 0) return [];
 
-    const mappedRealApps = realApps.slice(0, 6).map((app, idx) => {
+    return realApps.slice(0, 10).map((app, idx) => {
       const srvName = typeof app.service === 'object' ? app.service?.title : (app.serviceTitle || app.service || 'Citizen Service');
       const cat = app.category || (typeof app.service === 'object' ? app.service?.category : 'Government');
       const userName = app.citizenName || app.citizen || app.user?.profile?.fullName || (app.user?.email ? app.user.email.split('@')[0] : 'Citizen');
       const dateStr = app.submitted ? app.submitted : (app.submittedAt ? new Date(app.submittedAt).toLocaleDateString('en-GB') : 'Today');
-      const st = ['APPROVED', 'COMPLETED', 'Approved', 'Completed'].includes(app.status || app.rawStatus) ? 'Verified' :
-                 ['REJECTED', 'Rejected'].includes(app.status || app.rawStatus) ? 'Expired' : 'Pending';
+      const stRaw = String(app.status || app.rawStatus || '').toUpperCase();
+      const st = ['APPROVED', 'COMPLETED'].includes(stRaw) ? 'Verified' :
+                 ['REJECTED'].includes(stRaw) ? 'Expired' : 'Pending';
 
       return {
-        id: `DOC-SRV-${String(idx + 10).padStart(2, '0')}`,
+        id: app.refNumber || `DOC-${String(app.id || idx + 1).slice(-6).toUpperCase()}`,
         name: srvName,
         category: cat,
         user: userName,
@@ -227,8 +255,6 @@ export default function Analytics() {
         status: st
       };
     });
-
-    return [...mappedRealApps, ...defaultLogs];
   }, [realApps]);
 
   // Export report as real CSV file
@@ -781,7 +807,14 @@ export default function Analytics() {
               </tr>
             </thead>
             <tbody>
-              {recentActivityLogs.map((row, idx) => {
+              {recentActivityLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '36px 14px', color: '#94A3B8' }}>
+                    No recent document activities recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                recentActivityLogs.map((row, idx) => {
                 const isVerified = row.status === 'Verified';
                 const isPending = row.status === 'Pending';
                 const isExpired = row.status === 'Expired';
@@ -817,8 +850,9 @@ export default function Analytics() {
                     </td>
                   </tr>
                 );
-              })}
-            </tbody>
+              })
+            )}
+          </tbody>
           </table>
         </div>
       </div>

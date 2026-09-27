@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import {
   UploadCloud,
   CheckCircle,
@@ -28,7 +28,7 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
-import { getApiBaseUrl } from '../utils/apiConfig';
+import { getApiBaseUrl, apiFetch } from '../utils/apiConfig';
 import axios from 'axios';
 
 interface SubServiceItem {
@@ -71,7 +71,8 @@ export default function ServiceWizard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const serviceIdParam = searchParams.get('id');
+  const { id: routeId } = useParams();
+  const serviceIdParam = searchParams.get('id') || routeId;
   const stepParam = searchParams.get('step');
   const modeParam = searchParams.get('mode') || 'edit';
 
@@ -81,6 +82,18 @@ export default function ServiceWizard() {
   const [iconUploadError, setIconUploadError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Dynamic Header Logo Switching: Traditional on Step 1, BlueShieldLogo on Steps 2 to 7 (Sub Service through Publish)
+  useEffect(() => {
+    if (activeStep === 1) {
+      window.dispatchEvent(new CustomEvent('cybersave_header_logo', { detail: { variant: 'traditional' } }));
+    } else {
+      window.dispatchEvent(new CustomEvent('cybersave_header_logo', { detail: { variant: 'shield' } }));
+    }
+    return () => {
+      window.dispatchEvent(new CustomEvent('cybersave_header_logo', { detail: { variant: 'traditional' } }));
+    };
+  }, [activeStep]);
 
   // Core Service Data State
   const [serviceData, setServiceData] = useState<{
@@ -288,7 +301,7 @@ export default function ServiceWizard() {
             code: sub.code || `CS-${(sub.name || 'SUB').toUpperCase().slice(0, 6)}`,
             status: sub.status || 'Active',
             fee: sub.fee || baseFee,
-            sla: sub.sla || s.processingTime || '5-7 Days'
+            sla: sub.sla || s.processingTime || '5-7 Days', description: sub.description || '', detailedDescription: sub.detailedDescription || sub.description || ''
           }))
         : prev.subServices,
       formElements: Array.isArray(s.formDataSchema) && s.formDataSchema.length > 0
@@ -482,7 +495,7 @@ export default function ServiceWizard() {
     { id: 4, name: 'Form Builder', stepNum: 4 },
     { id: 5, name: 'Documents', stepNum: 5 },
     { id: 6, name: 'Pricing', stepNum: 6 },
-    { id: 7, name: 'Publish', stepNum: 9 }
+    { id: 7, name: 'Publish', stepNum: 7 }
   ];
 
   // ponytail: Multer + Cloudinary upload handler for service icon
@@ -640,6 +653,9 @@ export default function ServiceWizard() {
       ];
       for (const ep of endpoints) {
         try {
+          if (serviceData.id) {
+            await apiFetch(`/api/v1/services/${serviceData.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => null);
+          }
           await axios.post(ep, payload, { timeout: 4000 });
           break;
         } catch (_) {}
@@ -951,23 +967,27 @@ export default function ServiceWizard() {
         </div>
       )}
 
-      {/* Breadcrumb Navigation matching Image 3 */}
+      {/* Breadcrumb Navigation matching Image 2 Reference */}
       <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
         <Link to="/" style={{ color: '#64748b', textDecoration: 'none' }} className="hover:underline">Dashboard</Link>
         <span style={{ color: '#94a3b8' }}>&rarr;</span>
         <Link to="/services" style={{ color: '#64748b', textDecoration: 'none' }} className="hover:underline">Services</Link>
         <span style={{ color: '#94a3b8' }}>&rarr;</span>
-        <span style={{ color: '#2563eb', fontWeight: 600 }}>Add New Service</span>
+        <span style={{ color: '#64748b' }}>Create New Service</span>
+        <span style={{ color: '#94a3b8' }}>&rarr;</span>
+        <span style={{ color: '#2563eb', fontWeight: 600 }}>{steps.find(s => s.id === activeStep)?.name || 'Main Service'}</span>
       </div>
 
-      {/* Page Title Row matching Image 3 */}
+      {/* Page Title Row matching Image 2 Reference */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: '0 0 4px 0', letterSpacing: '-0.02em' }}>
-            Add New Service
+            {activeStep === 1 ? 'Main Service Configuration' : `${steps.find(s => s.id === activeStep)?.name} Configuration`}
           </h1>
           <p style={{ color: '#64748b', fontSize: 13.5, margin: 0 }}>
-            Register and configure service parameters, workflow stages, and documentation requirements.
+            {activeStep === 1 
+              ? 'Select or create the foundational parent category for this service.'
+              : 'Register and configure service parameters, workflow stages, and documentation requirements.'}
           </p>
         </div>
 
@@ -1091,827 +1111,246 @@ export default function ServiceWizard() {
         })}
       </div>
 
-      {/* ─── STEP 1: Main Service Configuration (Matching Image 3) ─── */}
+      {/* ─── STEP 1: Main Service Configuration (Matching Image 2 Reference) ─── */}
       {activeStep === 1 && (
-        <>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Main Service General Information Card matching Image 2 */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)',
-            gap: 24,
-            alignItems: 'start'
+            background: '#ffffff',
+            borderRadius: 12,
+            border: '1px solid #e2e8f0',
+            padding: '28px 32px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
           }}>
-            {/* ─── Left Column ─── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              
-              {/* Card 1: Service Information */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: 12,
-                border: '1px solid #e2e8f0',
-                padding: '24px 28px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                    Service Information
-                  </h3>
-                  <div style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: '50%',
-                    background: '#eff6ff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#2563eb'
-                  }}>
-                    <Clock size={15} />
-                  </div>
-                </div>
+            <h3 style={{ fontSize: 15.5, fontWeight: 700, color: '#0f172a', margin: '0 0 24px 0' }}>
+              Main Service General Information
+            </h3>
 
-                {/* Service Name */}
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Service Name <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={serviceData.name}
-                    onChange={e => handleNameChange(e.target.value)}
-                    placeholder="e.g. Aadhaar Address Update"
-                    style={{
-                      width: '100%',
-                      padding: '9px 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                      outline: 'none',
-                      background: '#ffffff',
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                </div>
+            {/* Service Name * */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                Service Name <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={serviceData.name}
+                onChange={e => handleNameChange(e.target.value)}
+                placeholder="Address Update"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  fontSize: 13.5,
+                  outline: 'none',
+                  background: '#ffffff',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
 
-                {/* Row: Service ID + Category */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Service ID (Auto-Generated)
-                    </label>
-                    <input
-                      type="text"
-                      value={serviceData.serviceCode}
-                      onChange={e => setServiceData({ ...serviceData, serviceCode: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #e2e8f0',
-                        fontSize: 13,
-                        background: '#f8fafc',
-                        color: '#475569',
-                        fontWeight: 600,
-                        boxSizing: 'border-box'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Category
-                    </label>
-                    <select
-                      value={serviceData.category}
-                      onChange={e => setServiceData({ ...serviceData, category: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #cbd5e1',
-                        fontSize: 13,
-                        background: '#ffffff',
-                        outline: 'none',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <option value="Identity">Identity</option>
-                      <option value="Government">Government</option>
-                      <option value="Finance">Finance</option>
-                      <option value="Certificates">Certificates</option>
-                      <option value="Passport Services">Passport Services</option>
-                      <option value="Utility Bills">Utility Bills</option>
-                      <option value="Banking (AEPS)">Banking (AEPS)</option>
-                      <option value="Insurance">Insurance</option>
-                      <option value="Pension Plan">Pension Plan</option>
-                      <option value="Education">Education</option>
-                      <option value="Agriculture">Agriculture</option>
-                      <option value="Health Services">Health Services</option>
-                      <option value="Employment">Employment</option>
-                      <option value="Citizen Welfare">Citizen Welfare</option>
-                    </select>
-                  </div>
-                </div>
+            {/* Service Category * */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                Service Category <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <select
+                value={serviceData.category}
+                onChange={e => setServiceData({ ...serviceData, category: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  fontSize: 13.5,
+                  background: '#ffffff',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <option value="Identity Services">Identity Services</option>
+                <option value="Government Services">Government Services</option>
+                <option value="Financial Services">Financial Services</option>
+                <option value="Certificates & Licenses">Certificates & Licenses</option>
+                <option value="Revenue & Land Records">Revenue & Land Records</option>
+                <option value="Welfare & Social Schemes">Welfare & Social Schemes</option>
+                <option value="Utility & Municipal Services">Utility & Municipal Services</option>
+                <option value="Education & Scholarships">Education & Scholarships</option>
+                <option value="Agriculture & Rural Services">Agriculture & Rural Services</option>
+              </select>
+            </div>
 
-                {/* Row: Department + Service Type */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Department
-                    </label>
-                    <select
-                      value={serviceData.department}
-                      onChange={e => setServiceData({ ...serviceData, department: e.target.value, departmentRole: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #cbd5e1',
-                        fontSize: 13,
-                        background: '#ffffff',
-                        outline: 'none',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <option value="UIDAI">UIDAI</option>
-                      <option value="Income Tax Department">Income Tax Department</option>
-                      <option value="Ministry of External Affairs">Ministry of External Affairs</option>
-                      <option value="State Revenue Department">State Revenue Department</option>
-                      <option value="Municipal Corporation">Municipal Corporation</option>
-                      <option value="State Police Department">State Police Department</option>
-                      <option value="Electricity Board / DISCOM">Electricity Board / DISCOM</option>
-                      <option value="NPCI / Banking Network">NPCI / Banking Network</option>
-                      <option value="Ministry of Agriculture">Ministry of Agriculture</option>
-                      <option value="National Health Authority">National Health Authority</option>
-                      <option value="General Administration">General Administration</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Service Type
-                    </label>
-                    <select
-                      value={serviceData.serviceType}
-                      onChange={e => setServiceData({ ...serviceData, serviceType: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #cbd5e1',
-                        fontSize: 13,
-                        background: '#ffffff',
-                        outline: 'none',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <option value="Online">Online</option>
-                      <option value="Assisted">Assisted</option>
-                      <option value="Hybrid">Hybrid</option>
-                    </select>
-                  </div>
-                </div>
+            {/* Service Code (Auto-Generated) */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                Service Code (Auto-Generated)
+              </label>
+              <input
+                type="text"
+                value={serviceData.serviceCode}
+                onChange={e => setServiceData({ ...serviceData, serviceCode: e.target.value })}
+                placeholder="CS-ID-ADDR-091"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #e2e8f0',
+                  fontSize: 13.5,
+                  background: '#f8fafc',
+                  color: '#475569',
+                  fontWeight: 600,
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
 
-                {/* Description */}
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Description
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={serviceData.description}
-                    onChange={e => setServiceData({ ...serviceData, description: e.target.value })}
-                    placeholder="Verify and update citizen residential address information based on government accepted proof documentation."
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                      outline: 'none',
-                      background: '#ffffff',
-                      resize: 'vertical',
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                </div>
-
-                {/* Status Toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: '#334155' }}>
-                    Service Status: <strong style={{ color: serviceData.status === 'Active' ? '#059669' : '#64748b' }}>{serviceData.status}</strong>
-                  </span>
-                  <div
-                    onClick={() => setServiceData({ ...serviceData, status: serviceData.status === 'Active' ? 'Inactive' : 'Active' })}
-                    style={{
-                      width: 40,
-                      height: 20,
-                      borderRadius: 12,
-                      background: serviceData.status === 'Active' ? '#10b981' : '#cbd5e1',
-                      position: 'relative',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s ease'
-                    }}
-                  >
-                    <div style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: '50%',
-                      background: '#ffffff',
-                      position: 'absolute',
-                      top: 3,
-                      left: serviceData.status === 'Active' ? 23 : 3,
-                      transition: 'left 0.2s ease',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
-                    }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Required Documents (Matching Image 3) */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: 12,
-                border: '1px solid #e2e8f0',
-                padding: '24px 28px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                    Required Documents
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowChecklistModal(true)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#2563eb',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      padding: 0
-                    }}
-                  >
-                    Configure checklist
-                  </button>
-                </div>
-
-                {/* Document List */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-                  {serviceData.documents.map((doc, idx) => {
-                    const isMandatory = doc.req === 'Required';
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '12px 14px',
-                          borderRadius: 8,
-                          border: '1px solid #f1f5f9',
-                          background: '#ffffff',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <div style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 6,
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#64748b'
-                          }}>
-                            <FileText size={16} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                              {doc.type}
-                            </div>
-                            <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                              {doc.subtitle || doc.formats || 'Accepted government document'}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span
-                            onClick={() => toggleDocReq(idx)}
-                            title="Click to toggle Mandatory/Optional"
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: '3px 10px',
-                              borderRadius: 9999,
-                              cursor: 'pointer',
-                              background: isMandatory ? '#fef2f2' : '#f1f5f9',
-                              color: isMandatory ? '#ef4444' : '#64748b',
-                              border: isMandatory ? '1px solid #fee2e2' : '1px solid #e2e8f0'
-                            }}
-                          >
-                            {isMandatory ? 'Mandatory' : 'Optional'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveDocument(idx)}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#94a3b8',
-                              cursor: 'pointer',
-                              padding: 4,
-                              borderRadius: 4,
-                              display: 'flex',
-                              alignItems: 'center'
-                            }}
-                            title="Remove Document"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* + Add Document Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowAddDocModal(true)}
+            {/* Status */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
+                Status
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  onClick={() => setServiceData({ ...serviceData, status: serviceData.status === 'Active' ? 'Inactive' : 'Active' })}
                   style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 8,
-                    border: '1px dashed #cbd5e1',
-                    background: '#f8fafc',
-                    color: '#2563eb',
-                    fontSize: 13,
-                    fontWeight: 700,
+                    width: 44,
+                    height: 24,
+                    borderRadius: 12,
+                    background: serviceData.status === 'Active' ? '#10b981' : '#cbd5e1',
+                    position: 'relative',
                     cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6
+                    transition: 'background 0.2s ease'
                   }}
                 >
-                  <Plus size={16} /> Add Document
-                </button>
+                  <div style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: '#ffffff',
+                    position: 'absolute',
+                    top: 3,
+                    left: serviceData.status === 'Active' ? 23 : 3,
+                    transition: 'left 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                  }} />
+                </div>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#0f172a' }}>
+                  {serviceData.status}
+                </span>
               </div>
             </div>
 
-            {/* ─── Right Column ─── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              
-              {/* Card 3: Processing Configuration (Matching Image 3) */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: 12,
-                border: '1px solid #e2e8f0',
-                padding: '24px 28px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-              }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 18px 0' }}>
-                  Processing Configuration
-                </h3>
+            {/* Description */}
+            <div style={{ marginBottom: 22 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                Description
+              </label>
+              <textarea
+                rows={3}
+                value={serviceData.description}
+                onChange={e => setServiceData({ ...serviceData, description: e.target.value })}
+                placeholder="Verify and update residential address records in compliance with national cyber security guidelines."
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  fontSize: 13.5,
+                  outline: 'none',
+                  background: '#ffffff',
+                  resize: 'vertical',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
 
-                {/* Row: Processing SLA + Priority Level */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Processing SLA
-                    </label>
-                    <select
-                      value={serviceData.processingSla}
-                      onChange={e => setServiceData({ ...serviceData, processingSla: e.target.value, tat: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #cbd5e1',
-                        fontSize: 13,
-                        background: '#ffffff',
-                        outline: 'none',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <option value="24 Hours">24 Hours</option>
-                      <option value="48 Hours">48 Hours</option>
-                      <option value="3-5 Days">3-5 Days</option>
-                      <option value="7 Days">7 Days</option>
-                      <option value="15 Days">15 Days</option>
-                      <option value="30 Days">30 Days</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Priority Level
-                    </label>
-                    <select
-                      value={serviceData.priorityLevel}
-                      onChange={e => setServiceData({ ...serviceData, priorityLevel: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #cbd5e1',
-                        fontSize: 13,
-                        background: '#ffffff',
-                        outline: 'none',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                      <option value="Critical">Critical</option>
-                    </select>
-                  </div>
+            {/* Icon Upload matching Image 2 */}
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                Icon Upload
+              </label>
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleIconUpload}
+                accept=".svg,.png,.jpg,.jpeg"
+              />
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: '1.5px dashed #cbd5e1',
+                  borderRadius: 10,
+                  padding: '36px 20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#ffffff',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.background = '#f8fafc'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#ffffff'; }}
+              >
+                <div style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: '50%',
+                  background: '#eff6ff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 10,
+                  color: '#2563eb'
+                }}>
+                  <UploadCloud size={24} />
                 </div>
-
-                {/* Service Fee */}
-                <div style={{ marginBottom: 18 }}>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Service Fee (₹)
-                  </label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <span style={{ position: 'absolute', left: 12, color: '#64748b', fontSize: 13.5, fontWeight: 600 }}>₹</span>
-                    <input
-                      type="number"
-                      value={serviceData.pricing.fee}
-                      onChange={e => updateFee(parseFloat(e.target.value) || 0)}
-                      placeholder="50"
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px 9px 28px',
-                        borderRadius: 8,
-                        border: '1px solid #cbd5e1',
-                        fontSize: 13,
-                        outline: 'none',
-                        background: '#ffffff',
-                        boxSizing: 'border-box'
-                      }}
-                    />
-                  </div>
+                <div style={{ color: '#2563eb', fontWeight: 600, fontSize: 13.5, marginBottom: 4 }}>
+                  Click to upload icon file
                 </div>
-
-                {/* Enable Auto-Approval */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                      Enable Auto-Approval
-                    </div>
-                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                      Automatically approve matches above 98% AI confidence
-                    </div>
-                  </div>
-                  <div
-                    onClick={() => setServiceData({ ...serviceData, autoApproval: !serviceData.autoApproval })}
-                    style={{
-                      width: 42,
-                      height: 22,
-                      borderRadius: 12,
-                      background: serviceData.autoApproval ? '#2563eb' : '#cbd5e1',
-                      position: 'relative',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s ease',
-                      flexShrink: 0
-                    }}
-                  >
-                    <div style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: '50%',
-                      background: '#ffffff',
-                      position: 'absolute',
-                      top: 3,
-                      left: serviceData.autoApproval ? 23 : 3,
-                      transition: 'left 0.2s ease',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
-                    }} />
-                  </div>
+                <div style={{ color: '#64748b', fontSize: 12 }}>
+                  SVG, PNG, JPG up to 1MB (Optimal size 48×48px)
                 </div>
-              </div>
-
-              {/* Card 4: SLA & Performance Settings (Matching Image 3) */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: 12,
-                border: '1px solid #e2e8f0',
-                padding: '24px 28px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-              }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 18px 0' }}>
-                  SLA & Performance Settings
-                </h3>
-
-                {/* Row: Target Processing Time + Compliance Target */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Target Processing Time
-                    </label>
-                    <input
-                      type="text"
-                      value={serviceData.targetProcessingTime}
-                      onChange={e => setServiceData({ ...serviceData, targetProcessingTime: e.target.value })}
-                      placeholder="18 Hours"
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #cbd5e1',
-                        fontSize: 13,
-                        outline: 'none',
-                        background: '#ffffff',
-                        boxSizing: 'border-box'
-                      }}
-                    />
+                {(serviceData.iconUrl || serviceData.imageUrl) && (
+                  <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px', background: '#ecfdf5', borderRadius: 6 }}>
+                    <CheckCircle size={14} color="#10b981" />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#047857' }}>Icon loaded</span>
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                      Compliance Target (%)
-                    </label>
-                    <input
-                      type="text"
-                      value={serviceData.complianceTarget}
-                      onChange={e => setServiceData({ ...serviceData, complianceTarget: e.target.value })}
-                      placeholder="95%"
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #cbd5e1',
-                        fontSize: 13,
-                        outline: 'none',
-                        background: '#ffffff',
-                        boxSizing: 'border-box'
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Reliability Index Target */}
-                <div style={{ marginBottom: 18 }}>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Reliability Index Target
-                  </label>
-                  <input
-                    type="text"
-                    value={serviceData.reliabilityTarget}
-                    onChange={e => setServiceData({ ...serviceData, reliabilityTarget: e.target.value })}
-                    placeholder="99.9%"
-                    style={{
-                      width: '100%',
-                      padding: '9px 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                      outline: 'none',
-                      background: '#ffffff',
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                </div>
-
-                {/* Enable Performance Monitoring */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                      Enable Performance Monitoring
-                    </div>
-                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                      Log processing metrics and alert operators on SLA slippage
-                    </div>
-                  </div>
-                  <div
-                    onClick={() => setServiceData({ ...serviceData, performanceMonitoring: !serviceData.performanceMonitoring })}
-                    style={{
-                      width: 42,
-                      height: 22,
-                      borderRadius: 12,
-                      background: serviceData.performanceMonitoring ? '#2563eb' : '#cbd5e1',
-                      position: 'relative',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s ease',
-                      flexShrink: 0
-                    }}
-                  >
-                    <div style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: '50%',
-                      background: '#ffffff',
-                      position: 'absolute',
-                      top: 3,
-                      left: serviceData.performanceMonitoring ? 23 : 3,
-                      transition: 'left 0.2s ease',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
-                    }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 5: Application Processing Workflow (Matching Image 3) */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: 12,
-                border: '1px solid #e2e8f0',
-                padding: '24px 28px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-              }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 20px 0' }}>
-                  Application Processing Workflow
-                </h3>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
-                  {/* Stage 1 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                    <div style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      background: '#22c55e',
-                      color: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      flexShrink: 0,
-                      boxShadow: '0 1px 3px rgba(34, 197, 94, 0.3)'
-                    }}>
-                      <Check size={14} strokeWidth={3} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                        Citizen Submission
-                      </div>
-                      <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                        Online secure form portal for digital document payloads.
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stage 2 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                    <div style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      background: '#22c55e',
-                      color: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      flexShrink: 0,
-                      boxShadow: '0 1px 3px rgba(34, 197, 94, 0.3)'
-                    }}>
-                      <Check size={14} strokeWidth={3} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                        Automated Verification
-                      </div>
-                      <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                        AI scans readability and cross-checks with identity registers.
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stage 3 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                    <div style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      background: '#2563eb',
-                      color: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      flexShrink: 0,
-                      boxShadow: '0 1px 3px rgba(37, 99, 235, 0.3)'
-                    }}>
-                      3
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#2563eb' }}>
-                        Officer Review
-                      </div>
-                      <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                        Back-office dashboard manual audit of edge-case documents.
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stage 4 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                    <div style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      background: '#f1f5f9',
-                      border: '1.5px solid #cbd5e1',
-                      color: '#64748b',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      flexShrink: 0
-                    }}>
-                      4
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>
-                        UIDAI API Sync
-                      </div>
-                      <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                        Tunnel and commit demographic payload directly to registry API.
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stage 5 */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                    <div style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      background: '#f1f5f9',
-                      border: '1.5px solid #cbd5e1',
-                      color: '#64748b',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      flexShrink: 0
-                    }}>
-                      5
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>
-                        Confirmation & Output
-                      </div>
-                      <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                        Citizen notification loop via email/SMS and digital receipt generation.
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Bottom Footer Actions (matching Image 3) */}
+          {/* Bottom Action Bar matching Image 2 */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginTop: 28,
-            paddingTop: 20,
-            borderTop: '1px solid #e2e8f0',
-            flexWrap: 'wrap',
-            gap: 12
+            padding: '16px 4px',
+            borderTop: '1px solid #f1f5f9',
+            marginTop: 8
           }}>
-            <button
-              type="button"
-              onClick={() => handleSave(false)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#475569',
-                fontSize: 13.5,
-                fontWeight: 600,
-                cursor: 'pointer',
-                padding: '8px 12px'
-              }}
-            >
-              Save as Draft
-            </button>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ fontSize: 13, color: '#64748b' }}>
+              Step 1 of 7: Establish primary service container attributes.
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
               <button
                 type="button"
-                onClick={() => navigate('/services')}
+                onClick={() => handleSave(false)}
+                disabled={isSubmitting}
                 style={{
                   padding: '9px 20px',
                   borderRadius: 8,
                   border: '1px solid #cbd5e1',
                   background: '#ffffff',
                   color: '#334155',
-                  fontSize: 13.5,
+                  fontSize: 13,
                   fontWeight: 600,
                   cursor: 'pointer'
                 }}
               >
-                Cancel
+                Save as Draft
               </button>
               <button
                 type="button"
@@ -1926,17 +1365,17 @@ export default function ServiceWizard() {
                   border: 'none',
                   background: '#2563eb',
                   color: '#ffffff',
-                  fontSize: 13.5,
+                  fontSize: 13,
                   fontWeight: 700,
                   cursor: 'pointer',
                   boxShadow: '0 2px 4px rgba(37,99,235,0.2)'
                 }}
               >
-                Create Service
+                Save & Continue
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* ─── STEP 2: Sub-Service Association ─── */}
