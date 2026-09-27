@@ -26,26 +26,18 @@ export default function SupportTicketDetail() {
   const fetchTicketData = useCallback(async () => {
     if (!id) return;
     try {
-      const endpoints = [
-        `/api/v1/support/tickets/${encodeURIComponent(id)}`,
-        `/api/support/tickets/${encodeURIComponent(id)}`,
-        `/api/admin/support/tickets/${encodeURIComponent(id)}`
-      ];
-      for (const ep of endpoints) {
-        try {
-          const res = await apiFetch(ep).catch(() => null);
-          if (res && res.ok) {
-            const json = await res.json().catch(() => null);
-            if (json && (json.id || json.refNumber || json.title)) {
-              setTicket(json);
-              setLoading(false);
-              return;
-            }
-          }
-        } catch (_) {}
+      // Primary: fetch single ticket by ID (now has a dedicated backend endpoint)
+      const res = await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(id)}`).catch(() => null);
+      if (res && res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json && (json.id || json.refNumber || json.title)) {
+          setTicket(json);
+          setLoading(false);
+          return;
+        }
       }
 
-      // Fallback: search in all tickets
+      // Fallback: search in all tickets list
       const listRes = await apiFetch('/api/v1/support/tickets').catch(() => null);
       if (listRes && listRes.ok) {
         const listJson = await listRes.json().catch(() => null);
@@ -60,10 +52,15 @@ export default function SupportTicketDetail() {
         if (match) {
           setTicket(match);
           setLoading(false);
+          return;
         }
       }
+
+      // All attempts exhausted
+      setLoading(false);
     } catch (e) {
       console.warn('[SupportTicketDetail] REST fetch note:', e);
+      setLoading(false);
     }
   }, [id]);
 

@@ -57,8 +57,11 @@ export default function SupportTicketResolve() {
           return;
         }
       }
+
+      setLoading(false);
     } catch (e) {
       console.warn('[SupportTicketResolve] fetch note:', e);
+      setLoading(false);
     }
   }, [id]);
 
