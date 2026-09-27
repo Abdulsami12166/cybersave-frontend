@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { apiFetch } from '../utils/apiConfig';
 import ErrorBoundary from './ErrorBoundary';
+import CyberSaveLogo from './CyberSaveLogo';
 
 export const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message, type } }));
@@ -618,31 +619,11 @@ export default function Layout() {
         }}>
           {isCollapsed ? (
             <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="CyberSave">
-              <img
-                src="/cybersave-icon.png"
-                alt="CyberSave"
-                style={{ width: '40px', height: '40px', objectFit: 'contain' }}
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = '/cybersave-logo.png';
-                }}
-              />
+              <CyberSaveLogo collapsed={true} size="small" />
             </Link>
           ) : (
             <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', userSelect: 'none' }} title="CyberSave — Digital Services • Trusted Always">
-              <img
-                src="/cybersave-logo-horizontal.png"
-                alt="CyberSave — Digital Services • Trusted Always"
-                style={{
-                  maxHeight: '48px',
-                  maxWidth: '215px',
-                  width: 'auto',
-                  objectFit: 'contain',
-                  display: 'block'
-                }}
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = '/cybersave-logo.png';
-                }}
-              />
+              <CyberSaveLogo collapsed={false} size="medium" />
             </Link>
           )}
         </div>
