@@ -718,9 +718,8 @@ export default function Layout() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {isCollapsed && (
               <>
-                <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }} title="CyberSave Admin Portal">
-                  <img src="/cybersave-icon.png" alt="CyberSave" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
-                  <span style={{ fontSize: '18px', fontWeight: 800, color: '#082567', fontFamily: "'Inter', -apple-system, sans-serif" }}>Cyber<span style={{ color: '#1668FE' }}>save</span></span>
+                <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }} title="CyberSave Admin Portal">
+                  <CyberSaveLogo collapsed={false} size="small" />
                 </Link>
                 <div style={{ height: '24px', width: '1px', background: '#E2E8F0' }} />
               </>

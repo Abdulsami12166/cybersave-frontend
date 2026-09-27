@@ -40,9 +40,9 @@ export const CyberSaveLogo: React.FC<CyberSaveLogoProps> = ({
     );
   }
 
-  const titleSize = size === 'small' ? '22px' : size === 'large' ? '32px' : '26px';
-  const subtitleSize = size === 'small' ? '6.5px' : size === 'large' ? '9px' : '7.8px';
-  const lineWidth = size === 'small' ? '20px' : size === 'large' ? '36px' : '28px';
+  const titleSize = size === 'small' ? '19px' : size === 'large' ? '28px' : '23px';
+  const subtitleSize = size === 'small' ? '4.0px' : size === 'large' ? '5.2px' : '4.5px';
+  const lineWidth = size === 'small' ? '18px' : size === 'large' ? '30px' : '22px';
 
   return (
     <div 
@@ -60,7 +60,7 @@ export const CyberSaveLogo: React.FC<CyberSaveLogoProps> = ({
       <div style={{
         fontSize: titleSize,
         fontWeight: 900,
-        letterSpacing: '-0.03em',
+        letterSpacing: '-0.035em',
         lineHeight: 1.1,
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         display: 'flex',
@@ -74,15 +74,15 @@ export const CyberSaveLogo: React.FC<CyberSaveLogoProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '6px',
+        gap: '5px',
         width: '100%',
-        marginTop: '3px'
+        marginTop: '2px'
       }}>
         <div style={{
           width: lineWidth,
-          height: '1.2px',
+          height: '1px',
           background: '#082567',
-          opacity: 0.7,
+          opacity: 0.65,
           borderRadius: '1px'
         }} />
         <span style={{
@@ -92,15 +92,16 @@ export const CyberSaveLogo: React.FC<CyberSaveLogoProps> = ({
           letterSpacing: '0.14em',
           whiteSpace: 'nowrap',
           textTransform: 'uppercase',
+          opacity: 0.85,
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
         }}>
           DIGITAL SERVICES &bull; TRUSTED ALWAYS
         </span>
         <div style={{
           width: lineWidth,
-          height: '1.2px',
+          height: '1px',
           background: '#082567',
-          opacity: 0.7,
+          opacity: 0.65,
           borderRadius: '1px'
         }} />
       </div>

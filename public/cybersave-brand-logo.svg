@@ -5,13 +5,13 @@
   </text>
   
   <!-- Left flanking line -->
-  <line x1="18" y1="52" x2="48" y2="52" stroke="#082567" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.85" />
+  <line x1="22" y1="52" x2="52" y2="52" stroke="#082567" stroke-width="1" stroke-linecap="round" stroke-opacity="0.75" />
   
   <!-- Subtitle -->
-  <text x="130" y="55" text-anchor="middle" font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="8.2" fill="#082567" letter-spacing="1.4">
+  <text x="130" y="54" text-anchor="middle" font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="6.2" fill="#082567" letter-spacing="1.2">
     DIGITAL SERVICES &#8226; TRUSTED ALWAYS
   </text>
   
   <!-- Right flanking line -->
-  <line x1="212" y1="52" x2="242" y2="52" stroke="#082567" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.85" />
+  <line x1="208" y1="52" x2="238" y2="52" stroke="#082567" stroke-width="1" stroke-linecap="round" stroke-opacity="0.75" />
 </svg>
