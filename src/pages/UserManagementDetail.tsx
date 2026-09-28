@@ -473,23 +473,26 @@ export default function UserManagementDetail() {
 
   const handleToggleBlock = async () => {
     if (!user) return;
-    const targetStatus = user.status === 'Blocked' ? 'Verified' : 'BLOCKED';
-    if (socket && connected) {
-      socket.emit('block_citizen', { id: user.dbId || user.id, status: targetStatus });
-    }
-    try {
-      const res = await apiFetch(`/api/v1/users/${user.dbId || user.id}/block`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: targetStatus })
-      });
-      if (res.ok) {
-        showToast(`Citizen status changed to ${targetStatus === 'BLOCKED' ? 'Blocked' : 'Verified'}`);
-        fetchUserRest();
+    const isCurrentlyBlocked = user.status === 'Blocked' || String(user.status).toUpperCase() === 'BLOCKED' || String(user.status).toUpperCase() === 'SUSPENDED';
+    const targetStatus = isCurrentlyBlocked ? 'VERIFIED' : 'BLOCKED';
+
+    // Instant optimistic update — UI changes immediately
+    setUser((prev: any) => prev ? { ...prev, status: targetStatus === 'BLOCKED' ? 'BLOCKED' : 'VERIFIED' } : prev);
+    showToast(`Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
+
+    // Fire API in background — don't block UI
+    apiFetch(`/api/v1/users/${user.dbId || user.id}/block`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: targetStatus })
+    }).then(res => {
+      if (res.ok) fetchUserRest();
+    }).catch(() => {
+      // Fallback: try socket if REST fails
+      if (socket && connected) {
+        socket.emit('block_citizen', { id: user.dbId || user.id, status: targetStatus });
       }
-    } catch {
-      // Socket will handle it if connected
-    }
+    });
   };
 
   const handleSaveProfile = async () => {
@@ -726,7 +729,7 @@ export default function UserManagementDetail() {
     state: user?.state || '-',
     pinCode: user?.pinCode || '-',
     joinedDate: user?.joinedDate || '15 March 2024',
-    status: user?.status === 'BLOCKED' ? 'Blocked' : (user?.status || 'Verified'),
+    status: (user?.status === 'BLOCKED' || user?.status === 'SUSPENDED') ? 'Blocked' : ((user?.status === 'PENDING' || user?.status === 'UNVERIFIED') ? 'Pending' : 'Verified'),
     id: user?.id || `CIT-${(id || '00482').slice(-5).toUpperCase()}`,
     isOnline: user?.isOnline === true,
     lastActive: user?.lastActive || user?.quickStats?.lastActive || (user?.isOnline ? 'Active Now' : 'Offline'),
@@ -765,7 +768,7 @@ export default function UserManagementDetail() {
       : (Array.isArray(user?.profile?.addresses) ? user.profile.addresses : [])
   };
 
-  const isBlocked = safeData.status === 'Blocked';
+  const isBlocked = safeData.status === 'Blocked' || String(user?.status).toUpperCase() === 'BLOCKED';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

@@ -176,8 +176,7 @@ export default function UserManagement() {
         handleRefresh();
       });
       socket.on('block_citizen_success', () => {
-        showToast('Citizen verification status updated');
-        handleRefresh();
+        // Optimistic update already applied — no delayed refresh needed
       });
 
       return () => {
@@ -424,7 +423,7 @@ export default function UserManagement() {
     const newStatus = isCurrentlyBlocked ? 'VERIFIED' : 'BLOCKED';
     const targetId = c.dbId || c.id;
 
-    // Instant optimistic update
+    // Instant optimistic update — UI changes immediately
     setLiveUsers(prev => prev.map(u => {
       const uId = u.dbId || u.id || u._id;
       if (uId === targetId || u.id === c.id || u.dbId === c.dbId) {
@@ -432,20 +431,19 @@ export default function UserManagement() {
       }
       return u;
     }));
+    showToast(`Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
 
-    if (socket && connected) {
-      socket.emit('block_citizen', { id: targetId, status: newStatus });
-    }
-    try {
-      await apiFetch(`/api/v1/users/${targetId}/block`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      showToast(`Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
-    } catch {
-      // Handled
-    }
+    // Fire API in background — don't block UI
+    apiFetch(`/api/v1/users/${targetId}/block`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    }).catch(() => {
+      // Fallback: try socket if REST fails
+      if (socket && connected) {
+        socket.emit('block_citizen', { id: targetId, status: newStatus });
+      }
+    });
   };
 
   // Bulk Block Handler
@@ -466,9 +464,6 @@ export default function UserManagement() {
       return u;
     }));
 
-    if (socket && connected) {
-      socket.emit('bulk_block_citizens', { userIds: targetIds, status: 'BLOCKED' });
-    }
     try {
       await apiFetch('/api/admin/users/bulk-block', {
         method: 'POST',
@@ -479,6 +474,10 @@ export default function UserManagement() {
       setSelectedCitizenIds([]);
       fetchUsersRest();
     } catch {
+      // Fallback: try socket if REST fails
+      if (socket && connected) {
+        socket.emit('bulk_block_citizens', { userIds: targetIds, status: 'BLOCKED' });
+      }
       showToast(`Blocked ${count} selected citizen(s)`);
       setSelectedCitizenIds([]);
       fetchUsersRest();
