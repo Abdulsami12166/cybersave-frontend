@@ -710,21 +710,13 @@ export default function ApplicationDetail() {
     }
   };
 
-  if (loading || !app) {
-    return (
-      <div style={{ padding: 60, textAlign: 'center', color: '#6b7280' }}>
-        <div style={{ width: 32, height: 32, border: '3px solid #e5e7eb', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
-        Loading Application Data...
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
-  const applicant = app.applicant || {};
-  const formData = app.formData || {};
+  const applicant = app?.applicant || {};
+  const formData = app?.formData || {};
 
   // Dynamic Application & Job Form Fields (Schema fields + Submitted form data with keys & values)
   const dynamicFormFields = useMemo(() => {
+    if (!app) return [];
+    const currentFormData = app.formData || {};
     const rawSchema = app?.service?.formDataSchema || app?.service?.formElements || app?.rawApp?.service?.formDataSchema || app?.rawApp?.service?.formElements;
     const schemaList: any[] = Array.isArray(rawSchema) ? rawSchema : [];
     const fieldsMap = new Map<string, { key: string; label: string; value: any; required?: boolean; type?: string }>();
@@ -736,7 +728,7 @@ export default function ApplicationDetail() {
       fieldsMap.set(fieldKey, {
         key: fieldKey,
         label,
-        value: formData[fieldKey] !== undefined ? formData[fieldKey] : (formData[label] !== undefined ? formData[label] : ''),
+        value: currentFormData[fieldKey] !== undefined ? currentFormData[fieldKey] : (currentFormData[label] !== undefined ? currentFormData[label] : ''),
         required: field.required !== false,
         type: field.type || 'text',
       });
@@ -748,7 +740,7 @@ export default function ApplicationDetail() {
       'razorpayOrderId', 'razorpayPaymentId', 'razorpaySignature', 'status', 'submittedAt', 'createdAt', 'updatedAt'
     ]);
 
-    Object.entries(formData).forEach(([k, v]) => {
+    Object.entries(currentFormData).forEach(([k, v]) => {
       if (ignoreKeys.has(k)) return;
       if (!fieldsMap.has(k)) {
         let label = k;
@@ -772,7 +764,18 @@ export default function ApplicationDetail() {
     });
 
     return Array.from(fieldsMap.values());
-  }, [app, formData]);
+  }, [app]);
+
+  if (loading || !app) {
+    return (
+      <div style={{ padding: 60, textAlign: 'center', color: '#6b7280' }}>
+        <div style={{ width: 32, height: 32, border: '3px solid #e5e7eb', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
+        Loading Application Data...
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   const statusUpper = (app.status || '').toUpperCase();
   const isApproved = statusUpper === 'APPROVED' || statusUpper === 'COMPLETED';
   const isRejected = statusUpper === 'REJECTED';
