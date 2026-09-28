@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { showToast } from '../components/Layout';
 import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
+import SendNotificationModal from '../components/SendNotificationModal';
 
 export default function UserManagementDetail() {
   const { id } = useParams<{ id: string }>();
@@ -2581,113 +2582,18 @@ export default function UserManagementDetail() {
       )}
 
       {/* ─── Send Notification Modal ─────────────────────────────────────── */}
-      {notifModalOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(15, 23, 42, 0.6)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '520px',
-            padding: '28px',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
-            border: '1px solid #E2E8F0'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Bell color="#2563EB" size={20} /> Send Notification Dispatch
-              </h2>
-              <button onClick={() => setNotifModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X color="#64748B" size={20} />
-              </button>
-            </div>
-
-            <div style={{
-              background: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              marginBottom: '20px',
-              display: 'flex',
-              gap: '12px',
-              alignItems: 'center'
-            }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#2563EB', color: '#FFFFFF', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '11px', fontWeight: 800 }}>
-                {initials}
-              </div>
-              <div style={{ fontSize: '13px', color: '#334155' }}>
-                Recipient: <strong>{safeData.fullName}</strong> ({safeData.id})
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>Dispatch Channel</label>
-              <select 
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', fontSize: '13px', background: '#FFF' }}
-                value={notifType}
-                onChange={e => setNotifType(e.target.value)}
-              >
-                <option>Push Notification</option>
-                <option>Email Notification</option>
-                <option>SMS Alert</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>Subject Line</label>
-              <input 
-                type="text" 
-                value={notifSubject}
-                onChange={e => setNotifSubject(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', fontSize: '13px' }} 
-                placeholder="e.g. Important: Service Application Verification Update"
-              />
-            </div>
-
-            <div style={{ marginBottom: '22px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>Message Content</label>
-                <span style={{ fontSize: '11px', color: '#94A3B8' }}>{notifBody.length} / 1000 chars</span>
-              </div>
-              <textarea 
-                rows={4}
-                value={notifBody}
-                onChange={e => setNotifBody(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', resize: 'none', fontSize: '13px' }} 
-                placeholder={`Dear ${safeData.fullName}, your submitted application has been successfully verified. You can now download the certificate from your app.`}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button
-                onClick={() => setNotifModalOpen(false)}
-                style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: '8px', padding: '9px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendNotification}
-                disabled={sendingNotif}
-                style={{ background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '9px 22px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-              >
-                {sendingNotif ? 'Broadcasting...' : 'Broadcast to Status Bar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SendNotificationModal
+        isOpen={notifModalOpen}
+        onClose={() => setNotifModalOpen(false)}
+        defaultRecipient={{
+          id: safeData.rawId || user?.id || id || '',
+          name: safeData.fullName || user?.name || 'Citizen User',
+          citId: safeData.id || `CIT-${(user?.id || '').slice(-5).toUpperCase()}`,
+          email: safeData.email || user?.email || '',
+          phone: safeData.phone || user?.phone || ''
+        }}
+        onSuccess={(msg) => showToast(msg, 'success')}
+      />
 
       {/* ─── Attached Proof / Image Modal ─────────────────────────────────── */}
       {previewImage && (

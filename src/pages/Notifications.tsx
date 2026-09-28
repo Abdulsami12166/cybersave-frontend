@@ -4,6 +4,7 @@ import { useSocket } from '../context/SocketContext';
 import { StatCard } from '../components/Dashboard';
 import { showToast } from '../components/Layout';
 import { apiFetch } from '../utils/apiConfig';
+import SendNotificationModal from '../components/SendNotificationModal';
 
 const defaultNotificationData = {
   stats: {
@@ -157,53 +158,7 @@ export default function Notifications() {
     };
   }, [socket, connected]);
 
-  const [showPushModal, setShowPushModal] = useState(false);
-  const [pushTitle, setPushTitle] = useState('');
-  const [pushBody, setPushBody] = useState('');
-  const [isSendingPush, setIsSendingPush] = useState(false);
-
-  const handleSendPush = async () => {
-    const title = pushTitle.trim();
-    const body = pushBody.trim();
-    if (!title || !body) {
-      showToast('Title and message body are required', 'error');
-      return;
-    }
-
-    setIsSendingPush(true);
-
-    try {
-      const res = await apiFetch('/api/v1/notifications/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, body }),
-      });
-      if (res && res.ok) {
-        showToast('Global Push dispatched to all citizen mobile devices!', 'success');
-      } else if (socket && connected) {
-        // Fallback to WebSocket only if REST endpoint returned non-ok
-        socket.emit('send_global_push', { title, body });
-        showToast('Broadcast dispatched via real-time gateway', 'success');
-      } else {
-        showToast('Push broadcast dispatched', 'info');
-      }
-    } catch (_) {
-      if (socket && connected) {
-        socket.emit('send_global_push', { title, body });
-        showToast('Broadcast dispatched via real-time socket fallback', 'info');
-      } else {
-        showToast('Push notification broadcast queued', 'info');
-      }
-    } finally {
-      setIsSendingPush(false);
-      setShowPushModal(false);
-      setPushTitle('');
-      setPushBody('');
-      setTimeout(() => {
-        fetchNotificationsRest();
-      }, 500);
-    }
-  };
+  const [showNotifModal, setShowNotifModal] = useState(false);
 
   const notifications = data?.notifications || defaultNotificationData.notifications;
   const rawStats = data?.stats;
@@ -225,32 +180,19 @@ export default function Notifications() {
           <p>Monitor system activity, security alerts, driver updates, and real-time operations.</p>
         </div>
         <div style={{display: 'flex', gap: 12}}>
-          <button className="action-btn" onClick={() => setShowPushModal(true)}>+ Send Global Push</button>
+          <button className="action-btn" onClick={() => setShowNotifModal(true)}>+ Send Notification</button>
           <button className="date-picker-btn">Preferences Settings</button>
         </div>
       </div>
 
-      {showPushModal && (
-        <div style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999}}>
-          <div style={{background: 'white', padding: 24, borderRadius: 12, width: 400}}>
-            <h3 style={{fontSize: 18, fontWeight: 700, marginBottom: 16}}>Send Global Push</h3>
-            <div style={{marginBottom: 16}}>
-              <label style={{display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8}}>Notification Title</label>
-              <input type="text" value={pushTitle} onChange={e => setPushTitle(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6}} />
-            </div>
-            <div style={{marginBottom: 24}}>
-              <label style={{display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8}}>Message Body</label>
-              <textarea value={pushBody} onChange={e => setPushBody(e.target.value)} style={{width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, minHeight: 80}} />
-            </div>
-            <div style={{display: 'flex', justifyContent: 'flex-end', gap: 12}}>
-              <button className="date-picker-btn" onClick={() => setShowPushModal(false)} disabled={isSendingPush}>Cancel</button>
-              <button className="action-btn" onClick={handleSendPush} disabled={isSendingPush} style={{opacity: isSendingPush ? 0.7 : 1}}>
-                {isSendingPush ? 'Dispatching...' : 'Send Broadcast'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SendNotificationModal
+        isOpen={showNotifModal}
+        onClose={() => setShowNotifModal(false)}
+        onSuccess={(msg) => {
+          showToast(msg);
+          fetchNotificationsRest();
+        }}
+      />
 
       <div className="stats-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)'}}>
         <StatCard 

@@ -30,6 +30,7 @@ import {
 import { useSocket } from '../context/SocketContext';
 import { getApiBaseUrl, apiFetch } from '../utils/apiConfig';
 import axios from 'axios';
+import AddNewService from './AddNewService';
 
 interface SubServiceItem {
   id?: string;
@@ -940,6 +941,10 @@ export default function ServiceWizard() {
       }
     }));
   };
+
+  if (!serviceIdParam) {
+    return <AddNewService />;
+  }
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60, fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
