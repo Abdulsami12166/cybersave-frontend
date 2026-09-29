@@ -303,8 +303,15 @@ export default function UserManagement() {
     const seenEmails = new Set<string>();
     const result: any[] = [];
 
+    const isRealDbId = (v: any) => typeof v === 'string' && /^[0-9a-fA-F]{24}$/.test(v.trim());
+
     rawList.forEach((u: any, idx: number) => {
-      const dbId = String(u.dbId || u._id || u.id || `cit_${idx}`);
+      // Only a real MongoDB ObjectId counts as a database id. Legacy records
+      // that fall back to CIT- display ids cannot be targeted by block/unblock
+      // and would cause 'Citizen not found' — exclude them until the server
+      // provides their dbId.
+      const dbId = isRealDbId(u.dbId) ? u.dbId.trim() : (isRealDbId(u._id) ? u._id.trim() : '');
+      if (!dbId) return;
       if (seenDbIds.has(dbId)) return;
 
       const profile = u.profile || {};
@@ -455,7 +462,7 @@ export default function UserManagement() {
       const result = await res.json().catch(() => null);
 
       if (res.ok && result?.success) {
-        const persistedStatus = String(result?.data?.status || '').toUpperCase();
+        const persistedStatus = String(result?.data?.status || result?.status || '').toUpperCase();
         // Apply authoritative state returned by the backend
         applyPersistedStatus(targetId, persistedStatus);
         showToast(result.message || `Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
@@ -463,7 +470,7 @@ export default function UserManagement() {
         fetchUsersRest();
       } else {
         // Backend rejected (validation, not found, DB failure) — keep previous confirmed state
-        showToast(result?.error || 'Failed to update citizen status. Please try again.', 'error');
+        showToast(result?.error || result?.message || 'Failed to update citizen status. Please try again.', 'error');
         fetchUsersRest();
       }
     } catch {
@@ -504,7 +511,7 @@ export default function UserManagement() {
         setSelectedCitizenIds([]);
         fetchUsersRest();
       } else {
-        showToast(result?.error || `Failed to ${targetAction} citizens. Please try again.`, 'error');
+        showToast(result?.error || result?.message || `Failed to ${targetAction} citizens. Please try again.`, 'error');
         fetchUsersRest();
       }
     } catch {
