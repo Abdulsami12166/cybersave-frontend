@@ -489,7 +489,18 @@ export default function UserManagement() {
     }
   };
 
-  // Unified bulk block/unblock handler at footer batch bar
+  // Unified bulk block/unblock handler for the footer batch bar.
+  // Strategy (production-safe across every deployed backend generation):
+  //   1. Try the dedicated bulk endpoint (/api/admin/users/bulk-block|bulk-unblock)
+  //      — implemented on current NestJS and Express backends.
+  //   2. If that route is unavailable (older deployment returns 404 / non-success
+  //      payload, or the request fails outright), fall back to the per-user
+  //      block route with an explicit whitelisted status — the one route shape
+  //      that exists on EVERY backend generation (same one single-user toggle
+  //      uses). Runs with bounded concurrency (batches of 5).
+  // Only ids confirmed persisted by the backend are deselected; failures stay
+  // checked so the admin can retry them without re-selecting everyone. The
+  // table is then re-fetched so the UI reflects DATABASE state, never intent.
   const handleBulkStatusChange = async (targetAction: 'block' | 'unblock') => {
     if (selectedCitizenIds.length === 0) {
       showToast(`Please select at least one citizen to ${targetAction}`, 'error');
@@ -497,29 +508,78 @@ export default function UserManagement() {
     }
     if (bulkMutating) return; // prevent double submission
 
-    const count = selectedCitizenIds.length;
+    const doneLabel = targetAction === 'block' ? 'blocked' : 'unblocked';
     const targetIds = [...selectedCitizenIds];
+    const totalCount = targetIds.length;
     setBulkMutating(true);
 
+    // Remove only confirmed ids from the selection, keeping failed ones checked.
+    const pruneSelection = (doneIds: string[]) => {
+      if (doneIds.length === 0) return;
+      const done = new Set(doneIds);
+      setSelectedCitizenIds(prev => prev.filter(id => !done.has(id)));
+    };
+
     try {
-      const res = await apiFetch(`/api/admin/users/bulk-${targetAction}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userIds: targetIds })
-      });
-
-      const result = await res.json().catch(() => null);
-
-      if (res.ok && result?.success) {
-        showToast(result.message || `Successfully ${targetAction === 'block' ? 'blocked' : 'unblocked'} ${result.count ?? count} citizen(s)`);
-        setSelectedCitizenIds([]);
-        fetchUsersRest();
-      } else {
-        showToast(result?.error || result?.message || `Failed to ${targetAction} citizens. Please try again.`, 'error');
-        fetchUsersRest();
+      // ── Attempt 1: native bulk endpoint (current backend generation) ──
+      let nativeSucceeded = false;
+      try {
+        const res = await apiFetch(`/api/admin/users/bulk-${targetAction}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userIds: targetIds })
+        });
+        const result = await res.json().catch(() => null);
+        if (res.ok && result?.success) {
+          nativeSucceeded = true;
+          showToast(result.message || `Successfully ${doneLabel} ${result.count ?? totalCount} citizen(s)`);
+          setSelectedCitizenIds([]);
+          fetchUsersRest();
+        }
+      } catch {
+        // Route missing/unreachable on this backend — fall through to per-user strategy.
       }
-    } catch {
-      showToast(`Failed to ${targetAction} citizens. Please try again.`, 'error');
+
+      if (nativeSucceeded) return;
+
+      // ── Attempt 2: per-user fallback (works on every backend generation) ──
+      const targetStatus = targetAction === 'block' ? 'BLOCKED' : 'VERIFIED';
+      const succeeded: string[] = [];
+      const failed: string[] = [];
+
+      // Bounded concurrency so large selections never hammer the backend.
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < targetIds.length; i += BATCH_SIZE) {
+        const batch = targetIds.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(async (id) => {
+            const res = await apiFetch(`/api/admin/users/${id}/block`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: targetStatus })
+            });
+            const result = await res.json().catch(() => null);
+            if (!res.ok || !result?.success) {
+              throw new Error(result?.error || result?.message || `HTTP ${res.status}`);
+            }
+            return id;
+          })
+        );
+        results.forEach((r, idx) => {
+          if (r.status === 'fulfilled') succeeded.push(batch[idx]);
+          else failed.push(batch[idx]);
+        });
+      }
+
+      if (succeeded.length > 0 && failed.length === 0) {
+        showToast(`Successfully ${doneLabel} ${succeeded.length} citizen(s)`);
+      } else if (succeeded.length > 0) {
+        showToast(`${targetAction === 'block' ? 'Blocked' : 'Unblocked'} ${succeeded.length} of ${totalCount} citizen(s) — ${failed.length} failed. Failed citizens remain selected for retry.`, 'error');
+      } else {
+        showToast(`Failed to ${targetAction} citizens. Please try again.`, 'error');
+      }
+      pruneSelection(succeeded);
+      fetchUsersRest();
     } finally {
       setBulkMutating(false);
     }
