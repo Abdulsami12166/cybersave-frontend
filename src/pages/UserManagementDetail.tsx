@@ -471,28 +471,39 @@ export default function UserManagementDetail() {
     };
   }, [id, socket, connected]);
 
+  const [blockMutating, setBlockMutating] = useState(false);
+
   const handleToggleBlock = async () => {
-    if (!user) return;
+    if (!user || blockMutating) return;
     const isCurrentlyBlocked = user.status === 'Blocked' || String(user.status).toUpperCase() === 'BLOCKED' || String(user.status).toUpperCase() === 'SUSPENDED';
-    const targetStatus = isCurrentlyBlocked ? 'VERIFIED' : 'BLOCKED';
+    const targetEndpoint = isCurrentlyBlocked ? 'unblock' : 'block';
 
-    // Instant optimistic update — UI changes immediately
-    setUser((prev: any) => prev ? { ...prev, status: targetStatus === 'BLOCKED' ? 'BLOCKED' : 'VERIFIED' } : prev);
-    showToast(`Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
+    setBlockMutating(true);
+    try {
+      // Await the backend. UI updates ONLY from the persisted state returned.
+      const res = await apiFetch(`/api/v1/users/${user.dbId || user.id}/${targetEndpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
 
-    // Fire API in background — don't block UI
-    apiFetch(`/api/v1/users/${user.dbId || user.id}/block`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: targetStatus })
-    }).then(res => {
-      if (res.ok) fetchUserRest();
-    }).catch(() => {
-      // Fallback: try socket if REST fails
-      if (socket && connected) {
-        socket.emit('block_citizen', { id: user.dbId || user.id, status: targetStatus });
+      const result = await res.json().catch(() => null);
+
+      if (res.ok && result?.success) {
+        const persistedStatus = String(result?.data?.status || '').toUpperCase();
+        setUser((prev: any) => prev ? { ...prev, status: persistedStatus } : prev);
+        showToast(result.message || `Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
+        fetchUserRest();
+      } else {
+        showToast(result?.error || 'Failed to update citizen status. Please try again.', 'error');
+        fetchUserRest();
       }
-    });
+    } catch {
+      // Network failure — keep previous confirmed state
+      showToast('Failed to update citizen status. Please try again.', 'error');
+    } finally {
+      setBlockMutating(false);
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -952,6 +963,7 @@ export default function UserManagementDetail() {
 
             <button
               onClick={handleToggleBlock}
+              disabled={blockMutating}
               style={{
                 background: isBlocked ? '#ECFDF5' : '#FFFFFF',
                 border: `1px solid ${isBlocked ? '#A7F3D0' : '#FECACA'}`,
@@ -960,11 +972,12 @@ export default function UserManagementDetail() {
                 fontSize: '13px',
                 fontWeight: 700,
                 color: isBlocked ? '#065F46' : '#DC2626',
-                cursor: 'pointer',
+                cursor: blockMutating ? 'wait' : 'pointer',
+                opacity: blockMutating ? 0.6 : 1,
                 boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
               }}
             >
-              {isBlocked ? 'Unblock Citizen' : 'Block Citizen'}
+              {blockMutating ? 'Saving...' : isBlocked ? 'Unblock Citizen' : 'Block Citizen'}
             </button>
 
             <button

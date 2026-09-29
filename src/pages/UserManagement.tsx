@@ -70,6 +70,22 @@ export default function UserManagement() {
   const [bulkNotifType, setBulkNotifType] = useState('Push Notification');
   const [sendingBulkNotif, setSendingBulkNotif] = useState(false);
 
+  // Per-row mutation in-flight guard (prevents double-clicks / conflicting requests)
+  const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
+  // Bulk mutation in-flight guard
+  const [bulkMutating, setBulkMutating] = useState(false);
+
+  // Apply authoritative status from the backend to a single citizen in local state.
+  const applyPersistedStatus = (dbId: string, apiStatus: string) => {
+    setLiveUsers(prev => prev.map(u => {
+      const uId = u.dbId || u.id || u._id;
+      if (uId === dbId) {
+        return { ...u, status: apiStatus };
+      }
+      return u;
+    }));
+  };
+
   const fetchUsersRest = async () => {
     try {
       const res = await apiFetch('/api/v1/users?limit=50').catch(() => null);
@@ -420,67 +436,81 @@ export default function UserManagement() {
 
   const handleToggleBlock = async (c: any) => {
     const isCurrentlyBlocked = c.status === 'Blocked' || String(c.status).toUpperCase() === 'BLOCKED' || String(c.status).toUpperCase() === 'SUSPENDED';
-    const newStatus = isCurrentlyBlocked ? 'VERIFIED' : 'BLOCKED';
+    const targetEndpoint = isCurrentlyBlocked ? 'unblock' : 'block';
     const targetId = c.dbId || c.id;
 
-    // Instant optimistic update — UI changes immediately
-    setLiveUsers(prev => prev.map(u => {
-      const uId = u.dbId || u.id || u._id;
-      if (uId === targetId || u.id === c.id || u.dbId === c.dbId) {
-        return { ...u, status: newStatus };
-      }
-      return u;
-    }));
-    showToast(`Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
-
-    // Fire API in background — don't block UI
-    apiFetch(`/api/v1/users/${targetId}/block`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus })
-    }).catch(() => {
-      // Fallback: try socket if REST fails
-      if (socket && connected) {
-        socket.emit('block_citizen', { id: targetId, status: newStatus });
-      }
-    });
-  };
-
-  // Bulk Block Handler
-  const handleBulkBlock = async () => {
-    if (selectedCitizenIds.length === 0) {
-      showToast('Please select at least one citizen to block', 'error');
-      return;
-    }
-    const count = selectedCitizenIds.length;
-    const targetIds = [...selectedCitizenIds];
-
-    // Optimistic UI update
-    setLiveUsers(prev => prev.map(u => {
-      const id = u.dbId || u.id || u._id;
-      if (targetIds.includes(id) || targetIds.includes(u.id)) {
-        return { ...u, status: 'BLOCKED' };
-      }
-      return u;
-    }));
+    // Guard against double-clicks while a mutation for this row is in flight
+    if (mutatingIds.has(targetId)) return;
+    setMutatingIds(prev => new Set(prev).add(targetId));
 
     try {
-      await apiFetch('/api/admin/users/bulk-block', {
+      // Await the backend. Database is the source of truth — UI only updates
+      // from the PERSISTED state returned by the API, never from local intent.
+      const res = await apiFetch(`/api/v1/users/${targetId}/${targetEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userIds: targetIds, status: 'BLOCKED' })
+        body: JSON.stringify({})
       });
-      showToast(`Successfully blocked ${count} selected citizen(s)`);
-      setSelectedCitizenIds([]);
-      fetchUsersRest();
-    } catch {
-      // Fallback: try socket if REST fails
-      if (socket && connected) {
-        socket.emit('bulk_block_citizens', { userIds: targetIds, status: 'BLOCKED' });
+
+      const result = await res.json().catch(() => null);
+
+      if (res.ok && result?.success) {
+        const persistedStatus = String(result?.data?.status || '').toUpperCase();
+        // Apply authoritative state returned by the backend
+        applyPersistedStatus(targetId, persistedStatus);
+        showToast(result.message || `Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
+        // Refresh from server to keep the whole table authoritative
+        fetchUsersRest();
+      } else {
+        // Backend rejected (validation, not found, DB failure) — keep previous confirmed state
+        showToast(result?.error || 'Failed to update citizen status. Please try again.', 'error');
+        fetchUsersRest();
       }
-      showToast(`Blocked ${count} selected citizen(s)`);
-      setSelectedCitizenIds([]);
-      fetchUsersRest();
+    } catch {
+      // Network failure — previous confirmed state is kept, no fake success
+      showToast('Failed to update citizen status. Please try again.', 'error');
+    } finally {
+      setMutatingIds(prev => {
+        const next = new Set(prev);
+        next.delete(targetId);
+        return next;
+      });
+    }
+  };
+
+  // Unified bulk block/unblock handler at footer batch bar
+  const handleBulkStatusChange = async (targetAction: 'block' | 'unblock') => {
+    if (selectedCitizenIds.length === 0) {
+      showToast(`Please select at least one citizen to ${targetAction}`, 'error');
+      return;
+    }
+    if (bulkMutating) return; // prevent double submission
+
+    const count = selectedCitizenIds.length;
+    const targetIds = [...selectedCitizenIds];
+    setBulkMutating(true);
+
+    try {
+      const res = await apiFetch(`/api/admin/users/bulk-${targetAction}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds: targetIds })
+      });
+
+      const result = await res.json().catch(() => null);
+
+      if (res.ok && result?.success) {
+        showToast(result.message || `Successfully ${targetAction === 'block' ? 'blocked' : 'unblocked'} ${result.count ?? count} citizen(s)`);
+        setSelectedCitizenIds([]);
+        fetchUsersRest();
+      } else {
+        showToast(result?.error || `Failed to ${targetAction} citizens. Please try again.`, 'error');
+        fetchUsersRest();
+      }
+    } catch {
+      showToast(`Failed to ${targetAction} citizens. Please try again.`, 'error');
+    } finally {
+      setBulkMutating(false);
     }
   };
 
@@ -1238,6 +1268,7 @@ export default function UserManagement() {
                           </button>
                           <button
                             onClick={() => handleToggleBlock(c)}
+                            disabled={mutatingIds.has(citizenKey)}
                             title={c.status === 'Blocked' ? 'Unblock Citizen' : 'Block Citizen'}
                             style={{
                               background: c.status === 'Blocked' ? '#ECFDF5' : '#FEF2F2',
@@ -1247,10 +1278,15 @@ export default function UserManagement() {
                               padding: '4px 8px',
                               fontSize: '11.5px',
                               fontWeight: 700,
-                              cursor: 'pointer'
+                              cursor: mutatingIds.has(citizenKey) ? 'wait' : 'pointer',
+                              opacity: mutatingIds.has(citizenKey) ? 0.6 : 1
                             }}
                           >
-                            {c.status === 'Blocked' ? 'Unblock' : 'Block'}
+                            {mutatingIds.has(citizenKey)
+                              ? 'Saving...'
+                              : c.status === 'Blocked'
+                                ? 'Unblock'
+                                : 'Block'}
                           </button>
                           <button
                             onClick={() => navigate(`/users/${citizenKey}`)}
@@ -1452,26 +1488,45 @@ export default function UserManagement() {
             </button>
           </div>
 
-          {/* Right section: Block Selected in bright red button matching Image 1 */}
-          <button
-            onClick={handleBulkBlock}
-            disabled={selectedCitizenIds.length === 0}
-            style={{
-              background: '#EF4444',
-              border: 'none',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '8px 18px',
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: selectedCitizenIds.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: selectedCitizenIds.length === 0 ? 0.7 : 1,
-              boxShadow: selectedCitizenIds.length > 0 ? '0 2px 8px rgba(239, 68, 68, 0.4)' : 'none',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            Block Selected
-          </button>
+          {/* Right section: Block Selected in bright red button matching Image 1 */}            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button
+                onClick={() => handleBulkStatusChange('unblock')}
+                disabled={selectedCitizenIds.length === 0 || bulkMutating}
+                style={{
+                  background: '#FFFFFF',
+                  border: selectedCitizenIds.length === 0 ? '1px solid #334155' : '1px solid #10B981',
+                  color: selectedCitizenIds.length === 0 ? '#64748B' : '#10B981',
+                  borderRadius: '6px',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: selectedCitizenIds.length === 0 || bulkMutating ? 'not-allowed' : 'pointer',
+                  opacity: selectedCitizenIds.length === 0 ? 0.7 : 1,
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {bulkMutating ? 'Processing...' : 'Unblock Selected'}
+              </button>
+              <button
+                onClick={() => handleBulkStatusChange('block')}
+                disabled={selectedCitizenIds.length === 0 || bulkMutating}
+                style={{
+                  background: '#EF4444',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  borderRadius: '6px',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: selectedCitizenIds.length === 0 || bulkMutating ? 'not-allowed' : 'pointer',
+                  opacity: selectedCitizenIds.length === 0 ? 0.7 : 1,
+                  boxShadow: selectedCitizenIds.length > 0 && !bulkMutating ? '0 2px 8px rgba(239, 68, 68, 0.4)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {bulkMutating ? 'Processing...' : 'Block Selected'}
+              </button>
+            </div>
         </div>
       </div>
 
