@@ -443,7 +443,7 @@ export default function UserManagement() {
 
   const handleToggleBlock = async (c: any) => {
     const isCurrentlyBlocked = c.status === 'Blocked' || String(c.status).toUpperCase() === 'BLOCKED' || String(c.status).toUpperCase() === 'SUSPENDED';
-    const targetEndpoint = isCurrentlyBlocked ? 'unblock' : 'block';
+    const targetStatus = isCurrentlyBlocked ? 'VERIFIED' : 'BLOCKED';
     const targetId = c.dbId || c.id;
 
     // Guard against double-clicks while a mutation for this row is in flight
@@ -453,10 +453,14 @@ export default function UserManagement() {
     try {
       // Await the backend. Database is the source of truth — UI only updates
       // from the PERSISTED state returned by the API, never from local intent.
-      const res = await apiFetch(`/api/v1/users/${targetId}/${targetEndpoint}`, {
+      // NOTE: uses /api/admin/.../block with an explicit whitelisted status —
+      // the one route shape that exists on EVERY deployed backend generation
+      // (the dedicated /unblock alias is newer than current production).
+      // The backend persists, re-reads the row, and returns authoritative state.
+      const res = await apiFetch(`/api/admin/users/${targetId}/block`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({ status: targetStatus })
       });
 
       const result = await res.json().catch(() => null);

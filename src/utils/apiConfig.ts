@@ -120,7 +120,14 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
         continue;
       }
 
-      // If response received (success or 4xx client error with valid API format), server is alive
+      // 404 on a mutating endpoint: this backend generation predates the
+      // route. Remember the candidate and try the next backend instead of
+      // short-circuiting with an error the user sees as 'not found'.
+      if (res.status === 404 && options.method && options.method !== 'GET') {
+        continue;
+      }
+
+      // If response received (success or other 4xx client error with valid API format), server is alive
       if (res.ok || res.status < 500) {
         if (activeBaseUrl !== base) {
           setApiBaseUrl(base);

@@ -476,15 +476,17 @@ export default function UserManagementDetail() {
   const handleToggleBlock = async () => {
     if (!user || blockMutating) return;
     const isCurrentlyBlocked = user.status === 'Blocked' || String(user.status).toUpperCase() === 'BLOCKED' || String(user.status).toUpperCase() === 'SUSPENDED';
-    const targetEndpoint = isCurrentlyBlocked ? 'unblock' : 'block';
+    const targetStatus = isCurrentlyBlocked ? 'VERIFIED' : 'BLOCKED';
 
     setBlockMutating(true);
     try {
       // Await the backend. UI updates ONLY from the persisted state returned.
-      const res = await apiFetch(`/api/v1/users/${user.dbId || user.id}/${targetEndpoint}`, {
+      // Uses /api/admin/.../block with explicit status — the route shape that
+      // exists on every deployed backend generation (see UserManagement).
+      const res = await apiFetch(`/api/admin/users/${user.dbId || user.id}/block`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({ status: targetStatus })
       });
 
       const result = await res.json().catch(() => null);
