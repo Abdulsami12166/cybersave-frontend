@@ -133,80 +133,10 @@ export default function Services() {
     navigate(`/services/create?id=${encodeURIComponent(targetId)}&mode=${mode}`);
   };
 
-  // Default rich categories matching both mobile & admin scheme pipelines
-  const defaultCategories = [
-    {
-      category: 'Government',
-      department: 'UIDAI Central Authority & State Ministries',
-      subServices: [
-        { id: '1', name: 'Aadhaar Demographic & Address Update', category: 'Government', sla: '5-7 Days', fee: 50, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '2', name: 'Aadhaar Biometric & Mobile Link', category: 'Government', sla: '3-5 Days', fee: 50, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '3', name: 'Birth Certificate Issuance', category: 'Government', sla: '7-15 Days', fee: 50, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '4', name: 'Income Certificate Verification', category: 'Government', sla: '7-10 Days', fee: 30, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '5', name: 'Caste Certificate Verification', category: 'Government', sla: '10-12 Days', fee: 50, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '6', name: 'Government Job Banking Registration', category: 'Government', sla: '3-5 Days', fee: 50, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '7', name: 'Central Scholarship Portal (NSP)', category: 'Government', sla: '15-20 Days', fee: 0, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '8', name: 'Pradhan Mantri Awas Yojana (PMAY)', category: 'Government', sla: '30 Days', fee: 0, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '9', name: 'Digital Voter ID & Epic Card', category: 'Government', sla: '7-10 Days', fee: 25, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '10', name: 'Ration Card Member Addition', category: 'Government', sla: '15 Days', fee: 50, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-      ]
-    },
-    {
-      category: 'Finance',
-      department: 'Department of Financial Services & RBI',
-      subServices: [
-        { id: '11', name: 'Electricity Bill Payment', category: 'Finance', sla: 'Instant', fee: 0, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '12', name: 'Banking & AePS Cash Services', category: 'Finance', sla: 'Instant', fee: 0, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '13', name: 'Atal Pension Yojana (APY)', category: 'Finance', sla: '2-3 Days', fee: 0, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '14', name: 'PM Suraksha Bima Yojana (PMSBY)', category: 'Finance', sla: '1-2 Days', fee: 20, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '15', name: 'PM Jeevan Jyoti Bima (PMJJBY)', category: 'Finance', sla: '1-2 Days', fee: 436, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '16', name: 'Sukanya Samriddhi Yojana (SSY)', category: 'Finance', sla: '3-5 Days', fee: 250, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-      ]
-    },
-    {
-      category: 'PAN Card Services',
-      department: 'Income Tax Department (NSDL / UTIITSL)',
-      subServices: [
-        { id: '17', name: 'New PAN Card Application (Form 49A)', category: 'PAN Card Services', sla: '7-10 Days', fee: 107, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '18', name: 'PAN Card Correction & Reprint', category: 'PAN Card Services', sla: '5-7 Days', fee: 107, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '19', name: 'Instant e-PAN via Aadhaar KYC', category: 'PAN Card Services', sla: '10 Mins', fee: 0, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '20', name: 'PAN-Aadhaar Mandatory Linkage', category: 'PAN Card Services', sla: '24 Hours', fee: 1000, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '21', name: 'Minor to Major PAN Update', category: 'PAN Card Services', sla: '7 Days', fee: 107, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '22', name: 'Lost / Damaged PAN Physical Card', category: 'PAN Card Services', sla: '5-7 Days', fee: 50, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-      ]
-    },
-    {
-      category: 'Passport Services',
-      department: 'Ministry of External Affairs (PSP Portal)',
-      subServices: [
-        { id: '23', name: 'Fresh Passport (36 Pages Regular)', category: 'Passport Services', sla: '15-20 Days', fee: 1500, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '24', name: 'Tatkaal Passport Fast-track', category: 'Passport Services', sla: '3-5 Days', fee: 3500, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '25', name: 'Passport Renewal & Validity Extension', category: 'Passport Services', sla: '10-15 Days', fee: 1500, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '26', name: 'Police Clearance Certificate (PCC)', category: 'Passport Services', sla: '7-10 Days', fee: 500, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-      ]
-    },
-    {
-      category: 'Certificates',
-      department: 'State Revenue & Municipal Departments',
-      subServices: [
-        { id: '27', name: 'Domicile & Residence Certificate', category: 'Certificates', sla: '7-10 Days', fee: 40, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '28', name: 'Marriage Certificate Registration', category: 'Certificates', sla: '10-15 Days', fee: 100, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '29', name: 'Character & Police Clearance', category: 'Certificates', sla: '15 Days', fee: 100, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-        { id: '30', name: 'EWS Income & Asset Certificate', category: 'Certificates', sla: '7-10 Days', fee: 50, appliedCount: 1, appliedText: '1 citizen applied', status: 'Active' },
-      ]
-    }
-  ];
-
-  const rawServices = data?.services && data.services.length > 0 ? data.services : defaultCategories;
-  const categoriesList = rawServices.map((cat: any) => {
-    const matchedDefault = defaultCategories.find(d => d.category.toLowerCase() === cat.category?.toLowerCase());
-    const mergedSubs = (cat.subServices && cat.subServices.length > 0) ? cat.subServices : (matchedDefault?.subServices || []);
-    return {
-      ...cat,
-      department: cat.department || matchedDefault?.department || 'Central / State Authority',
-      subServices: mergedSubs
-    };
-  });
+  // Render ONLY real backend records. The old behaviour merged hardcoded
+  // demo categories into the listing, which masked missing/partial data and
+  // made edited services look unchanged. Empty DB => empty directory.
+  const categoriesList = data?.services && data.services.length > 0 ? data.services : [];
 
   const totalServicesCount = categoriesList.reduce((acc: number, c: any) => acc + (c.subServices?.length || 0), 0);
   const totalAppliedMembers = categoriesList.reduce((acc: number, c: any) => 
@@ -222,7 +152,7 @@ export default function Services() {
           <p>Configure workflows, track real citizen application volume, and inspect department SLAs.</p>
         </div>
         <div style={{display: 'flex', gap: 12}}>
-          <button className="action-btn" onClick={() => navigate('/services/create')}>+ Add New Service</button>
+          <button className="action-btn" onClick={() => { try { sessionStorage.removeItem('cybersave_edit_service_id'); } catch (_) {} navigate('/services/create'); }}>+ Add New Service</button>
         </div>
       </div>
 

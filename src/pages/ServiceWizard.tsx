@@ -268,6 +268,22 @@ export default function ServiceWizard() {
       });
     }
 
+    // Authoritative REST load; aborts the loading state only after real data
+    // arrives (or every candidate fails), never on a transient empty reply.
+    let cancelled = false;
+    const loadViaApiFetch = async () => {
+      const res = await apiFetch(`/api/v1/services/${effectiveServiceId}`).catch(() => null);
+      if (cancelled) return false;
+      if (res && res.ok) {
+        const svc = await res.json().catch(() => null);
+        if (svc && (svc.id || svc.title || svc.slug)) {
+          populateService(svc);
+          return true;
+        }
+      }
+      return false;
+    };
+
     // Also try REST API fallback across candidate endpoints
     const endpoints = [
       `http://localhost:3001/api/v1/services/${effectiveServiceId}`,
@@ -278,19 +294,22 @@ export default function ServiceWizard() {
       `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/services/${effectiveServiceId}`,
     ];
     (async () => {
+      const ok = await loadViaApiFetch();
+      if (ok || cancelled) return;
       for (const ep of endpoints) {
         try {
           const res = await axios.get(ep, { timeout: 3000 });
-          if (res.data) {
+          if (res.data && (res.data.id || res.data.title || res.data.slug)) {
             populateService(res.data);
-            break;
+            return;
           }
         } catch (_) {}
       }
-      setLoadingExisting(false);
+      if (!cancelled) setLoadingExisting(false);
     })();
 
     return () => {
+      cancelled = true;
       if (socket) {
         socket.off('response_service_detail');
       }
@@ -299,6 +318,8 @@ export default function ServiceWizard() {
 
   const populateService = (s: any) => {
     if (!s) return;
+    if (loadedRef.current) return;
+    loadedRef.current = true;
     setLoadingExisting(false);
     const rawPricing = (s.pricingConfig && typeof s.pricingConfig === 'object') ? s.pricingConfig : {};
     const baseFee = typeof s.fee === 'number' ? s.fee : (Number(rawPricing.fee) || 50);
@@ -376,18 +397,23 @@ export default function ServiceWizard() {
       serviceCode: s.serviceCode || (s.slug ? `CS-${s.slug.toUpperCase().slice(0, 8)}` : prev.serviceCode),
       status: s.isActive === false ? 'Inactive' : 'Active',
       description: s.description || prev.description,
-      shortDescription: s.shortDescription || rawPricing.shortDescription || prev.shortDescription,
+      // Overview fields: derive honestly from the saved record instead of
+      // keeping create-mode template text — never show fictional copy here.
+      shortDescription: s.shortDescription || rawPricing.shortDescription || (s.description ? String(s.description).slice(0, 140) : prev.shortDescription),
       detailedDescription: s.detailedDescription || s.description || prev.detailedDescription,
       department: s.department || prev.department,
       departmentRole: s.department || prev.departmentRole,
       serviceType: s.serviceType || rawPricing.serviceType || prev.serviceType,
       processingSla: s.processingTime || prev.processingSla,
       tat: s.processingTime || prev.tat,
-      subServices: restoredSubs.length > 0 ? restoredSubs : prev.subServices,
-      formElements: restoredFields.length > 0 ? restoredFields : prev.formElements,
-      documents: restoredDocs.length > 0 ? restoredDocs : prev.documents,
-      assignedTeams: restoredTeams.length > 0 ? restoredTeams : prev.assignedTeams,
-      searchTags: restoredTags.length > 0 ? restoredTags : prev.searchTags,
+      // Sections are authoritative from the record: if a section was never
+      // configured, it must show EMPTY — not template content that would get
+      // published as if the admin had entered it.
+      subServices: restoredSubs,
+      formElements: restoredFields,
+      documents: restoredDocs,
+      assignedTeams: restoredTeams,
+      searchTags: restoredTags,
       iconName: s.iconName || prev.iconName,
       iconUrl: s.iconUrl || s.imageUrl || (s.iconName && s.iconName.startsWith('http') ? s.iconName : (rawPricing.iconUrl || prev.iconUrl)),
       imageUrl: s.imageUrl || s.iconUrl || prev.imageUrl,
@@ -398,7 +424,7 @@ export default function ServiceWizard() {
         total: typeof rawPricing.total === 'number' ? rawPricing.total : computedTotal,
         paymentMethods: rawPricing.paymentMethods || prev.pricing.paymentMethods,
         refundPolicy: rawPricing.refundPolicy || prev.pricing.refundPolicy,
-        charges: rawPricing.charges || prev.pricing.charges
+        charges: rawPricing.charges || []
       }
     }));
 
@@ -435,7 +461,10 @@ export default function ServiceWizard() {
   };
 
   // Smart Cross-Section Auto-Fill Engine
+  // EDIT MODE: never auto-fill. Sections must show exactly what is saved for
+  // this service; auto-generated template content must not overwrite it.
   const autoFillSection = (targetStep: number) => {
+    if (modeRef.current.mode === 'edit') return;
     const sName = (serviceData.name || '').trim() || 'Citizen Digital Service';
     const sCat = serviceData.category || 'Identity Services';
     const sDesc = (serviceData.description || '').trim() || `Official government citizen service portal for ${sName}.`;
@@ -669,12 +698,24 @@ export default function ServiceWizard() {
   // Save as draft or publish to real DB
   // EDIT mode (serviceData.id present) -> PUT /api/v1/services/:id (updates the existing record)
   // CREATE mode (no id)               -> POST /api/v1/services (creates exactly one new record)
+  //
+  // modeRef pins edit-vs-create at the moment the wizard loaded. Without it,
+  // any handler that reads state could flip a genuine edit back to create.
+  const modeRef = React.useRef<{ mode: 'create' | 'edit'; serviceId: string | null }>(
+    effectiveServiceId ? { mode: 'edit', serviceId: effectiveServiceId } : { mode: 'create', serviceId: null }
+  );
+  // First successful load wins: a slower duplicate reply (socket vs REST)
+  // must never clobber the loaded record — or edits the admin already made.
+  const loadedRef = React.useRef(false);
+
   const handleSave = async (isPublish = false) => {
     setIsSubmitting(true);
     const resolvedIcon = serviceData.iconUrl || serviceData.iconName || 'file-document-outline';
-    const isEditMode = Boolean(serviceData.id);
+    const mode = modeRef.current.mode;
+    const editId = mode === 'edit' ? (serviceData.id || modeRef.current.serviceId || effectiveServiceId) : null;
+    const isEditMode = mode === 'edit' && Boolean(editId);
     const payload = {
-      id: serviceData.id,
+      id: isEditMode ? editId : undefined,
       title: serviceData.name,
       name: serviceData.name,
       slug: (serviceData.slug || serviceData.name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-'),
@@ -720,8 +761,8 @@ export default function ServiceWizard() {
       // service by id; POST creates a new one. The socket broadcast below is
       // only a realtime refresh signal for other admin screens.
       let saved: any = null;
-      if (isEditMode) {
-        saved = await apiFetch(`/api/v1/services/${serviceData.id}`, {
+      if (isEditMode && editId) {
+        saved = await apiFetch(`/api/v1/services/${editId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -742,8 +783,8 @@ export default function ServiceWizard() {
         ];
         for (const ep of endpoints) {
           try {
-            if (isEditMode) {
-              const res = await axios.put(`${ep}/${serviceData.id}`, payload, { timeout: 6000 });
+            if (isEditMode && editId) {
+              const res = await axios.put(`${ep}/${editId}`, payload, { timeout: 6000 });
               saved = res.data;
             } else {
               const res = await axios.post(ep, payload, { timeout: 6000 });
@@ -755,6 +796,9 @@ export default function ServiceWizard() {
       }
 
       if (saved?.id) {
+        // Record created (create mode) or id re-confirmed (edit mode): pin it
+        // so subsequent saves keep operating on the same service.
+        modeRef.current = { mode: 'edit', serviceId: saved.id };
         setServiceData(prev => ({ ...prev, id: saved.id, slug: saved.slug || prev.slug }));
       }
 
@@ -1054,7 +1098,7 @@ export default function ServiceWizard() {
     );
   }
 
-  const isEditMode = Boolean(serviceData.id);
+  const isEditMode = modeRef.current.mode === 'edit';
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60, fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
@@ -1088,7 +1132,7 @@ export default function ServiceWizard() {
         <span style={{ color: '#94a3b8' }}>&rarr;</span>
         <Link to="/services" style={{ color: '#64748b', textDecoration: 'none' }} className="hover:underline">Services</Link>
         <span style={{ color: '#94a3b8' }}>&rarr;</span>
-        <span style={{ color: '#64748b' }}>{isEditMode ? 'Edit Service' : 'Create New Service'}</span>
+        <span style={{ color: '#64748b' }}>{modeRef.current.mode === 'edit' ? 'Edit Service' : 'Create New Service'}</span>
         <span style={{ color: '#94a3b8' }}>&rarr;</span>
         <span style={{ color: '#2563eb', fontWeight: 600 }}>{steps.find(s => s.id === activeStep)?.name || 'Main Service'}</span>
       </div>
