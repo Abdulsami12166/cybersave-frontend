@@ -77,8 +77,19 @@ export default function ServiceWizard() {
   const stepParam = searchParams.get('step');
   const modeParam = searchParams.get('mode') || 'edit';
 
+  // Reload-safety: remember which service is being edited so a browser refresh
+  // mid-wizard cannot silently fall back to create mode.
+  const effectiveServiceId = (() => {
+    if (serviceIdParam) {
+      try { sessionStorage.setItem('cybersave_edit_service_id', serviceIdParam); } catch (_) {}
+      return serviceIdParam;
+    }
+    try { return sessionStorage.getItem('cybersave_edit_service_id'); } catch (_) { return null; }
+  })();
+
   const [activeStep, setActiveStep] = useState<number>(stepParam ? parseInt(stepParam, 10) : 1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState<boolean>(Boolean(effectiveServiceId));
   const [isUploadingIcon, setIsUploadingIcon] = useState(false);
   const [iconUploadError, setIconUploadError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -207,6 +218,15 @@ export default function ServiceWizard() {
   // Active element selected in Form Builder properties panel
   const [selectedElementIndex, setSelectedElementIndex] = useState<number>(0);
 
+  // Metadata persisted with the service that has no dedicated wizard input,
+  // so edits round-trip instead of being dropped on publish.
+  const [extraMeta, setExtraMeta] = useState<{
+    eligibility: string[];
+    priorityLevel: string;
+    autoApproval: boolean;
+    isPublished: boolean;
+  }>({ eligibility: [], priorityLevel: 'Medium', autoApproval: true, isPublished: false });
+
   // New tag inputs
   const [newTeamTag, setNewTeamTag] = useState('');
   const [newSearchTag, setNewSearchTag] = useState('');
@@ -234,13 +254,13 @@ export default function ServiceWizard() {
   const [newChargeAmount, setNewChargeAmount] = useState('₹50');
   const [newChargeCondition, setNewChargeCondition] = useState('Standard condition');
 
-  // Fetch existing service data if ID is passed
+  // Fetch existing service data if ID is passed (edit mode prefill)
   useEffect(() => {
-    if (!serviceIdParam) return;
+    if (!effectiveServiceId) return;
 
     // First try socket
     if (socket) {
-      socket.emit('request_service_detail', { id: serviceIdParam });
+      socket.emit('request_service_detail', { id: effectiveServiceId });
       socket.on('response_service_detail', (res: any) => {
         if (res) {
           populateService(res);
@@ -250,12 +270,12 @@ export default function ServiceWizard() {
 
     // Also try REST API fallback across candidate endpoints
     const endpoints = [
-      `http://localhost:3001/api/v1/services/${serviceIdParam}`,
-      `http://localhost:3001/api/services/${serviceIdParam}`,
-      `http://localhost:3000/api/v1/services/${serviceIdParam}`,
-      `http://localhost:3000/api/services/${serviceIdParam}`,
-      `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/v1/services/${serviceIdParam}`,
-      `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/services/${serviceIdParam}`,
+      `http://localhost:3001/api/v1/services/${effectiveServiceId}`,
+      `http://localhost:3001/api/services/${effectiveServiceId}`,
+      `http://localhost:3000/api/v1/services/${effectiveServiceId}`,
+      `http://localhost:3000/api/services/${effectiveServiceId}`,
+      `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/v1/services/${effectiveServiceId}`,
+      `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/services/${effectiveServiceId}`,
     ];
     (async () => {
       for (const ep of endpoints) {
@@ -267,6 +287,7 @@ export default function ServiceWizard() {
           }
         } catch (_) {}
       }
+      setLoadingExisting(false);
     })();
 
     return () => {
@@ -274,66 +295,121 @@ export default function ServiceWizard() {
         socket.off('response_service_detail');
       }
     };
-  }, [serviceIdParam, socket]);
+  }, [effectiveServiceId, socket]);
 
   const populateService = (s: any) => {
-    const rawPricing = s.pricingConfig || {};
-    const baseFee = typeof s.fee === 'number' ? s.fee : (rawPricing.fee || 50);
+    if (!s) return;
+    setLoadingExisting(false);
+    const rawPricing = (s.pricingConfig && typeof s.pricingConfig === 'object') ? s.pricingConfig : {};
+    const baseFee = typeof s.fee === 'number' ? s.fee : (Number(rawPricing.fee) || 50);
     const hasGst = rawPricing.applyGst !== false;
     const computedTotal = hasGst ? Math.round(baseFee * 1.18) : baseFee;
+
+    // Form-builder fields: restore persisted configuration exactly (label,
+    // type, placeholder, mandatory flag, validation and options).
+    const TYPE_MAP: Record<string, string> = {
+      text: 'Text Input', number: 'Number Input', phone: 'Phone Field',
+      email: 'Email Address', date: 'Date Picker', select: 'Dropdown Select',
+      textarea: 'Text Area', 'text-area': 'Text Area',
+      radio: 'Radio Control', checkbox: 'Checkbox Option',
+    };
+    const restoreType = (t: any) => {
+      if (!t) return 'Text Input';
+      if (TYPE_MAP[String(t).toLowerCase()]) return TYPE_MAP[String(t).toLowerCase()];
+      const match = ['Text Input', 'Number Input', 'Phone Field', 'Email Address', 'Date Picker', 'Dropdown Select', 'Text Area', 'Radio Control', 'Checkbox Option']
+        .find((v) => v.toLowerCase() === String(t).toLowerCase());
+      return match || String(t);
+    };
+    const restoredFields: FormElementItem[] = Array.isArray(s.formDataSchema)
+      ? s.formDataSchema.map((f: any) => ({
+          label: f.label || 'Field Label',
+          type: restoreType(f.type),
+          placeholder: f.placeholder || '',
+          required: f.required !== false,
+          validationRule: f.validationRule || 'None',
+          options: typeof f.options === 'string' ? f.options : (Array.isArray(f.options) ? f.options.join(', ') : undefined),
+          section: f.section,
+        }))
+      : [];
+
+    const restoredSubs: SubServiceItem[] = Array.isArray(s.subServices)
+      ? s.subServices.map((sub: any) => ({
+          id: sub.id,
+          name: sub.name || sub.title || 'Sub Service',
+          code: sub.code || `CS-${(sub.name || sub.title || 'SUB').toUpperCase().replace(/\s+/g, '-').slice(0, 6)}`,
+          status: sub.status === 'Inactive' ? 'Inactive' : 'Active',
+          fee: typeof sub.fee === 'number' ? sub.fee : (Number(sub.fee) || baseFee),
+          sla: sub.sla || s.processingTime || '5-7 Days',
+          description: sub.description || '',
+          detailedDescription: sub.detailedDescription || sub.description || '',
+        }))
+      : [];
+
+    const restoredDocs: DocumentItem[] = Array.isArray(s.requiredDocs)
+      ? s.requiredDocs.map((d: any) => ({
+          id: typeof d === 'object' && d ? d.id : undefined,
+          type: typeof d === 'string' ? d : (d.type || d.name || 'Proof Document'),
+          subtitle: typeof d === 'object' && d ? (d.subtitle || d.description || '') : '',
+          formats: (typeof d === 'object' && d && d.formats) || 'PDF, JPG, PNG',
+          size: (typeof d === 'object' && d && d.size) || '2 MB',
+          req: (typeof d === 'object' && d && (d.req === 'Optional' || d.mandatory === false || d.required === false)) ? 'Optional' : 'Required',
+        }))
+      : [];
+
+    const restoredTeams: string[] = Array.isArray(s.assignedTeams)
+      ? s.assignedTeams
+      : (rawPricing.assignedTeams && Array.isArray(rawPricing.assignedTeams) ? rawPricing.assignedTeams : []);
+    const restoredTags: string[] = Array.isArray(s.searchTags)
+      ? s.searchTags
+      : (rawPricing.searchTags && Array.isArray(rawPricing.searchTags) ? rawPricing.searchTags : []);
+    const eligibilityList: string[] = Array.isArray(s.eligibility)
+      ? s.eligibility
+      : (typeof s.eligibility === 'string' && s.eligibility ? [s.eligibility] : []);
 
     setServiceData(prev => ({
       ...prev,
       id: s.id,
       slug: s.slug,
       name: s.title || s.name || prev.name,
-      displayName: s.title || prev.displayName,
+      displayName: s.displayName || s.title || prev.displayName,
       category: s.category || prev.category,
-      serviceCode: s.slug ? `CS-${s.slug.toUpperCase().slice(0, 8)}` : prev.serviceCode,
+      serviceCode: s.serviceCode || (s.slug ? `CS-${s.slug.toUpperCase().slice(0, 8)}` : prev.serviceCode),
       status: s.isActive === false ? 'Inactive' : 'Active',
       description: s.description || prev.description,
-      shortDescription: s.shortDescription || prev.shortDescription,
-      detailedDescription: s.description || prev.detailedDescription,
+      shortDescription: s.shortDescription || rawPricing.shortDescription || prev.shortDescription,
+      detailedDescription: s.detailedDescription || s.description || prev.detailedDescription,
+      department: s.department || prev.department,
       departmentRole: s.department || prev.departmentRole,
+      serviceType: s.serviceType || rawPricing.serviceType || prev.serviceType,
+      processingSla: s.processingTime || prev.processingSla,
       tat: s.processingTime || prev.tat,
-      subServices: Array.isArray(s.subServices) && s.subServices.length > 0
-        ? s.subServices.map((sub: any) => ({
-            name: sub.name || sub.title || 'Sub Service',
-            code: sub.code || `CS-${(sub.name || 'SUB').toUpperCase().slice(0, 6)}`,
-            status: sub.status || 'Active',
-            fee: sub.fee || baseFee,
-            sla: sub.sla || s.processingTime || '5-7 Days', description: sub.description || '', detailedDescription: sub.detailedDescription || sub.description || ''
-          }))
-        : prev.subServices,
-      formElements: Array.isArray(s.formDataSchema) && s.formDataSchema.length > 0
-        ? s.formDataSchema.map((f: any) => ({
-            label: f.label || 'Field Label',
-            type: f.type === 'text' ? 'Text Input' : f.type === 'date' ? 'Date Picker' : f.type === 'number' ? 'Number Input' : f.type || 'Text Input',
-            placeholder: f.placeholder || '',
-            required: f.required !== false,
-            validationRule: f.validationRule || 'None'
-          }))
-        : prev.formElements,
-      documents: Array.isArray(s.requiredDocs) && s.requiredDocs.length > 0
-        ? s.requiredDocs.map((d: any) => ({
-            type: typeof d === 'string' ? d : (d.type || d.name || 'Proof Document'),
-            formats: d.formats || 'PDF, JPG, PNG',
-            size: d.size || '2 MB',
-            req: d.req === 'Optional' ? 'Optional' : 'Required'
-          }))
-        : prev.documents,
+      subServices: restoredSubs.length > 0 ? restoredSubs : prev.subServices,
+      formElements: restoredFields.length > 0 ? restoredFields : prev.formElements,
+      documents: restoredDocs.length > 0 ? restoredDocs : prev.documents,
+      assignedTeams: restoredTeams.length > 0 ? restoredTeams : prev.assignedTeams,
+      searchTags: restoredTags.length > 0 ? restoredTags : prev.searchTags,
       iconName: s.iconName || prev.iconName,
-      iconUrl: s.iconUrl || s.imageUrl || (s.iconName && s.iconName.startsWith('http') ? s.iconName : (rawPricing.iconUrl || '')),
-      imageUrl: s.imageUrl || s.iconUrl || '',
+      iconUrl: s.iconUrl || s.imageUrl || (s.iconName && s.iconName.startsWith('http') ? s.iconName : (rawPricing.iconUrl || prev.iconUrl)),
+      imageUrl: s.imageUrl || s.iconUrl || prev.imageUrl,
       colorHex: s.colorHex || prev.colorHex,
       pricing: {
         fee: baseFee,
         applyGst: hasGst,
-        total: computedTotal,
+        total: typeof rawPricing.total === 'number' ? rawPricing.total : computedTotal,
         paymentMethods: rawPricing.paymentMethods || prev.pricing.paymentMethods,
         refundPolicy: rawPricing.refundPolicy || prev.pricing.refundPolicy,
         charges: rawPricing.charges || prev.pricing.charges
       }
+    }));
+
+    // Persist extra metadata that has no dedicated state field yet so edits
+    // round-trip instead of being dropped on publish.
+    setExtraMeta(prev => ({
+      ...prev,
+      eligibility: eligibilityList,
+      priorityLevel: s.priorityLevel || prev.priorityLevel,
+      autoApproval: typeof s.autoApproval === 'boolean' ? s.autoApproval : prev.autoApproval,
+      isPublished: s.isPublished !== undefined ? Boolean(s.isPublished) : prev.isPublished,
     }));
   };
 
@@ -576,14 +652,14 @@ export default function ServiceWizard() {
           imageUrl: uploadedUrl,
           iconName: uploadedUrl,
         }));
-        showToast('Γ£à Service icon uploaded to Cloudinary successfully!');
+        showToast('✅ Service icon uploaded to Cloudinary successfully!');
       } else {
-        showToast('Γ£à Icon loaded locally.');
+        showToast('✅ Icon loaded locally.');
       }
     } catch (error: any) {
       console.error('Icon upload failed:', error);
       setIconUploadError(error?.message || 'Failed to upload icon');
-      showToast('Γ¥î Failed to upload icon. Please try again.');
+      showToast('❌ Failed to upload icon. Please try again.');
     } finally {
       setIsUploadingIcon(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -591,9 +667,12 @@ export default function ServiceWizard() {
   };
 
   // Save as draft or publish to real DB
+  // EDIT mode (serviceData.id present) -> PUT /api/v1/services/:id (updates the existing record)
+  // CREATE mode (no id)               -> POST /api/v1/services (creates exactly one new record)
   const handleSave = async (isPublish = false) => {
     setIsSubmitting(true);
     const resolvedIcon = serviceData.iconUrl || serviceData.iconName || 'file-document-outline';
+    const isEditMode = Boolean(serviceData.id);
     const payload = {
       id: serviceData.id,
       title: serviceData.name,
@@ -630,43 +709,64 @@ export default function ServiceWizard() {
       colorHex: serviceData.colorHex,
       assignedTeams: serviceData.assignedTeams,
       searchTags: serviceData.searchTags,
-      isPublished: isPublish
+      eligibility: extraMeta.eligibility,
+      priorityLevel: extraMeta.priorityLevel,
+      autoApproval: extraMeta.autoApproval,
+      isPublished: isPublish || extraMeta.isPublished,
     };
 
     try {
-      // 1. Emit via socket
-      if (socket) {
-        socket.emit('save_service_config', payload);
-        socket.emit('service_created', payload);
-        socket.emit('service_updated', payload);
-        socket.emit('services_updated', payload);
-        socket.emit('service_published', payload);
+      // 1. Persist via REST first (authoritative). PUT updates the existing
+      // service by id; POST creates a new one. The socket broadcast below is
+      // only a realtime refresh signal for other admin screens.
+      let saved: any = null;
+      if (isEditMode) {
+        saved = await apiFetch(`/api/v1/services/${serviceData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then(r => (r && r.ok ? r.json() : null)).catch(() => null);
+      } else {
+        saved = await apiFetch('/api/v1/services', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then(r => (r && r.ok ? r.json() : null)).catch(() => null);
       }
 
-      // 2. Also POST to backend REST endpoint for guaranteed persistence & curl testing
-      const endpoints = [
-        '/api/v1/services',
-        '/api/services',
-        'http://localhost:3001/api/v1/services',
-        'http://localhost:3001/api/services',
-        `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/v1/services`,
-        `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/services`,
-      ];
-      for (const ep of endpoints) {
-        try {
-          if (serviceData.id) {
-            await apiFetch(`/api/v1/services/${serviceData.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => null);
-          }
-          await axios.post(ep, payload, { timeout: 4000 });
-          break;
-        } catch (_) {}
+      // Fallback candidates for environments where apiFetch's primary base is unreachable
+      if (!saved) {
+        const endpoints = [
+          `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/v1/services`,
+          `${import.meta.env.VITE_BACKEND_URL || getApiBaseUrl()}/api/services`,
+        ];
+        for (const ep of endpoints) {
+          try {
+            if (isEditMode) {
+              const res = await axios.put(`${ep}/${serviceData.id}`, payload, { timeout: 6000 });
+              saved = res.data;
+            } else {
+              const res = await axios.post(ep, payload, { timeout: 6000 });
+              saved = res.data;
+            }
+            break;
+          } catch (_) {}
+        }
+      }
+
+      if (saved?.id) {
+        setServiceData(prev => ({ ...prev, id: saved.id, slug: saved.slug || prev.slug }));
+      }
+
+      if (socket) {
+        socket.emit('services_updated', saved || payload);
       }
 
       setIsSubmitting(false);
       window.dispatchEvent(new CustomEvent('cybersave_services_updated'));
 
       if (isPublish) {
-        showToast(`🎉 Service "${serviceData.name}" has been published live to CyberSave Mobile App & Citizen Portal!`);
+        showToast(`🎉 Service "${serviceData.name}" ${isEditMode ? 'updated' : 'published'} live to CyberSave Mobile App & Citizen Portal!`);
         setTimeout(() => {
           navigate('/services');
         }, 1500);
@@ -675,7 +775,7 @@ export default function ServiceWizard() {
       }
     } catch (e: any) {
       setIsSubmitting(false);
-      showToast('Saved locally and broadcasted to portal!');
+      showToast(isEditMode ? 'Could not update the service. Please retry.' : 'Could not create the service. Please retry.');
     }
   };
 
@@ -719,7 +819,7 @@ export default function ServiceWizard() {
   const FORM_TEMPLATES: Record<string, { name: string; icon: string; description: string; fields: FormElementItem[] }> = {
     general: {
       name: 'General Citizen Application',
-      icon: '≡ƒôï',
+      icon: '📋',
       description: 'Standard demographic and contact details for all citizen requests',
       fields: [
         { label: 'Applicant Full Name', type: 'Text Input', placeholder: 'Enter official name as per Aadhaar', required: true, validationRule: 'None' },
@@ -736,7 +836,7 @@ export default function ServiceWizard() {
     },
     farmer: {
       name: 'Farmer & DBT Welfare Scheme (PM-KISAN)',
-      icon: '≡ƒî╛',
+      icon: '🌾',
       description: 'Direct benefit transfer, land verification, and bank details',
       fields: [
         { label: 'Beneficiary Farmer Name', type: 'Text Input', placeholder: 'Farmer full name', required: true, validationRule: 'None' },
@@ -766,7 +866,7 @@ export default function ServiceWizard() {
     },
     passport: {
       name: 'Passport & Overseas Travel Clearance',
-      icon: '≡ƒ¢é',
+      icon: '🛂',
       description: 'PSP Portal Ministry of External Affairs parameters',
       fields: [
         { label: 'Given Name (First & Middle Name)', type: 'Text Input', placeholder: 'As on Birth/School cert', required: true, validationRule: 'None' },
@@ -781,7 +881,7 @@ export default function ServiceWizard() {
     },
     utility: {
       name: 'Electricity & Utility Bill Payment',
-      icon: 'ΓÜí',
+      icon: '⚡',
       description: 'BBPS utility power, water, and gas consumer billing parameters',
       fields: [
         { label: 'Electricity Board / DISCOM Name', type: 'Dropdown Select', placeholder: 'Select provider', required: true, validationRule: 'None', options: 'State Power Distribution Co., BSES Rajdhani, Tata Power-DDL, Adani Electricity, Torrent Power, UPPCL' },
@@ -793,7 +893,7 @@ export default function ServiceWizard() {
     },
     pan: {
       name: 'PAN Card & Income Tax Identification',
-      icon: '≡ƒÆ│',
+      icon: '💳',
       description: 'NSDL / UTIITSL PAN issuance and demographic update',
       fields: [
         { label: 'Applicant Legal Full Name', type: 'Text Input', placeholder: 'Name in full (no abbreviations)', required: true, validationRule: 'None' },
@@ -942,9 +1042,19 @@ export default function ServiceWizard() {
     }));
   };
 
-  if (!serviceIdParam) {
+  if (!effectiveServiceId) {
     return <AddNewService />;
   }
+
+  if (loadingExisting) {
+    return (
+      <div style={{ maxWidth: 1200, margin: '0 auto', paddingTop: 80, paddingBottom: 60, textAlign: 'center', color: '#64748b', fontSize: 14, fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+        Loading service configuration…
+      </div>
+    );
+  }
+
+  const isEditMode = Boolean(serviceData.id);
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60, fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
@@ -978,7 +1088,7 @@ export default function ServiceWizard() {
         <span style={{ color: '#94a3b8' }}>&rarr;</span>
         <Link to="/services" style={{ color: '#64748b', textDecoration: 'none' }} className="hover:underline">Services</Link>
         <span style={{ color: '#94a3b8' }}>&rarr;</span>
-        <span style={{ color: '#64748b' }}>Create New Service</span>
+        <span style={{ color: '#64748b' }}>{isEditMode ? 'Edit Service' : 'Create New Service'}</span>
         <span style={{ color: '#94a3b8' }}>&rarr;</span>
         <span style={{ color: '#2563eb', fontWeight: 600 }}>{steps.find(s => s.id === activeStep)?.name || 'Main Service'}</span>
       </div>
@@ -1688,7 +1798,7 @@ export default function ServiceWizard() {
                       assignedTeams: serviceData.assignedTeams.filter((_, i) => i !== idx)
                     })}
                   >
-                    Γèù
+                    ⊗
                   </span>
                 </span>
               ))}
@@ -1739,7 +1849,7 @@ export default function ServiceWizard() {
                       searchTags: serviceData.searchTags.filter((_, i) => i !== idx)
                     })}
                   >
-                    Γèù
+                    ⊗
                   </span>
                 </span>
               ))}
@@ -1802,7 +1912,7 @@ export default function ServiceWizard() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div>
                 <h4 style={{ fontSize: 13.5, fontWeight: 800, color: '#1e40af', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>ΓÜí</span> Quick Government Form Templates
+                  <span>⚡</span> Quick Government Form Templates
                 </h4>
                 <p style={{ fontSize: 11.5, color: '#475569', margin: '2px 0 0 0' }}>
                   Select a pre-designed standard scheme form or customize fields individually below.
@@ -1862,15 +1972,16 @@ export default function ServiceWizard() {
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
-                  { name: 'Text Input', icon: '≡ƒô¥' },
-                  { name: 'Number Input', icon: '≡ƒöó' },
-                  { name: 'Phone Field', icon: '≡ƒô▒' },
-                  { name: 'Email Address', icon: 'Γ£ë∩╕Å' },
-                  { name: 'Date Picker', icon: '≡ƒôà' },
-                  { name: 'Dropdown Select', icon: '≡ƒö╜' },
-                  { name: 'Text Area / Multi-line', icon: '≡ƒôä' },
-                  { name: 'Radio Control', icon: '≡ƒöÿ' },
-                  { name: 'Checkbox Option', icon: 'Γÿæ∩╕Å' }
+                  { name: 'Text Input', icon: '📝' },
+
+                  { name: 'Number Input', icon: '🔢' },
+                  { name: 'Phone Field', icon: '📱' },
+                  { name: 'Email Address', icon: '✉️' },
+                  { name: 'Date Picker', icon: '📅' },
+                  { name: 'Dropdown Select', icon: '🔽' },
+                  { name: 'Text Area / Multi-line', icon: '📄' },
+                  { name: 'Radio Control', icon: '🔘' },
+                  { name: 'Checkbox Option', icon: '☑️' }
                 ].map((elem, idx) => (
                   <div
                     key={idx}
@@ -1925,7 +2036,7 @@ export default function ServiceWizard() {
 
               {serviceData.formElements.length === 0 ? (
                 <div style={{ padding: '40px 20px', textAlign: 'center', border: '2px dashed #cbd5e1', borderRadius: 10, background: '#f8fafc' }}>
-                  <div style={{ fontSize: 24, marginBottom: 8 }}>≡ƒôï</div>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: '#334155' }}>No Form Fields Configured</div>
                   <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
                     Choose a template above or click fields from the left palette to build this service form.
@@ -1961,7 +2072,7 @@ export default function ServiceWizard() {
                             </div>
                             <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
                               <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, marginRight: 6, fontWeight: 600 }}>{elem.type}</span>
-                              {elem.placeholder && `ΓÇó "${elem.placeholder}"`}
+                              {elem.placeholder && `• "${elem.placeholder}"`}
                             </div>
                           </div>
                         </div>
@@ -1978,7 +2089,7 @@ export default function ServiceWizard() {
                             style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #e2e8f0', background: idx === 0 ? '#f8fafc' : '#ffffff', cursor: idx === 0 ? 'not-allowed' : 'pointer', fontSize: 11 }}
                             title="Move Up"
                           >
-                            Γû▓
+                            ▲
                           </button>
                           <button
                             type="button"
@@ -1990,7 +2101,7 @@ export default function ServiceWizard() {
                             style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #e2e8f0', background: idx === serviceData.formElements.length - 1 ? '#f8fafc' : '#ffffff', cursor: idx === serviceData.formElements.length - 1 ? 'not-allowed' : 'pointer', fontSize: 11 }}
                             title="Move Down"
                           >
-                            Γû╝
+                            ▼
                           </button>
                           <Trash2
                             size={15}
@@ -2708,7 +2819,7 @@ export default function ServiceWizard() {
                     onChange={e => setServiceData({ ...serviceData, effectiveDate: e.target.value })}
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
                   />
-                  <span style={{ position: 'absolute', right: 12, top: 8 }}>≡ƒôà</span>
+                  <span style={{ position: 'absolute', right: 12, top: 8 }}>📅</span>
                 </div>
               </div>
 
@@ -2757,7 +2868,7 @@ export default function ServiceWizard() {
 
           {/* Warning Banner */}
           <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '14px 20px', display: 'flex', gap: 12, marginBottom: 24 }}>
-            <span style={{ fontSize: 18 }}>ΓÜá∩╕Å</span>
+            <span style={{ fontSize: 18 }}>⚠️</span>
             <div style={{ fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>
               <strong style={{ color: '#78350f' }}>Warning:</strong> Publishing this service makes it visible and accessible to over 10M+ citizens instantly on the main portal and CyberSave mobile application. Ensure SLA constraints and verification departments are correctly specified.
             </div>
@@ -2799,7 +2910,7 @@ export default function ServiceWizard() {
                   boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)'
                 }}
               >
-                <Check size={16} strokeWidth={2.5} /> {isSubmitting ? 'Publishing Live to Portal & Mobile...' : 'Publish Service'}
+                <Check size={16} strokeWidth={2.5} /> {isSubmitting ? (isEditMode ? 'Updating Service…' : 'Publishing Live to Portal & Mobile...') : (isEditMode ? 'Update & Publish Service' : 'Publish Service')}
               </button>
             </div>
           </div>
