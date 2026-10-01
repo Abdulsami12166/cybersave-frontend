@@ -56,7 +56,11 @@ export default function Services() {
                   category: s.category,
                   department: s.department,
                   sla: sub.sla || s.processingTime || '3-5 Days',
-                  fee: sub.fee !== undefined ? sub.fee : (s.fee || 50),
+                  // Show the service's CURRENT published fee (parent record),
+                  // not the sub-service's creation-time snapshot — otherwise a
+                  // price update publishes to mobile but the directory keeps
+                  // rendering the old amount.
+                  fee: typeof s.fee === 'number' ? s.fee : (sub.fee ?? 50),
                   description: sub.description || s.description,
                   status: s.isActive ? 'Active' : 'Inactive',
                   iconUrl: iconUrl,
@@ -105,6 +109,10 @@ export default function Services() {
 
   useEffect(() => {
     fetchServicesRest();
+    // Refetch when any wizard save broadcasts completion (covers in-place
+    // updates when the socket channel is unavailable).
+    const handleServicesUpdated = () => { fetchServicesRest(); };
+    window.addEventListener('cybersave_services_updated', handleServicesUpdated);
     if (socket && connected) {
       socket.emit('request_services_data');
       socket.on('response_services_data', (resData) => {
@@ -122,6 +130,7 @@ export default function Services() {
       });
     }
     return () => {
+      window.removeEventListener('cybersave_services_updated', handleServicesUpdated);
       if (socket) {
         socket.off('response_services_data');
         socket.off('edit_service_success');
