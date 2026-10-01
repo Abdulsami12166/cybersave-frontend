@@ -73,17 +73,23 @@ export default function ServiceWizard() {
   const [searchParams] = useSearchParams();
 
   const { id: routeId } = useParams();
-  const serviceIdParam = searchParams.get('id') || routeId;
   const stepParam = searchParams.get('step');
   const modeParam = searchParams.get('mode') || 'edit';
 
-  // Reload-safety: remember which service is being edited so a browser refresh
-  // mid-wizard cannot silently fall back to create mode.
+  // Strict create-vs-edit identity: an id must come from the URL. The
+  // sessionStorage entry below is only a reload-safety net for a genuine edit
+  // session (it is written when a real id is present). It must never resurrect
+  // a stale id for an explicit create route (/services/new), otherwise
+  // "Add New Service" would silently reopen the last-edited service instead of
+  // creating a fresh one.
+  const serviceIdParam = searchParams.get('id') || routeId || null;
+  const isExplicitCreateRoute = window.location.pathname === '/services/new';
   const effectiveServiceId = (() => {
     if (serviceIdParam) {
       try { sessionStorage.setItem('cybersave_edit_service_id', serviceIdParam); } catch (_) {}
       return serviceIdParam;
     }
+    if (isExplicitCreateRoute) return null;
     try { return sessionStorage.getItem('cybersave_edit_service_id'); } catch (_) { return null; }
   })();
 
@@ -392,7 +398,10 @@ export default function ServiceWizard() {
       id: s.id,
       slug: s.slug,
       name: s.title || s.name || prev.name,
-      displayName: s.displayName || s.title || prev.displayName,
+      // Overview display name is persisted inside pricingConfig metadata by the
+      // backend (the Service table has no dedicated column); restore it so the
+      // Overview step pre-fills exactly what was saved instead of template text.
+      displayName: s.displayName || rawPricing.displayName || s.title || prev.displayName,
       category: s.category || prev.category,
       serviceCode: s.serviceCode || (s.slug ? `CS-${s.slug.toUpperCase().slice(0, 8)}` : prev.serviceCode),
       status: s.isActive === false ? 'Inactive' : 'Active',
@@ -435,7 +444,18 @@ export default function ServiceWizard() {
       eligibility: eligibilityList,
       priorityLevel: s.priorityLevel || prev.priorityLevel,
       autoApproval: typeof s.autoApproval === 'boolean' ? s.autoApproval : prev.autoApproval,
-      isPublished: s.isPublished !== undefined ? Boolean(s.isPublished) : prev.isPublished,
+      isPublished: s.isPublished !== undefined
+        ? Boolean(s.isPublished)
+        : (rawPricing.isPublished !== undefined ? Boolean(rawPricing.isPublished) : prev.isPublished),
+    }));
+
+    // Publish-step configuration saved with the record (inside pricingConfig).
+    setServiceData(prev2 => ({
+      ...prev2,
+      portalVisibility: rawPricing.portalVisibility || prev2.portalVisibility,
+      effectiveDate: rawPricing.effectiveDate || prev2.effectiveDate,
+      notifyCitizens: typeof rawPricing.notifyCitizens === 'boolean' ? rawPricing.notifyCitizens : prev2.notifyCitizens,
+      targetEnv: rawPricing.targetEnv || prev2.targetEnv,
     }));
   };
 
@@ -743,7 +763,16 @@ export default function ServiceWizard() {
       documents: serviceData.documents,
       requiredDocs: serviceData.documents,
       pricing: { ...serviceData.pricing, iconUrl: serviceData.iconUrl },
-      pricingConfig: { ...serviceData.pricing, iconUrl: serviceData.iconUrl },
+      pricingConfig: {
+        ...serviceData.pricing,
+        iconUrl: serviceData.iconUrl,
+        // Publish-step configuration round-trips with the record so a later
+        // edit restores the previously published visibility/settings.
+        portalVisibility: serviceData.portalVisibility,
+        effectiveDate: serviceData.effectiveDate,
+        notifyCitizens: serviceData.notifyCitizens,
+        targetEnv: serviceData.targetEnv,
+      },
       iconName: resolvedIcon,
       iconUrl: serviceData.iconUrl,
       imageUrl: serviceData.imageUrl || serviceData.iconUrl,

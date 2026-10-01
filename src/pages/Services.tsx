@@ -62,8 +62,10 @@ export default function Services() {
                   iconUrl: iconUrl,
                   iconName: s.iconName,
                   isActive: s.isActive,
-                  appliedCount: sub.appliedCount || 1,
-                  appliedText: sub.appliedText || '1 citizen applied'
+                  // Real counts only: never invent "1 citizen applied" for a
+                  // service nobody has applied to.
+                  appliedCount: sub.appliedCount || 0,
+                  appliedText: sub.appliedText || (sub.appliedCount ? `${sub.appliedCount} citizens applied` : 'No applications yet')
                 });
               });
             } else {
@@ -82,8 +84,8 @@ export default function Services() {
                 iconUrl: iconUrl,
                 iconName: s.iconName,
                 isActive: s.isActive,
-                appliedCount: 1,
-                appliedText: '1 citizen applied'
+                appliedCount: 0,
+                appliedText: 'No applications yet'
               });
             }
           });
@@ -140,8 +142,31 @@ export default function Services() {
 
   const totalServicesCount = categoriesList.reduce((acc: number, c: any) => acc + (c.subServices?.length || 0), 0);
   const totalAppliedMembers = categoriesList.reduce((acc: number, c: any) => 
-    acc + c.subServices.reduce((subAcc: number, s: any) => subAcc + (s.appliedCount || 1), 0), 0
+    acc + c.subServices.reduce((subAcc: number, s: any) => subAcc + (s.appliedCount || 0), 0), 0
   );
+
+  // Real stats only: derive active count and average SLA from actual records.
+  const rawServices: any[] = data?.rawServices || [];
+  const activeServicesCount = rawServices.filter((s: any) => s.isActive !== false).length;
+  const parseSlaDays = (sla: any): number | null => {
+    if (!sla || typeof sla !== 'string') return null;
+    const s = sla.toLowerCase();
+    if (s.includes('instant')) return 0;
+    const range = s.match(/(\d+)\s*(?:-|to|–)\s*(\d+)/);
+    const single = s.match(/(\d+(?:\.\d+)?)/);
+    if (range) return (parseFloat(range[1]) + parseFloat(range[2])) / 2;
+    if (single) {
+      const n = parseFloat(single[1]);
+      return s.includes('hour') ? n / 24 : n;
+    }
+    return null;
+  };
+  const slaDays = rawServices
+    .map((s: any) => parseSlaDays(s.processingTime || s.sla))
+    .filter((d: number | null): d is number => d !== null);
+  const avgSlaLabel = slaDays.length > 0
+    ? `${(slaDays.reduce((a: number, b: number) => a + b, 0) / slaDays.length).toFixed(1)} Days`
+    : '—';
 
   return (
     <>
@@ -164,7 +189,7 @@ export default function Services() {
         />
         <StatCard 
           icon={<CheckCircle color="#10b981" />} iconBg="#d1fae5"
-          title="ACTIVE SERVICES" value={totalServicesCount.toLocaleString()} 
+          title="ACTIVE SERVICES" value={activeServicesCount.toLocaleString()} 
           trend="Operational Online" trendType="up" 
         />
         <StatCard 
@@ -174,8 +199,8 @@ export default function Services() {
         />
         <StatCard 
           icon={<Clock color="#f59e0b" />} iconBg="#fef3c7"
-          title="AVG PROCESSING SLA" value="5.2 Days" 
-          trend="SLA compliance 98.4%" trendType="neutral" 
+          title="AVG PROCESSING SLA" value={avgSlaLabel} 
+          trend="Computed from configured SLAs" trendType="neutral" 
         />
       </div>
 

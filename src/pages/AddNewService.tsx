@@ -360,6 +360,9 @@ export default function AddNewService() {
         if (created?.id) {
           navigate(`/services/create?id=${created.id}&step=2&mode=edit`);
         } else {
+          // Creation failed to return an id: clear the wizard's edit-session key
+          // so it cannot resume some OTHER service as if it were this new one.
+          try { sessionStorage.removeItem('cybersave_edit_service_id'); } catch (_) {}
           navigate('/services');
         }
       }, 1200);
