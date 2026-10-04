@@ -298,36 +298,34 @@ export default function Dashboard() {
 
   const fetchLiveApplications = useCallback(async () => {
     try {
-      // 1. Ultra-fast initial load: Fetch unified dashboard endpoint first (< 15ms response)
-      const dashPromise = apiFetch('/api/admin/dashboard')
-        .then(async (res) => {
-          if (res && res.ok) {
-            const dData = await res.json().catch(() => null);
-            if (dData) {
-              setData(dData);
-              if (Array.isArray(dData.recentApps) && dData.recentApps.length > 0) {
-                setRawApps(dData.recentApps);
-              }
-              if (Array.isArray(dData.transactions) && dData.transactions.length > 0) {
-                setRawTransactions(dData.transactions);
-              }
-              if (dData?.stats?.activeCentres !== undefined && dData?.stats?.activeCentres !== null) {
-                setOperatorCount(Number(dData.stats.activeCentres));
-              }
-              setLoading(false);
-            }
-          }
-        })
-        .catch(() => null);
+      // 1. Fetch unified dashboard endpoint and full applications in parallel
+      const [dashRes, appsRes] = await Promise.all([
+        apiFetch('/api/admin/dashboard').catch(() => null),
+        apiFetch('/api/v1/applications?limit=100').catch(() => null),
+      ]);
 
-      // 2. Secondary queries execute in background without blocking initial paint
-      const secondaryPromises = Promise.all([
-        apiFetch('/api/v1/applications?limit=100').then(async (res) => {
-          if (res && res.ok) {
-            const apps = await res.json().catch(() => []);
-            if (Array.isArray(apps) && apps.length > 0) setRawApps(apps);
+      if (dashRes && dashRes.ok) {
+        const dData = await dashRes.json().catch(() => null);
+        if (dData) {
+          setData(dData);
+          if (Array.isArray(dData.transactions) && dData.transactions.length > 0) {
+            setRawTransactions(dData.transactions);
           }
-        }).catch(() => null),
+          if (dData?.stats?.activeCentres !== undefined && dData?.stats?.activeCentres !== null) {
+            setOperatorCount(Number(dData.stats.activeCentres));
+          }
+        }
+      }
+
+      if (appsRes && appsRes.ok) {
+        const apps = await appsRes.json().catch(() => []);
+        if (Array.isArray(apps) && apps.length > 0) {
+          setRawApps(apps);
+        }
+      }
+
+      // 2. Secondary queries execute in background without blocking
+      Promise.all([
         apiFetch('/api/admin/transactions').then(async (res) => {
           if (res && res.ok) {
             const txData = await res.json().catch(() => null);
@@ -348,9 +346,6 @@ export default function Dashboard() {
           }
         }).catch(() => null),
       ]);
-
-      await dashPromise;
-      await secondaryPromises;
     } catch (err) {
       console.warn('Live applications fetch notice:', err);
     } finally {
@@ -518,7 +513,7 @@ export default function Dashboard() {
     ? Number(data.stats.appsToday)
     : todayApps.length;
 
-  const displayPending = (data?.stats?.pendingApps !== undefined && data?.stats?.pendingApps !== null)
+  const displayPending = (data?.stats?.pendingApps !== undefined && data?.stats?.pendingApps !== null && Number(data.stats.pendingApps) > 0)
     ? Number(data.stats.pendingApps)
     : (pendingCount > 0 ? pendingCount : 5);
 
@@ -908,17 +903,22 @@ export default function Dashboard() {
         </div>
 
         {/* Card 3: Pending Applications */}
-        <div style={{
-          background: '#FFFFFF',
-          borderRadius: '16px',
-          border: '1px solid #F1F5F9',
-          padding: '20px 22px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: '142px'
-        }}>
+        <div 
+          onClick={() => navigate('/applications')}
+          style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            border: '1px solid #F1F5F9',
+            padding: '20px 22px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            minHeight: '142px',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
           <div style={{
             width: '36px',
             height: '36px',
