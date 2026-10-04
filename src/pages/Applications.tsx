@@ -31,7 +31,8 @@ import {
   normalizeFee, 
   formatIndianDate, 
   normalizeStatus,
-  extractSupportingDocuments
+  extractSupportingDocuments,
+  isRealOfficer
 } from '../utils/normalize';
 import { apiFetch } from '../utils/apiConfig';
 
@@ -94,11 +95,9 @@ export default function Applications() {
     const storedPriority = formData.priority || a.priority;
     const priority = storedPriority || (idx % 3 === 0 ? 'High' : (idx % 3 === 1 ? 'Medium' : 'Low'));
 
-    // Realistic Assigned Officer determination
-    const storedOfficer = raw.officialOfficer || a.assigned;
-    const assigned = storedOfficer && storedOfficer !== 'Auto Assigned' && storedOfficer !== 'Officer Sharma (SDM)'
-      ? storedOfficer 
-      : (idx % 5 === 0 ? 'Vikram T.' : (idx % 5 === 1 ? 'Sunita M.' : (idx % 5 === 2 ? 'Deepak V.' : (idx % 5 === 3 ? 'Rakesh S.' : 'Auto'))));
+    // Assigned Officer determination: empty if unassigned / placeholder
+    const storedOfficer = raw.officialOfficer || a.assigned || a.assignedOfficer || '';
+    const assigned = isRealOfficer(storedOfficer);
 
     // Dynamic SLA Remaining Calculation
     const subDate = new Date(raw.submittedAt || a.submittedAt || raw.createdAt || Date.now());
@@ -633,8 +632,13 @@ export default function Applications() {
 
       // Assigned Dropdown Filter
       if (filterAssigned !== 'All') {
-        if (filterAssigned === 'Unassigned' && app.assigned !== 'Unassigned' && app.assigned !== 'Auto') return false;
-        if (filterAssigned !== 'Unassigned' && !app.assigned.toLowerCase().includes(filterAssigned.toLowerCase())) return false;
+        if (filterAssigned === 'Unassigned') {
+          if (app.assigned && app.assigned.trim() !== '') return false;
+        } else if (filterAssigned === 'Assigned') {
+          if (!app.assigned || app.assigned.trim() === '') return false;
+        } else {
+          if (!app.assigned || !app.assigned.toLowerCase().includes(filterAssigned.toLowerCase())) return false;
+        }
       }
 
       // Search Query
@@ -689,7 +693,7 @@ export default function Applications() {
       `"${(a.serviceType || 'Government Service').replace(/"/g, '""')}"`,
       `"${a.priority || 'Medium'}"`,
       `"${a.status || 'In Review'}"`,
-      `"${a.assigned || 'Vikram T.'}"`,
+      `"${a.assigned || ''}"`,
       `"${a.submitted || ''}"`,
       `"${a.sla || '24h'}"`,
       String(a.amount || 50),
@@ -1221,12 +1225,13 @@ export default function Applications() {
               }}
             >
               <option value="All">Assigned: All</option>
-              <option value="Vikram">Vikram T.</option>
-              <option value="Sunita">Sunita M.</option>
-              <option value="Deepak">Deepak V.</option>
-              <option value="Rakesh">Rakesh S.</option>
-              <option value="Auto">Auto</option>
-              <option value="Unassigned">Unassigned</option>
+              <option value="Unassigned">Unassigned (Empty)</option>
+              <option value="Assigned">Assigned Only</option>
+              <option value="Vikram Tiwari">Vikram Tiwari</option>
+              <option value="Sunita Mishra">Sunita Mishra</option>
+              <option value="Deepak Verma">Deepak Verma</option>
+              <option value="Rakesh Singh">Rakesh Singh</option>
+              <option value="Rajesh Kumar">Rajesh Kumar</option>
             </select>
           </div>
         </div>
@@ -1756,7 +1761,7 @@ export default function Applications() {
               <option value="Sunita Mishra (SDM-Office)">Sunita Mishra (SDM-Office)</option>
               <option value="Deepak Verma (CSC-1024)">Deepak Verma (CSC-1024)</option>
               <option value="Rakesh Singh (Kendra-4892)">Rakesh Singh (Kendra-4892)</option>
-              <option value="Principal Verification Officer (SDM)">Principal Verification Officer (SDM)</option>
+              <option value="Rajesh Kumar (Senior Field Officer)">Rajesh Kumar (Senior Field Officer)</option>
             </select>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

@@ -4,7 +4,7 @@ import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
-import { extractSupportingDocuments, type SupportingDocumentItem } from '../utils/normalize';
+import { extractSupportingDocuments, type SupportingDocumentItem, isRealOfficer } from '../utils/normalize';
 import {
   FileText, CheckCircle, Clock, FileBadge, ArrowRight, ArrowLeft,
   ShieldCheck, Check, X, AlertTriangle, Download, Eye, CreditCard,
@@ -25,15 +25,18 @@ function buildTimeline(app: any, checklist?: any[]) {
       color: '#10b981',
     });
 
-    const assignTime = new Date(submitted.getTime() + 60000);
-    const officerName = typeof app.assignedTo === 'object'
-      ? (app.assignedTo?.name || 'Assigned Officer')
-      : (app.assignedTo || app.officialOfficer || 'Principal Officer');
-    events.push({
-      t: `Assigned to ${officerName.split('(')[0].trim()}`,
-      d: `${officerName} • ${fmt(assignTime)}`,
-      color: '#2563eb',
-    });
+    const rawOfficer = typeof app.assignedTo === 'object'
+      ? (app.assignedTo?.name || '')
+      : (app.assignedTo || app.officialOfficer || '');
+    const realOfficer = isRealOfficer(rawOfficer);
+    if (realOfficer) {
+      const assignTime = new Date(submitted.getTime() + 60000);
+      events.push({
+        t: `Assigned to ${realOfficer.split('(')[0].trim()}`,
+        d: `${realOfficer} • ${fmt(assignTime)}`,
+        color: '#2563eb',
+      });
+    }
   }
 
   // Dynamic verification checklist steps
@@ -179,7 +182,7 @@ export default function ApplicationDetail() {
       }),
       submittedAt: raw.submittedAt || a.submittedAt,
       updatedAt: raw.updatedAt || a.updatedAt,
-      assignedTo: raw.officialOfficer || a.assignedTo || 'Principal Verification Officer (SDM)',
+      assignedTo: isRealOfficer(raw.officialOfficer) || isRealOfficer(a.assignedTo) || isRealOfficer(a.assigned) || '',
       centre: formData.district ? `CSC ${formData.district}, ${formData.stateName || formData.state || ''}` : (a.centre || 'CSC District Hub'),
       sla: '24h',
       paymentStatus: raw.paymentStatus || a.paymentStatus || 'Verified & Settled',
@@ -653,7 +656,7 @@ export default function ApplicationDetail() {
       ['Citizen Email', applicant?.email || 'N/A'],
       ['Service Name', serviceName],
       ['Processing Centre', app.centre || 'CyberSave Regional Hub'],
-      ['Assigned Officer', typeof app.assignedTo === 'object' ? (app.assignedTo?.name || 'VLE Officer') : (app.assignedTo || app.officialOfficer || 'Auto Assigned')],
+      ['Assigned Officer', isRealOfficer(app.assignedTo) || 'Unassigned'],
       ['Application Status', app.status || 'SUBMITTED'],
       ['Fee Paid (INR)', `Rs. ${amount}`],
       ['Payment Status', paymentStatus],
@@ -727,7 +730,7 @@ export default function ApplicationDetail() {
             </div>
 
             <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10, lineHeight: 1.6 }}>
-              Submitted: {app.submitted} &nbsp;•&nbsp; Assigned Operator: <span style={{ color: '#2563eb', fontWeight: 600 }}>{typeof app.assignedTo === 'object' ? (app.assignedTo?.name || 'Principal Officer') : (app.assignedTo || 'Auto Assigned')}</span> &nbsp;•&nbsp; Centre: {app.centre}
+              Submitted: {app.submitted} &nbsp;•&nbsp; Assigned Operator: <span style={{ color: isRealOfficer(app.assignedTo) ? '#2563eb' : '#94a3b8', fontWeight: 600 }}>{isRealOfficer(app.assignedTo) || 'Unassigned'}</span> &nbsp;•&nbsp; Centre: {app.centre}
             </div>
           </div>
 

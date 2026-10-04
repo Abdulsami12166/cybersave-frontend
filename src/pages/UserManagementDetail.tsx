@@ -753,7 +753,7 @@ export default function UserManagementDetail() {
       totalAmountSpent: user?.quickStats?.totalAmountSpent ?? (user?.applications?.reduce((sum: number, a: any) => sum + (a.rawAmount || a.feePaid || 0), 0) ? `₹${user.applications.reduce((sum: number, a: any) => sum + (a.rawAmount || a.feePaid || 0), 0).toLocaleString('en-IN')}` : '₹0'),
       lastActive: user?.quickStats?.lastActive || user?.lastActive || (user?.isOnline ? 'Active Now' : 'Offline'),
       registeredCentre: user?.quickStats?.registeredCentre || (user?.district && user.district !== '-' ? `CSC ${user.district}` : 'CSC Central Seva Kendra (Digital India)'),
-      assignedOperator: user?.quickStats?.assignedOperator || 'Officer Sharma - Verification Incharge (SDM-01)',
+      assignedOperator: user?.quickStats?.assignedOperator || 'Unassigned',
       walletBalance: user?.quickStats?.walletBalance || (user?.wallet ? `₹${Number(user.wallet.balance || 0).toLocaleString('en-IN')}` : '₹0'),
     },
     recentServices: (user?.recentServices && user.recentServices.length > 0)

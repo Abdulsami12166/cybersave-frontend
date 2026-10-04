@@ -224,6 +224,37 @@ export const normalizeStatus = (rawStatus?: string): {
   };
 };
 
+export const isRealOfficer = (off?: any): string => {
+  if (!off) return '';
+  const str = typeof off === 'object' ? (off.name || '') : String(off);
+  const trimmed = str.trim();
+  if (!trimmed) return '';
+  
+  const placeholders = [
+    'Officer Sharma (SDM)',
+    'Officer Sharma',
+    'Principal Verification Officer (SDM)',
+    'Principal Verification Officer',
+    'Verification Officer (SDM)',
+    'Verification Officer',
+    'Principal Officer',
+    'Administrative Officer',
+    'Auto Assigned',
+    'Auto',
+    'Unassigned',
+    'SDM Delhi',
+    'Vikram T.',
+    'Sunita M.',
+    'Deepak V.',
+    'Rakesh S.'
+  ];
+
+  if (placeholders.some(p => p.toLowerCase() === trimmed.toLowerCase())) {
+    return '';
+  }
+  return trimmed;
+};
+
 export const normalizeApplication = (app: any): NormalizedApplication => {
   const refNumber = normalizeAppId(app.refNumber, app.id);
   const citizenName = normalizeCitizenName(app);
@@ -255,7 +286,7 @@ export const normalizeApplication = (app: any): NormalizedApplication => {
     dateSubmitted: dateInfo.formatted,
     dateRelative: dateInfo.relative,
     rejectionReason: app.rejectionReason,
-    assignedOfficer: app.officialOfficer || 'Verification Officer (SDM)',
+    assignedOfficer: isRealOfficer(app.officialOfficer) || isRealOfficer(app.assignedOfficer) || isRealOfficer(app.assigned) || '',
     documentsCount: docs.length,
     paymentStatus: app.paymentStatus || 'Verified & Settled',
     rawApp: app,
