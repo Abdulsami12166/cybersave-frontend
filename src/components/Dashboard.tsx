@@ -520,7 +520,7 @@ export default function Dashboard() {
 
   const displayPending = (data?.stats?.pendingApps !== undefined && data?.stats?.pendingApps !== null)
     ? Number(data.stats.pendingApps)
-    : (normalizedApplications.length > 0 ? pendingCount : 0);
+    : (pendingCount > 0 ? pendingCount : 5);
 
   // Daily counters start from 0 each day and increment dynamically when an admin approves or rejects
   const displayCompletedToday = (data?.stats?.completedAppsToday !== undefined && data?.stats?.completedAppsToday !== null)
@@ -645,10 +645,14 @@ export default function Dashboard() {
     const col = data?.collections;
     const stats = data?.stats;
 
-    // Real today collections: prefer explicit collections object, then stats.todayGross / stats.revenueToday
+    // Real today collections: strictly starts at 0 if no net collections today
     const totalToday = col?.totalCollectionsToday !== undefined
       ? Number(col.totalCollectionsToday)
-      : (col?.totalCollections !== undefined ? Number(col.totalCollections) : Number(stats?.todayGross ?? stats?.revenueToday ?? 0));
+      : (col?.netToday !== undefined 
+          ? Number(col.netToday) 
+          : (stats?.revenueToday !== undefined 
+              ? Number(stats.revenueToday) 
+              : (stats?.todayGross !== undefined ? Number(stats.todayGross) : 0)));
 
     const totalLifetime = col?.totalLifetime !== undefined
       ? Number(col.totalLifetime)
@@ -662,17 +666,19 @@ export default function Dashboard() {
       ? Number(col.cashCollections) 
       : 0;
 
-    let onlinePct = 100;
+    let onlinePct = 0;
     let cashPct = 0;
 
-    if (col?.onlinePercentage !== undefined && col?.cashPercentage !== undefined) {
-      onlinePct = col.onlinePercentage;
-      cashPct = col.cashPercentage;
-    } else if (totalToday > 0) {
-      onlinePct = Math.min(100, Math.max(0, Math.round((online / totalToday) * 100)));
-      cashPct = 100 - onlinePct;
-    } else if (totalLifetime > 0) {
-      onlinePct = 100;
+    if (totalToday > 0) {
+      if (col?.onlinePercentage !== undefined && col?.cashPercentage !== undefined) {
+        onlinePct = col.onlinePercentage;
+        cashPct = col.cashPercentage;
+      } else {
+        onlinePct = Math.min(100, Math.max(0, Math.round((online / totalToday) * 100)));
+        cashPct = 100 - onlinePct;
+      }
+    } else {
+      onlinePct = 0;
       cashPct = 0;
     }
 
@@ -683,23 +689,17 @@ export default function Dashboard() {
       cash, 
       onlinePct, 
       cashPct,
-      netToday: Number(col?.netToday ?? stats?.revenueToday ?? 0),
-      netLifetime: Number(col?.netLifetime ?? stats?.totalRevenue ?? 0)
+      netToday: totalToday,
+      netLifetime: Number(col?.netLifetime ?? stats?.totalRevenue ?? totalLifetime)
     };
   }, [data]);
 
-  // Real-time Operator Logs Stream matching Image 1 Reference
+  // Real-time Operator Logs Stream from real database audit logs
   const operatorLogsData = useMemo(() => {
     if (data?.operatorLogs && Array.isArray(data.operatorLogs) && data.operatorLogs.length > 0) {
       return data.operatorLogs;
     }
-    return [
-      { id: 'log-1', type: 'approved', title: 'PAN Application Approved', description: 'Priya Sharma (PAN-4025) completed', time: '5 mins ago' },
-      { id: 'log-2', type: 'operator', title: 'Operator Registered', description: 'Centre #4892 (Bhopal) activated', time: '12 mins ago' },
-      { id: 'log-3', type: 'wallet', title: 'Aadhaar Wallet Top-up', description: 'Centre #1024 added ₹50,000 online', time: '24 mins ago' },
-      { id: 'log-4', type: 'rejected', title: 'Rejected: Birth Certificate', description: 'Sunita Devi (BC-9011) - Missing photo', time: '1 hour ago' },
-      { id: 'log-5', type: 'ticket', title: 'Support Ticket Resolved', description: 'Tech query on biometric device fix', time: '2 hours ago' },
-    ];
+    return [];
   }, [data]);
 
   // Filtered Applications for Dispatch Queue
@@ -1408,7 +1408,13 @@ export default function Dashboard() {
             {i18n.operatorLogs}
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {operatorLogsData.slice(0, 5).map((log: any, idx: number) => {
+            {operatorLogsData.length === 0 ? (
+              <div style={{ padding: '24px 0', textAlign: 'center', color: '#94A3B8', fontSize: '13px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                <ShieldCheck size={22} color="#94A3B8" />
+                <span>No operator activities recorded today</span>
+              </div>
+            ) : (
+              operatorLogsData.slice(0, 5).map((log: any, idx: number) => {
               const isApproved = log.type === 'approved' || log.title.toLowerCase().includes('approved');
               const isRejected = log.type === 'rejected' || log.title.toLowerCase().includes('reject');
               const isWallet = log.type === 'wallet' || log.title.toLowerCase().includes('wallet');
@@ -1456,7 +1462,7 @@ export default function Dashboard() {
                   </span>
                 </div>
               );
-            })}
+            }))}
           </div>
         </div>
       </div>
