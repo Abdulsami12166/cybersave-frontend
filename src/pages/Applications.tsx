@@ -190,23 +190,18 @@ export default function Applications() {
             const today = new Date();
             return sub.toDateString() === today.toDateString();
           }).length;
-          const submittedCount = formatted.filter(a => a.rawStatus === 'SUBMITTED').length;
-          const underReviewCount = formatted.filter(a => a.rawStatus === 'VERIFYING' || a.rawStatus === 'PENDING').length;
-          const processingCount = formatted.filter(a => a.rawStatus === 'IN_PROGRESS' || a.rawStatus === 'PROCESSING').length;
-          const approvedCount = formatted.filter(a => a.rawStatus === 'APPROVED').length;
-          const completedCount = formatted.filter(a => a.rawStatus === 'COMPLETED').length;
-          const completedTodayCount = formatted.filter(a => {
-            const isDone = a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED';
-            if (!isDone) return false;
-            const upd = new Date(a.rawApp?.updatedAt || a.rawApp?.submittedAt || Date.now());
-            return upd.toDateString() === new Date().toDateString();
-          }).length;
+          const submittedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
+          const underReviewCount = formatted.filter(a => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+          const processingCount = formatted.filter(a => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
+          const approvedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
+          const completedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
+          const pendingTotalCount = formatted.filter(a => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
 
-          const freshData = {
+          setData((prev: any) => ({
             stats: { 
-              totalApps, 
-              todayApps, 
-              pending: submittedCount + underReviewCount, 
+              totalApps: prev?.stats?.totalApps && prev.stats.totalApps >= totalApps ? prev.stats.totalApps : totalApps, 
+              todayApps: todayApps, 
+              pending: pendingTotalCount, 
               processing: processingCount, 
               completed: completedTodayCount 
             },
@@ -218,8 +213,7 @@ export default function Applications() {
               completed: completedCount
             },
             applications: formatted,
-          };
-          setData(freshData);
+          }));
           setLoading(false);
           return formatted;
         }
@@ -259,31 +253,26 @@ export default function Applications() {
           const sub = new Date(a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
           return sub.toDateString() === new Date().toDateString();
         }).length;
-        const submittedCount = formatted.filter(a => a.rawStatus === 'SUBMITTED').length;
-        const underReviewCount = formatted.filter(a => a.rawStatus === 'VERIFYING' || a.rawStatus === 'PENDING').length;
-        const processingCount = formatted.filter(a => a.rawStatus === 'IN_PROGRESS' || a.rawStatus === 'PROCESSING').length;
-        const approvedCount = formatted.filter(a => a.rawStatus === 'APPROVED').length;
-        const completedCount = formatted.filter(a => a.rawStatus === 'COMPLETED').length;
-        const completedTodayCount = formatted.filter(a => {
-          const isDone = a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED';
-          if (!isDone) return false;
-          const upd = new Date(a.rawApp?.updatedAt || a.rawApp?.submittedAt || Date.now());
-          return upd.toDateString() === new Date().toDateString();
-        }).length;
+        const submittedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
+        const underReviewCount = formatted.filter(a => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+        const processingCount = formatted.filter(a => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
+        const approvedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
+        const completedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
+        const pendingTotalCount = formatted.filter(a => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
 
         const stats = {
           totalApps: resData.stats?.totalApps ?? totalApps,
           todayApps: resData.stats?.todayApps ?? todayApps,
-          pending: resData.stats?.pending ?? (submittedCount + underReviewCount),
+          pending: resData.stats?.pending ?? pendingTotalCount,
           processing: resData.stats?.processing ?? processingCount,
           completed: resData.stats?.completed ?? completedTodayCount,
         };
-        const pipeline = resData.pipeline || {
-          submitted: submittedCount,
-          underReview: underReviewCount,
-          processing: processingCount,
-          approved: approvedCount,
-          completed: completedCount,
+        const pipeline = {
+          submitted: resData.pipeline?.submitted ?? submittedCount,
+          underReview: resData.pipeline?.underReview ?? underReviewCount,
+          processing: resData.pipeline?.processing ?? processingCount,
+          approved: resData.pipeline?.approved ?? approvedCount,
+          completed: resData.pipeline?.completed ?? completedCount,
         };
         setData({ stats, pipeline, applications: formatted });
         setLoading(false);
@@ -336,7 +325,19 @@ export default function Applications() {
         }
         return a;
       });
-      return { ...prev, applications: updated };
+      const submitted = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
+      const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+      const processing = updated.filter((a: any) => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
+      const approved = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
+      const completed = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
+      const pending = updated.filter((a: any) => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
+
+      return {
+        ...prev,
+        stats: { ...prev.stats, pending, processing, completed: (prev.stats?.completed || 0) + 1 },
+        pipeline: { submitted, underReview, processing, approved, completed },
+        applications: updated,
+      };
     });
 
     window.dispatchEvent(new CustomEvent('cybersave_toast', {
@@ -383,7 +384,19 @@ export default function Applications() {
         }
         return a;
       });
-      return { ...prev, applications: updated };
+      const submitted = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
+      const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+      const processing = updated.filter((a: any) => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
+      const approved = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
+      const completed = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
+      const pending = updated.filter((a: any) => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
+
+      return {
+        ...prev,
+        stats: { ...prev.stats, pending, processing },
+        pipeline: { submitted, underReview, processing, approved, completed },
+        applications: updated,
+      };
     });
 
     window.dispatchEvent(new CustomEvent('cybersave_toast', {
@@ -428,7 +441,19 @@ export default function Applications() {
         }
         return a;
       });
-      return { ...prev, applications: updated };
+      const submitted = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
+      const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+      const processing = updated.filter((a: any) => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
+      const approved = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
+      const completed = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
+      const pending = updated.filter((a: any) => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
+
+      return {
+        ...prev,
+        stats: { ...prev.stats, pending, processing, completed: (prev.stats?.completed || 0) + count },
+        pipeline: { submitted, underReview, processing, approved, completed },
+        applications: updated,
+      };
     });
 
     window.dispatchEvent(new CustomEvent('cybersave_toast', {
@@ -573,12 +598,20 @@ export default function Applications() {
       // Status Dropdown Filter
       if (filterStatus !== 'All') {
         const s = filterStatus.toLowerCase();
-        if (s === 'pending' && !['pending', 'submitting'].includes(app.status.toLowerCase())) return false;
-        if (s === 'in review' && app.status.toLowerCase() !== 'in review') return false;
-        if (s === 'processing' && app.status.toLowerCase() !== 'processing') return false;
-        if (s === 'approved' && app.status.toLowerCase() !== 'approved') return false;
-        if (s === 'completed' && app.status.toLowerCase() !== 'completed') return false;
-        if (s === 'rejected' && app.status.toLowerCase() !== 'rejected') return false;
+        const raw = String(app.rawStatus || app.status || '').toUpperCase();
+        if (s === 'pending') {
+          if (['APPROVED', 'COMPLETED', 'REJECTED'].includes(raw)) return false;
+        } else if (s === 'in review') {
+          if (!['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW', 'SUBMITTED'].includes(raw) && app.status !== 'In Review') return false;
+        } else if (s === 'processing') {
+          if (!['IN_PROGRESS', 'PROCESSING'].includes(raw) && app.status !== 'Processing') return false;
+        } else if (s === 'approved') {
+          if (raw !== 'APPROVED' && app.status !== 'Approved') return false;
+        } else if (s === 'completed') {
+          if (raw !== 'COMPLETED' && app.status !== 'Completed') return false;
+        } else if (s === 'rejected') {
+          if (raw !== 'REJECTED' && app.status !== 'Rejected') return false;
+        }
       }
 
       // Priority Dropdown Filter

@@ -364,10 +364,11 @@ export default function SupportTickets() {
                       fontWeight: 700,
                       marginBottom: '10px'
                     }}>
-                      <span>⭐ {t.rating || 5}/5 Stars</span>
+                      <span>⭐ {t.rating !== undefined && t.rating !== null ? t.rating : (t.title?.match(/\((\d)★\)/) ? t.title.match(/\((\d)★\)/)[1] : 5)}/5 Stars</span>
                       <span style={{ fontSize: '10.5px', opacity: 0.85 }}>{t.feedbackCategory || 'CyberSave Mobile'}</span>
                     </div>
                   )}
+
 
                   <h3 style={{fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 14, minHeight: 48}}>{t.title}</h3>
                   

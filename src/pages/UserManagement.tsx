@@ -140,32 +140,31 @@ export default function UserManagement() {
         }, 1200);
       };
 
-      const handleStatusChange = (statusData: any) => {
-        if (statusData?.userId) {
-          const target = String(statusData.userId).toLowerCase();
-          setLiveUsers((prev) =>
-            prev.map((u) => {
-              const uDbId = String(u.dbId || u._id || '').toLowerCase();
-              const uId = String(u.id || '').toLowerCase();
-              const isMatch =
-                uDbId === target ||
-                uId === target ||
-                (target.length >= 5 && (uId.includes(target.slice(-5)) || uDbId.includes(target.slice(-5)))) ||
-                (uDbId.length >= 5 && target.includes(uDbId.slice(-5)));
+      const handlePresenceChange = (statusData: any) => {
+        if (!statusData?.userId) return;
+        const target = String(statusData.userId).toLowerCase();
+        const isOnline = statusData.isOnline === true;
+        setLiveUsers((prev) =>
+          prev.map((u) => {
+            const uDbId = String(u.dbId || u._id || '').toLowerCase();
+            const uId = String(u.id || '').toLowerCase();
+            const isMatch =
+              uDbId === target ||
+              uId === target ||
+              (target.length >= 5 && (uId.includes(target.slice(-5)) || uDbId.includes(target.slice(-5)))) ||
+              (uDbId.length >= 5 && target.includes(uDbId.slice(-5)));
 
-              if (isMatch) {
-                const isOnline = statusData.isOnline === true;
-                return {
-                  ...u,
-                  isOnline,
-                  lastActive: isOnline ? 'Active Now' : 'Just now',
-                  lastSeenAt: statusData.lastSeenAt || new Date().toISOString(),
-                };
-              }
-              return u;
-            })
-          );
-        }
+            if (isMatch) {
+              return {
+                ...u,
+                isOnline,
+                lastActive: isOnline ? 'Active Now' : 'Just now',
+                lastSeenAt: statusData.lastSeenAt || new Date().toISOString(),
+              };
+            }
+            return u;
+          })
+        );
       };
 
       const handlePushSent = (res: any) => {
@@ -181,7 +180,12 @@ export default function UserManagement() {
       };
 
       socket.on('response_users_data', handleUsers);
-      socket.on('user_status_changed', handleStatusChange);
+      socket.on('citizen_presence_updated', handlePresenceChange);
+      socket.on('user_status_changed', handlePresenceChange);
+      socket.on('citizen_heartbeat', (d: any) => handlePresenceChange({ ...d, isOnline: true }));
+      socket.on('user_connected', (d: any) => handlePresenceChange({ ...d, isOnline: true }));
+      socket.on('user_disconnected', (d: any) => handlePresenceChange({ ...d, isOnline: false }));
+      socket.on('citizen_app_closed', (d: any) => handlePresenceChange({ ...d, isOnline: false }));
       socket.on('user_activity_updated', handleRefresh);
       socket.on('new_user_feedback', handleRefresh);
       socket.on('applications_updated', handleRefresh);
@@ -200,7 +204,12 @@ export default function UserManagement() {
         clearInterval(pollInterval);
         clearTimeout(safetyTimer);
         socket.off('response_users_data', handleUsers);
-        socket.off('user_status_changed', handleStatusChange);
+        socket.off('citizen_presence_updated', handlePresenceChange);
+        socket.off('user_status_changed', handlePresenceChange);
+        socket.off('citizen_heartbeat');
+        socket.off('user_connected');
+        socket.off('user_disconnected');
+        socket.off('citizen_app_closed');
         socket.off('user_activity_updated', handleRefresh);
         socket.off('new_user_feedback', handleRefresh);
         socket.off('applications_updated', handleRefresh);
@@ -732,9 +741,12 @@ export default function UserManagement() {
     ? Number(data.stats.totalCitizens)
     : totalCount;
 
-  const displayActiveCitizens = data?.stats?.activeCitizens !== undefined
-    ? Number(data.stats.activeCitizens)
-    : normalizedCitizens.filter(c => c.status !== 'Blocked').length;
+  const onlineCountInList = normalizedCitizens.filter(c => c.isOnline === true).length;
+  const displayActiveCitizens = data?.stats?.onlineCitizens !== undefined
+    ? Number(data.stats.onlineCitizens)
+    : (data?.stats?.activeCitizens !== undefined
+        ? Number(data.stats.activeCitizens)
+        : onlineCountInList);
 
   const displayNewThisMonth = data?.stats?.newThisMonth !== undefined
     ? Number(data.stats.newThisMonth)
@@ -896,7 +908,19 @@ export default function UserManagement() {
           justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748B' }}>Active Citizens</span>
+            <div>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748B' }}>Active Citizens</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: '#10B981',
+                  boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.25)'
+                }} />
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#059669' }}>Real-time Online</span>
+              </div>
+            </div>
             <div style={{
               width: '36px',
               height: '36px',
@@ -1306,9 +1330,24 @@ export default function UserManagement() {
                       {/* Last Active */}
                       <td style={{ padding: '14px 14px', color: '#64748B', fontSize: '12.5px' }}>
                         {c.isOnline ? (
-                          <span style={{ color: '#16A34A', fontWeight: 600 }}>Active now</span>
+                          <span style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '6px', 
+                            color: '#16A34A', 
+                            fontWeight: 700 
+                          }}>
+                            <span style={{
+                              width: '7px',
+                              height: '7px',
+                              borderRadius: '50%',
+                              background: '#16A34A',
+                              boxShadow: '0 0 0 2.5px rgba(22, 163, 74, 0.25)'
+                            }} />
+                            Active now
+                          </span>
                         ) : (
-                          c.lastActive || '2 hours ago'
+                          c.lastActive || 'Active recently'
                         )}
                       </td>
 

@@ -751,8 +751,6 @@ export default function ServiceWizard() {
       fee: serviceData.pricing.fee,
       status: serviceData.status,
       isActive: serviceData.status === 'Active',
-      priorityLevel: serviceData.priorityLevel || 'Medium',
-      autoApproval: serviceData.autoApproval,
       targetProcessingTime: serviceData.targetProcessingTime || '18 Hours',
       complianceTarget: serviceData.complianceTarget || '95%',
       reliabilityTarget: serviceData.reliabilityTarget || '99.9%',

@@ -203,6 +203,26 @@ export default function SupportTicketDetail() {
       adminRole,
     };
 
+    const newAgentMsg = {
+      id: `msg-${Date.now()}`,
+      senderId: adminId || 'admin-01',
+      senderName: `${adminName} (Official Response)`,
+      role: 'AGENT',
+      text: replyText.trim(),
+      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toISOString()
+    };
+
+    setTicket((prev: any) => {
+      if (!prev) return prev;
+      const currentMsgs = Array.isArray(prev.messages) ? prev.messages : [];
+      return {
+        ...prev,
+        status: 'IN_PROGRESS',
+        messages: [...currentMsgs, newAgentMsg]
+      };
+    });
+
     if (adminTypingTimerRef.current) clearTimeout(adminTypingTimerRef.current);
     if (socket && connected) {
       socket.emit('admin_typing', {
@@ -216,6 +236,7 @@ export default function SupportTicketDetail() {
     if (socket && connected) {
       socket.emit('send_ticket_reply', payload);
     }
+
 
     // 2. REST dispatch for guaranteed database persistence
     try {
@@ -613,8 +634,9 @@ export default function SupportTicketDetail() {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 17, fontWeight: 800, color: '#0369A1' }}>
-                        Citizen Rating: {'★'.repeat(ticket.rating || 5)}{'☆'.repeat(Math.max(0, 5 - (ticket.rating || 5)))} ({ticket.rating || 5}/5)
+                        Citizen Rating: {'★'.repeat(Number(ticket.rating !== undefined && ticket.rating !== null ? ticket.rating : (ticket.title?.match(/\((\d)★\)/) ? ticket.title.match(/\((\d)★\)/)[1] : 5)))}{'☆'.repeat(Math.max(0, 5 - Number(ticket.rating !== undefined && ticket.rating !== null ? ticket.rating : (ticket.title?.match(/\((\d)★\)/) ? ticket.title.match(/\((\d)★\)/)[1] : 5))))} ({ticket.rating !== undefined && ticket.rating !== null ? ticket.rating : (ticket.title?.match(/\((\d)★\)/) ? ticket.title.match(/\((\d)★\)/)[1] : 5)}/5)
                       </span>
+
                       <span style={{
                         fontSize: 11,
                         fontWeight: 700,

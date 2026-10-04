@@ -529,6 +529,47 @@ export default function Layout() {
     }
   }, [socket, admin?.id, logout, navigate, updateAdmin]);
 
+  // Real-time Support Chat Citizen Message Notifications (Bell Icon)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCitizenSupportMessage = (data: any) => {
+      const sender = data?.senderName || data?.sender || data?.message?.senderName || data?.message?.sender || 'Citizen User';
+      const rawText = data?.text || data?.message?.text || 'Sent an attachment';
+      const textSnippet = rawText.length > 55 ? `${rawText.substring(0, 52)}...` : rawText;
+      const ticketRef = data?.ticketId || data?.refNumber || data?.id || 'Support';
+
+      const newNotif = {
+        id: `chat-notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        title: `Support Message from ${sender}`,
+        desc: `Ticket #${ticketRef}: "${textSnippet}"`,
+        time: 'Just now',
+        read: false,
+        path: `/support`
+      };
+
+      setNotificationList((prev) => [newNotif, ...prev]);
+      setNotifCount((prev) => prev + 1);
+      showToast(`Support chat message from ${sender}`, 'info');
+    };
+
+    const handleNewTicketMessage = (data: any) => {
+      const role = data?.message?.role;
+      if (role === 'CITIZEN' || role === 'USER') {
+        handleCitizenSupportMessage(data);
+      }
+    };
+
+    socket.on('support_message_notification', handleCitizenSupportMessage);
+    socket.on('new_ticket_message', handleNewTicketMessage);
+
+    return () => {
+      socket.off('support_message_notification', handleCitizenSupportMessage);
+      socket.off('new_ticket_message', handleNewTicketMessage);
+    };
+  }, [socket]);
+
+
   const navItems = [
     { icon: <LayoutDashboard size={18} />, label: currentTranslations.dashboard, path: '/', requiredPermission: 'DASHBOARD' },
     { icon: <Users size={18} />, label: currentTranslations.users, path: '/users', requiredPermission: 'USERS' },

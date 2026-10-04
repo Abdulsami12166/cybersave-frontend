@@ -482,7 +482,7 @@ export default function Dashboard() {
     return d >= today;
   });
 
-  const pendingCount = normalizedApplications.filter(a => a.status === 'In Review' || a.status === 'Pending' || a.status === 'Processing' || a.rawStatus === 'SUBMITTED' || a.rawStatus === 'VERIFYING' || a.rawStatus === 'IN_PROGRESS').length;
+  const pendingCount = normalizedApplications.filter(a => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || a.status || '').toUpperCase())).length;
   const totalApprovedCount = normalizedApplications.filter(a => a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
   
   // Real-time daily completed & rejected counts — strictly from today (starts at 0 each day)
@@ -515,11 +515,9 @@ export default function Dashboard() {
     ? Number(data.stats.appsToday)
     : todayApps.length;
 
-  const displayPending = normalizedApplications.length > 0
-    ? pendingCount
-    : ((data?.stats?.pendingApps !== undefined && data?.stats?.pendingApps !== null)
-        ? Number(data.stats.pendingApps)
-        : 9);
+  const displayPending = (data?.stats?.pendingApps !== undefined && data?.stats?.pendingApps !== null)
+    ? Number(data.stats.pendingApps)
+    : (normalizedApplications.length > 0 ? pendingCount : 0);
 
   // Daily counters start from 0 each day and increment dynamically when an admin approves or rejects
   const displayCompletedToday = (data?.stats?.completedAppsToday !== undefined && data?.stats?.completedAppsToday !== null)
