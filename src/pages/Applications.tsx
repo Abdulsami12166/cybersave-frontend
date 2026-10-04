@@ -191,7 +191,7 @@ export default function Applications() {
             return sub.toDateString() === today.toDateString();
           }).length;
           const submittedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
-          const underReviewCount = formatted.filter(a => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+          const underReviewCount = formatted.filter(a => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
           const processingCount = formatted.filter(a => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
           const approvedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
           const completedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
@@ -260,7 +260,7 @@ export default function Applications() {
           return sub.toDateString() === new Date().toDateString();
         }).length;
         const submittedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
-        const underReviewCount = formatted.filter(a => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+        const underReviewCount = formatted.filter(a => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
         const processingCount = formatted.filter(a => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
         const approvedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
         const completedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
@@ -338,11 +338,11 @@ export default function Applications() {
         return a;
       });
       const submitted = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
-      const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+      const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
       const processing = updated.filter((a: any) => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
       const approved = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
       const completed = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
-      const pending = updated.filter((a: any) => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
+      const pending = submitted + underReview;
 
       return {
         ...prev,
@@ -397,11 +397,11 @@ export default function Applications() {
         return a;
       });
       const submitted = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
-      const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+      const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
       const processing = updated.filter((a: any) => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
       const approved = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
       const completed = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
-      const pending = updated.filter((a: any) => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
+      const pending = submitted + underReview;
 
       return {
         ...prev,
@@ -454,11 +454,11 @@ export default function Applications() {
         return a;
       });
       const submitted = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
-      const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review').length;
+      const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
       const processing = updated.filter((a: any) => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
       const approved = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
       const completed = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
-      const pending = updated.filter((a: any) => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
+      const pending = submitted + underReview;
 
       return {
         ...prev,
@@ -612,9 +612,9 @@ export default function Applications() {
         const s = filterStatus.toLowerCase();
         const raw = String(app.rawStatus || app.status || '').toUpperCase();
         if (s === 'pending') {
-          if (['APPROVED', 'COMPLETED', 'REJECTED'].includes(raw)) return false;
+          if (!['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW', 'SUBMITTED'].includes(raw) && app.status !== 'In Review' && app.status !== 'Pending') return false;
         } else if (s === 'in review') {
-          if (!['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW', 'SUBMITTED'].includes(raw) && app.status !== 'In Review') return false;
+          if (!['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW', 'SUBMITTED'].includes(raw) && app.status !== 'In Review' && app.status !== 'Pending') return false;
         } else if (s === 'processing') {
           if (!['IN_PROGRESS', 'PROCESSING'].includes(raw) && app.status !== 'Processing') return false;
         } else if (s === 'approved') {
@@ -865,19 +865,27 @@ export default function Applications() {
         </div>
 
         {/* Card 3: PENDING REVIEW */}
-        <div style={{
-          background: '#FFFFFF',
-          borderRadius: '14px',
-          border: '1px solid #F1F5F9',
-          padding: '18px 20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: '128px'
-        }}>
+        <div 
+          onClick={() => {
+            setFilterStatus(prev => prev === 'In Review' ? 'All' : 'In Review');
+            setCurrentPage(1);
+          }}
+          style={{
+            background: filterStatus === 'In Review' ? '#FFFBEB' : '#FFFFFF',
+            borderRadius: '14px',
+            border: filterStatus === 'In Review' ? '1.5px solid #F59E0B' : '1px solid #F1F5F9',
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            minHeight: '128px',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: filterStatus === 'In Review' ? '#B45309' : '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               PENDING REVIEW
             </span>
             <AlertCircle size={16} color="#D97706" />
@@ -982,7 +990,13 @@ export default function Applications() {
           </div>
 
           {/* Step 2: Under Review */}
-          <div>
+          <div 
+            onClick={() => {
+              setFilterStatus(prev => prev === 'In Review' ? 'All' : 'In Review');
+              setCurrentPage(1);
+            }}
+            style={{ cursor: 'pointer' }}
+          >
             <div style={{ fontSize: '12px', color: '#D97706', fontWeight: 600 }}>
               Under Review
             </div>
