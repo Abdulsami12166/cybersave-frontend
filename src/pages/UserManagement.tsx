@@ -742,11 +742,10 @@ export default function UserManagement() {
     : totalCount;
 
   const onlineCountInList = normalizedCitizens.filter(c => c.isOnline === true).length;
-  const displayActiveCitizens = data?.stats?.onlineCitizens !== undefined
-    ? Number(data.stats.onlineCitizens)
-    : (data?.stats?.activeCitizens !== undefined
-        ? Number(data.stats.activeCitizens)
-        : onlineCountInList);
+  const rawOnline = data?.stats?.onlineCitizens ?? data?.stats?.activeCitizens;
+  const displayActiveCitizens = (rawOnline !== undefined && Number(rawOnline) < displayTotalCitizens)
+    ? Number(rawOnline)
+    : onlineCountInList;
 
   const displayNewThisMonth = data?.stats?.newThisMonth !== undefined
     ? Number(data.stats.newThisMonth)

@@ -266,6 +266,18 @@ export default function ApplicationDetail() {
         }, 800);
       };
 
+      const handleChecklistUpdate = (checklistData?: any) => {
+        if (checklistData?.checklist && Array.isArray(checklistData.checklist)) {
+          setChecklist(checklistData.checklist);
+        } else {
+          handleUpdate();
+        }
+      };
+
+      const handleNoteAdded = () => {
+        handleUpdate();
+      };
+
       socket.on('application_status_changed', handleUpdate);
       socket.on('update_application_status_success', handleUpdate);
       socket.on('application_assigned', handleUpdate);
