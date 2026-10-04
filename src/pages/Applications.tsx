@@ -195,13 +195,19 @@ export default function Applications() {
           const processingCount = formatted.filter(a => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
           const approvedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
           const completedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
-          const pendingTotalCount = formatted.filter(a => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
+          const pendingReviewCount = submittedCount + underReviewCount;
+          const completedTodayCount = formatted.filter(a => {
+            const isDone = ['APPROVED', 'COMPLETED'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Approved' || a.status === 'Completed';
+            if (!isDone) return false;
+            const upd = new Date(a.rawApp?.updatedAt || a.rawApp?.submittedAt || a.submittedDate || Date.now());
+            return upd.toDateString() === new Date().toDateString();
+          }).length;
 
           setData((prev: any) => ({
             stats: { 
               totalApps: prev?.stats?.totalApps && prev.stats.totalApps >= totalApps ? prev.stats.totalApps : totalApps, 
               todayApps: todayApps, 
-              pending: pendingTotalCount, 
+              pending: pendingReviewCount, 
               processing: processingCount, 
               completed: completedTodayCount 
             },
@@ -258,12 +264,18 @@ export default function Applications() {
         const processingCount = formatted.filter(a => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
         const approvedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
         const completedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
-        const pendingTotalCount = formatted.filter(a => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || '').toUpperCase())).length;
+        const pendingReviewCount = submittedCount + underReviewCount;
+        const completedTodayCount = formatted.filter(a => {
+          const isDone = ['APPROVED', 'COMPLETED'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Approved' || a.status === 'Completed';
+          if (!isDone) return false;
+          const upd = new Date(a.rawApp?.updatedAt || a.rawApp?.submittedAt || a.submittedDate || Date.now());
+          return upd.toDateString() === new Date().toDateString();
+        }).length;
 
         const stats = {
           totalApps: resData.stats?.totalApps ?? totalApps,
           todayApps: resData.stats?.todayApps ?? todayApps,
-          pending: resData.stats?.pending ?? pendingTotalCount,
+          pending: resData.stats?.pending ?? pendingReviewCount,
           processing: resData.stats?.processing ?? processingCount,
           completed: resData.stats?.completed ?? completedTodayCount,
         };

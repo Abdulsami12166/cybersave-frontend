@@ -482,7 +482,10 @@ export default function Dashboard() {
     return d >= today;
   });
 
-  const pendingCount = normalizedApplications.filter(a => !['APPROVED', 'COMPLETED', 'REJECTED'].includes(String(a.rawStatus || a.status || '').toUpperCase())).length;
+  const pendingCount = normalizedApplications.filter(a => {
+    const s = String(a.rawStatus || a.status || '').toUpperCase();
+    return ['SUBMITTED', 'VERIFYING', 'UNDER_REVIEW', 'IN_REVIEW', 'PENDING'].includes(s) || a.status === 'In Review' || a.status === 'Pending';
+  }).length;
   const totalApprovedCount = normalizedApplications.filter(a => a.status === 'Approved' || a.status === 'Completed' || a.rawStatus === 'APPROVED' || a.rawStatus === 'COMPLETED').length;
   
   // Real-time daily completed & rejected counts — strictly from today (starts at 0 each day)
