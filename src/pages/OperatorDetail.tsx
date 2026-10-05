@@ -113,35 +113,36 @@ export default function OperatorDetail() {
     'SETTINGS'
   ];
 
+  // ponytail: Exact dashboard screen names matching sidebar nav items
   const PERMISSION_GROUPS = [
     {
       category: 'Operations Management',
       key: 'OPS_MGMT',
       items: [
-        { id: 'DASHBOARD', title: 'Command Center (Dashboard)', desc: 'Access real-time operational overview, key performance indicators, quick stats, and application charts.' },
-        { id: 'APPLICATIONS', title: 'Applications Queue', desc: 'Process citizen applications, verify attached documents, approve, reject, and issue certificates.' },
-        { id: 'REFUNDS', title: 'Refund Dispatches', desc: 'Review citizen refund requests, approve disbursements, track refund status, and manage financial reversals.' },
-        { id: 'TRANSACTIONS', title: 'Settlement Journal', desc: 'Inspect financial transactions, citizen payment status, revenue collections, and fee receipts.' },
+        { id: 'DASHBOARD', title: 'Dashboard', desc: 'Access real-time operational overview, key performance indicators, quick stats, and application charts.' },
+        { id: 'USERS', title: 'User Management', desc: 'View citizen registries, inspect identity records, KYC status, and dispatch direct notifications.' },
+        { id: 'APPLICATIONS', title: 'Applications', desc: 'Process citizen applications, verify attached documents, approve, reject, and issue certificates.' },
+        { id: 'REFUNDS', title: 'Refund Claims', desc: 'Review citizen refund requests, approve disbursements, track refund status, and manage financial reversals.' },
       ]
     },
     {
-      category: 'Governance & Citizen Registry',
+      category: 'Governance & Registry',
       key: 'GOV_REGISTRY',
       items: [
-        { id: 'SERVICES', title: 'Service Schemes', desc: 'Manage government schemes catalog, configure department services, eligibility criteria, and fee structures.' },
-        { id: 'USERS', title: 'Citizen Directory', desc: 'View citizen registries, inspect identity records, KYC status, and dispatch direct notifications.' },
-        { id: 'OPERATORS', title: 'Seva Kendra Operators', desc: 'Manage Seva Kendra staff accounts, provision operators, and configure least-privilege feature access.' },
+        { id: 'SERVICES', title: 'Services', desc: 'Manage government schemes catalog, configure department services, eligibility criteria, and fee structures.' },
+        { id: 'OPERATORS', title: 'Operators', desc: 'Manage Seva Kendra staff accounts, provision operators, and configure least-privilege feature access.' },
+        { id: 'TRANSACTIONS', title: 'Transactions', desc: 'Inspect financial transactions, citizen payment status, revenue collections, and fee receipts.' },
+        { id: 'NOTIFICATIONS', title: 'Notifications', desc: 'Dispatch emergency announcements, circulars, and broadcast messages to citizens.' },
       ]
     },
     {
-      category: 'Audit, Support & System Control',
+      category: 'Audit, Support & Control',
       key: 'AUDIT_CONTROL',
       items: [
-        { id: 'SUPPORT', title: 'Citizen Grievances', desc: 'Respond to and resolve citizen support tickets, grievances, and feedback requests.' },
-        { id: 'ANALYTICS', title: 'SLA Analytics', desc: 'Review operational performance metrics, turnaround times, and statutory SLA compliance.' },
-        { id: 'AUDIT', title: 'Security Audit Logs', desc: 'Access tamper-evident cryptographic security audit trails and administrator activity logs.' },
-        { id: 'NOTIFICATIONS', title: 'Broadcast Dispatches', desc: 'Dispatch emergency announcements, circulars, and broadcast messages to citizens.' },
-        { id: 'SETTINGS', title: 'System Configuration', desc: 'Configure portal operational settings, official contact phone, maintenance mode, and backups.' },
+        { id: 'SUPPORT', title: 'Support Tickets', desc: 'Respond to and resolve citizen support tickets, grievances, and feedback requests.' },
+        { id: 'ANALYTICS', title: 'Analytics', desc: 'Review operational performance metrics, turnaround times, and statutory SLA compliance.' },
+        { id: 'AUDIT', title: 'Audit Logs', desc: 'Access tamper-evident cryptographic security audit trails and administrator activity logs.' },
+        { id: 'SETTINGS', title: 'Settings', desc: 'Configure portal operational settings, official contact phone, maintenance mode, and backups.' },
       ]
     }
   ];

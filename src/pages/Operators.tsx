@@ -22,19 +22,20 @@ export default function Operators() {
   const [newOpPass, setNewOpPass] = useState('');
   const [newOpFeats, setNewOpFeats] = useState<string[]>(['DASHBOARD']);
 
+  // ponytail: Exact dashboard screen names matching sidebar nav items
   const ALL_FEATURES = [
-    { id: 'DASHBOARD', label: 'Command Center', category: 'Operations', desc: 'Real-time overview, operational KPIs & performance statistics' },
-    { id: 'APPLICATIONS', label: 'Applications Queue', category: 'Operations', desc: 'Verify, review, approve, reject and process citizen service applications' },
-    { id: 'REFUNDS', label: 'Refund Dispatches', category: 'Operations', desc: 'Review citizen refund claims, approve disbursements, process bank reversals and dispatch refunds' },
-    { id: 'TRANSACTIONS', label: 'Settlement Journal', category: 'Operations', desc: 'Financial transaction ledgers, citizen payment status & revenue receipts' },
-    { id: 'SERVICES', label: 'Service Schemes', category: 'Governance & Registry', desc: 'Manage government schemes catalog, forms, rules & service criteria' },
-    { id: 'USERS', label: 'Citizen Directory', category: 'Governance & Registry', desc: 'Citizen registry, KYC verification status, and direct notifications' },
-    { id: 'OPERATORS', label: 'Seva Kendra Operators', category: 'Governance & Registry', desc: 'Manage operators, add staff accounts, and assign least-privilege feature access' },
-    { id: 'SUPPORT', label: 'Citizen Grievances', category: 'Audit & Compliance', desc: 'Resolve citizen support tickets, grievances, and feedback requests' },
-    { id: 'ANALYTICS', label: 'SLA Analytics', category: 'Audit & Compliance', desc: 'Review operational performance metrics, turnaround times & SLA compliance' },
-    { id: 'AUDIT', label: 'Security Audit Logs', category: 'Audit & Compliance', desc: 'Cryptographic security audit trails and administrator activity records' },
-    { id: 'NOTIFICATIONS', label: 'Broadcast Dispatches', category: 'Audit & Compliance', desc: 'Compose and dispatch citizen announcements, circulars & emergency alerts' },
-    { id: 'SETTINGS', label: 'System Configuration', category: 'Audit & Compliance', desc: 'Portal configuration, contact details & maintenance settings' },
+    { id: 'DASHBOARD', label: 'Dashboard', category: 'Operations', desc: 'Real-time overview, operational KPIs & performance statistics' },
+    { id: 'USERS', label: 'User Management', category: 'Operations', desc: 'Citizen registry, identity records, KYC verification status & notifications' },
+    { id: 'APPLICATIONS', label: 'Applications', category: 'Operations', desc: 'Verify, review, approve, reject and process citizen service applications' },
+    { id: 'REFUNDS', label: 'Refund Claims', category: 'Operations', desc: 'Review citizen refund claims, approve disbursements, process bank reversals and dispatch refunds' },
+    { id: 'SERVICES', label: 'Services', category: 'Governance', desc: 'Manage government schemes catalog, forms, rules & service criteria' },
+    { id: 'OPERATORS', label: 'Operators', category: 'Governance', desc: 'Manage operators, add staff accounts, and configure least-privilege feature access' },
+    { id: 'TRANSACTIONS', label: 'Transactions', category: 'Governance', desc: 'Financial transaction ledgers, citizen payment status & revenue receipts' },
+    { id: 'NOTIFICATIONS', label: 'Notifications', category: 'Governance', desc: 'Compose and dispatch citizen announcements, circulars & emergency alerts' },
+    { id: 'SUPPORT', label: 'Support Tickets', category: 'Audit & Support', desc: 'Resolve citizen support tickets, grievances, and feedback requests' },
+    { id: 'ANALYTICS', label: 'Analytics', category: 'Audit & Support', desc: 'Review operational performance metrics, turnaround times & SLA compliance' },
+    { id: 'AUDIT', label: 'Audit Logs', category: 'Audit & Support', desc: 'Cryptographic security audit trails and administrator activity records' },
+    { id: 'SETTINGS', label: 'Settings', category: 'Audit & Support', desc: 'Portal configuration, contact details & maintenance settings' },
   ];
 
   const fetchOperatorsRest = async () => {

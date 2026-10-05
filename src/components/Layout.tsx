@@ -131,40 +131,12 @@ export default function Layout() {
     { id: 'n5', title: 'Security Audit Log Generated', desc: 'Operator access credentials updated', time: '1 hour ago', read: false },
   ]);
 
-  // Messages State for Settings Header (Image 4)
+  // Messages State for Settings Header (Real Live Citizen & Operator Inquiries)
   const [showMessageMenu, setShowMessageMenu] = useState(false);
-  const [messageCount, setMessageCount] = useState(3);
+  const [messageCount, setMessageCount] = useState(0);
   const [selectedMsgForReply, setSelectedMsgForReply] = useState<any | null>(null);
   const [replyText, setReplyText] = useState('');
-  const [messageList, setMessageList] = useState<any[]>([
-    {
-      id: 'm1',
-      sender: 'Rajesh Kumar',
-      centre: 'Centre #1024 - Mumbai South',
-      message: 'Biometric iris scanner firmware upgrade completed, pending admin verification sign-off.',
-      time: '10m ago',
-      tag: 'Hardware',
-      read: false
-    },
-    {
-      id: 'm2',
-      sender: 'Anita Deshmukh',
-      centre: 'Zone 4 CSC Hub - Pune',
-      message: 'Urgent query regarding batch clearance for pending citizen income certificate applications.',
-      time: '25m ago',
-      tag: 'Escalation',
-      read: false
-    },
-    {
-      id: 'm3',
-      sender: 'Vikram Patel',
-      centre: 'Bhopal Centre #4812',
-      message: 'Reconciliation statement for ₹4,250 offline counter fees uploaded for supervisory review.',
-      time: '1h ago',
-      tag: 'Finance',
-      read: false
-    }
-  ]);
+  const [messageList, setMessageList] = useState<any[]>([]);
 
   // Upload New Document State for Analytics & Settings Headers (Images 3 & 4)
   const [showUploadDocModal, setShowUploadDocModal] = useState(false);
@@ -218,6 +190,108 @@ export default function Layout() {
   };
   const { admin, logout, updateAdmin } = useAuth();
   const { socket } = useSocket();
+
+  // ponytail: Format timestamp into human relative time
+  const formatMsgRelativeTime = (timeInput?: any) => {
+    if (!timeInput) return 'Recently';
+    const date = new Date(timeInput);
+    if (isNaN(date.getTime())) return String(timeInput);
+    const diffMs = Date.now() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSecs < 60) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'Yesterday';
+    return `${diffDays}d ago`;
+  };
+
+  const fetchRealMessages = async () => {
+    try {
+      const endpoints = ['/api/v1/support/tickets', '/api/support/tickets'];
+      let ticketsData: any = null;
+      for (const ep of endpoints) {
+        try {
+          const res = await apiFetch(ep).catch(() => null);
+          if (res && res.ok) {
+            ticketsData = await res.json().catch(() => null);
+            if (ticketsData?.tickets) break;
+          }
+        } catch (_) {}
+      }
+
+      if (ticketsData?.tickets && Array.isArray(ticketsData.tickets)) {
+        const mapped = ticketsData.tickets.map((t: any) => {
+          const msgs = Array.isArray(t.messages) ? t.messages : [];
+          const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+          const senderName = lastMsg?.senderName || lastMsg?.sender || t.reporter?.name || t.user?.profile?.fullName || (t.user?.email ? t.user.email.split('@')[0] : 'Citizen User');
+          const snippet = lastMsg?.text || t.description || t.title || 'Inquiry regarding citizen services';
+          const timeRaw = lastMsg?.timestamp || lastMsg?.createdAt || t.createdAt || new Date().toISOString();
+          const isResolved = t.status === 'RESOLVED' || t.status === 'CLOSED';
+          const ticketRef = t.refNumber || t.id || 'Support';
+
+          return {
+            id: `msg-${t.rawId || t.id}`,
+            ticketId: ticketRef,
+            rawId: t.rawId || t.id,
+            sender: senderName,
+            centre: `Ticket #${ticketRef} • ${t.category || 'Support'}`,
+            message: snippet,
+            time: formatMsgRelativeTime(timeRaw),
+            timestamp: new Date(timeRaw).getTime() || Date.now(),
+            tag: t.priority || t.category || 'Support',
+            read: isResolved,
+            status: t.status || 'OPEN'
+          };
+        });
+
+        mapped.sort((a: any, b: any) => b.timestamp - a.timestamp);
+        const topRecent = mapped.slice(0, 15);
+        setMessageList(topRecent);
+        const unreadCount = topRecent.filter((m: any) => !m.read).length;
+        setMessageCount(unreadCount);
+      }
+    } catch (e) {
+      console.warn('[Layout] fetchRealMessages error:', e);
+    }
+  };
+
+  const handleSendQuickReply = async () => {
+    if (!selectedMsgForReply || !replyText.trim()) return;
+    const text = replyText.trim();
+    const targetRef = selectedMsgForReply.ticketId || selectedMsgForReply.rawId;
+    const targetSender = selectedMsgForReply.sender;
+
+    setReplyText('');
+    showToast(`Reply sent to ${targetSender}`);
+
+    if (socket) {
+      socket.emit('send_ticket_reply', {
+        ticketId: targetRef,
+        text,
+        adminName: admin?.name || 'Administrator',
+        adminEmail: admin?.email || 'admin@cybersave.com'
+      });
+    }
+
+    try {
+      await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(targetRef)}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          adminName: admin?.name || 'Administrator',
+          adminEmail: admin?.email || 'admin@cybersave.com'
+        })
+      }).catch(() => null);
+    } catch (_) {}
+
+    setSelectedMsgForReply(null);
+    fetchRealMessages();
+  };
 
   // Dynamic Operator / Admin Full Profile State
   const [operatorProfile, setOperatorProfile] = useState<{ name: string; designation: string; avatarUrl?: string }>(() => {
@@ -538,7 +612,12 @@ export default function Layout() {
     }
   }, [socket, admin?.id, admin?.email, logout, navigate, updateAdmin]);
 
-  // Real-time Support Chat Citizen Message Notifications (Bell Icon)
+  // Fetch real messages on mount and route changes
+  useEffect(() => {
+    fetchRealMessages();
+  }, [location.pathname]);
+
+  // Real-time Support Chat Citizen Message Notifications (Bell Icon & Header Message Icon)
   useEffect(() => {
     if (!socket) return;
 
@@ -559,6 +638,23 @@ export default function Layout() {
 
       setNotificationList((prev) => [newNotif, ...prev]);
       setNotifCount((prev) => prev + 1);
+
+      const newMsgItem = {
+        id: `chat-msg-${Date.now()}`,
+        ticketId: ticketRef,
+        rawId: data?.ticketId || data?.id,
+        sender,
+        centre: `Ticket #${ticketRef} • Live Inquiry`,
+        message: rawText,
+        time: 'Just now',
+        timestamp: Date.now(),
+        tag: 'Live',
+        read: false,
+        status: 'OPEN'
+      };
+      setMessageList((prev) => [newMsgItem, ...prev.filter(m => m.ticketId !== ticketRef)]);
+      setMessageCount((prev) => prev + 1);
+
       showToast(`Support chat message from ${sender}`, 'info');
     };
 
@@ -569,12 +665,20 @@ export default function Layout() {
       }
     };
 
+    const handleSupportTicketsUpdated = () => {
+      fetchRealMessages();
+    };
+
     socket.on('support_message_notification', handleCitizenSupportMessage);
     socket.on('new_ticket_message', handleNewTicketMessage);
+    socket.on('new_support_ticket', handleSupportTicketsUpdated);
+    socket.on('support_tickets_updated', handleSupportTicketsUpdated);
 
     return () => {
       socket.off('support_message_notification', handleCitizenSupportMessage);
       socket.off('new_ticket_message', handleNewTicketMessage);
+      socket.off('new_support_ticket', handleSupportTicketsUpdated);
+      socket.off('support_tickets_updated', handleSupportTicketsUpdated);
     };
   }, [socket]);
 
@@ -996,7 +1100,7 @@ export default function Layout() {
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
                       <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
-                        Operator Messages ({messageCount})
+                        Inquiries & Messages ({messageCount})
                       </div>
                       <button 
                         onClick={() => {
@@ -1011,38 +1115,54 @@ export default function Layout() {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
-                      {messageList.map((msg) => (
-                        <div 
-                          key={msg.id} 
-                          onClick={() => {
-                            setSelectedMsgForReply(msg);
-                            setMessageList(prev => prev.map(m => m.id === msg.id ? { ...m, read: true } : m));
-                            if (!msg.read && messageCount > 0) setMessageCount(c => Math.max(0, c - 1));
-                          }}
-                          style={{ 
-                            padding: '10px', 
-                            background: msg.read ? '#FFFFFF' : '#F0F9FF', 
-                            borderRadius: '8px', 
-                            border: msg.read ? '1px solid #F1F5F9' : '1px solid #BAE6FD',
-                            fontSize: '12px',
-                            cursor: 'pointer',
-                            transition: 'background 0.15s ease'
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = '#E0F2FE')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = msg.read ? '#FFFFFF' : '#F0F9FF')}
-                        >
-                          <div style={{ fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>{msg.sender}</span>
-                            <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 500 }}>{msg.time}</span>
-                          </div>
-                          <div style={{ fontSize: '10.5px', color: '#2563EB', fontWeight: 600, marginTop: '2px' }}>
-                            {msg.centre}
-                          </div>
-                          <div style={{ color: '#475569', fontSize: '11.5px', marginTop: '3px', lineHeight: 1.4 }}>
-                            {msg.message}
-                          </div>
+                      {messageList.length === 0 ? (
+                        <div style={{ padding: '24px 12px', textAlign: 'center', color: '#94A3B8', fontSize: '12px' }}>
+                          No messages available. All inquiries are up to date.
                         </div>
-                      ))}
+                      ) : (
+                        messageList.map((msg) => (
+                          <div 
+                            key={msg.id} 
+                            onClick={() => {
+                              setSelectedMsgForReply(msg);
+                              setMessageList(prev => prev.map(m => m.id === msg.id ? { ...m, read: true } : m));
+                              if (!msg.read && messageCount > 0) setMessageCount(c => Math.max(0, c - 1));
+                            }}
+                            style={{ 
+                              padding: '10px', 
+                              background: msg.read ? '#FFFFFF' : '#F0F9FF', 
+                              borderRadius: '8px', 
+                              border: msg.read ? '1px solid #F1F5F9' : '1px solid #BAE6FD',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              transition: 'background 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = '#E0F2FE')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = msg.read ? '#FFFFFF' : '#F0F9FF')}
+                          >
+                            <div style={{ fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>{msg.sender}</span>
+                              <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 500 }}>{msg.time}</span>
+                            </div>
+                            <div style={{ fontSize: '10.5px', color: '#2563EB', fontWeight: 600, marginTop: '2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>{msg.centre}</span>
+                              <span 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowMessageMenu(false);
+                                  navigate(`/support/${encodeURIComponent(msg.ticketId)}`);
+                                }}
+                                style={{ fontSize: '10.5px', color: '#1D4ED8', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700 }}
+                              >
+                                View Ticket →
+                              </span>
+                            </div>
+                            <div style={{ color: '#475569', fontSize: '11.5px', marginTop: '3px', lineHeight: 1.4 }}>
+                              {msg.message}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
 
                     {selectedMsgForReply && (
@@ -1057,10 +1177,8 @@ export default function Layout() {
                             value={replyText}
                             onChange={(e) => setReplyText(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter' && replyText.trim()) {
-                                showToast(`Reply sent to ${selectedMsgForReply.sender}`);
-                                setReplyText('');
-                                setSelectedMsgForReply(null);
+                              if (e.key === 'Enter') {
+                                handleSendQuickReply();
                               }
                             }}
                             style={{
@@ -1073,13 +1191,7 @@ export default function Layout() {
                           />
                           <button
                             type="button"
-                            onClick={() => {
-                              if (replyText.trim()) {
-                                showToast(`Reply sent to ${selectedMsgForReply.sender}`);
-                                setReplyText('');
-                                setSelectedMsgForReply(null);
-                              }
-                            }}
+                            onClick={handleSendQuickReply}
                             style={{
                               background: '#2563EB',
                               color: '#FFFFFF',
