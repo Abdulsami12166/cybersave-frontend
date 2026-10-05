@@ -34,6 +34,8 @@ export interface NormalizedApplication {
   assignedOfficer: string;
   documentsCount: number;
   paymentStatus: string;
+  submittedAt?: string | Date;
+  updatedAt?: string | Date;
   rawApp: any;
 }
 
@@ -289,6 +291,8 @@ export const normalizeApplication = (app: any): NormalizedApplication => {
     assignedOfficer: isRealOfficer(app.officialOfficer) || isRealOfficer(app.assignedOfficer) || isRealOfficer(app.assigned) || '',
     documentsCount: docs.length,
     paymentStatus: app.paymentStatus || 'Verified & Settled',
+    submittedAt: app.submittedAt || app.createdAt,
+    updatedAt: app.updatedAt || app.rawApp?.updatedAt,
     rawApp: app,
   };
 };

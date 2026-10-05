@@ -172,6 +172,8 @@ export default function Applications() {
       refundRequests,
       formData,
       documents: cleanedDocs,
+      submittedAt: raw.submittedAt || a.submittedAt || raw.createdAt,
+      updatedAt: raw.updatedAt || a.updatedAt || raw.rawApp?.updatedAt,
       rawApp: raw,
     };
   };
@@ -185,7 +187,7 @@ export default function Applications() {
           const formatted = list.map((item, idx) => formatApplication(item, idx));
           const totalApps = formatted.length;
           const todayApps = formatted.filter(a => {
-            const sub = new Date(a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
+            const sub = new Date(a.submittedAt || a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
             const today = new Date();
             return sub.toDateString() === today.toDateString();
           }).length;
@@ -198,7 +200,9 @@ export default function Applications() {
           const completedTodayCount = formatted.filter(a => {
             const isDone = ['APPROVED', 'COMPLETED'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Approved' || a.status === 'Completed';
             if (!isDone) return false;
-            const upd = new Date(a.rawApp?.updatedAt || a.rawApp?.submittedAt || a.submittedDate || Date.now());
+            const updDate = a.updatedAt || a.rawApp?.updatedAt || a.rawApp?.submittedAt || a.submittedDate;
+            if (!updDate) return false;
+            const upd = new Date(updDate);
             return upd.toDateString() === new Date().toDateString();
           }).length;
 
@@ -255,7 +259,7 @@ export default function Applications() {
         const formatted = rawList.map((item: any, idx: number) => formatApplication(item, idx));
         const totalApps = formatted.length;
         const todayApps = formatted.filter(a => {
-          const sub = new Date(a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
+          const sub = new Date(a.submittedAt || a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
           return sub.toDateString() === new Date().toDateString();
         }).length;
         const submittedCount = formatted.filter(a => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
@@ -267,7 +271,9 @@ export default function Applications() {
         const completedTodayCount = formatted.filter(a => {
           const isDone = ['APPROVED', 'COMPLETED'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Approved' || a.status === 'Completed';
           if (!isDone) return false;
-          const upd = new Date(a.rawApp?.updatedAt || a.rawApp?.submittedAt || a.submittedDate || Date.now());
+          const updDate = a.updatedAt || a.rawApp?.updatedAt || a.rawApp?.submittedAt || a.submittedDate;
+          if (!updDate) return false;
+          const upd = new Date(updDate);
           return upd.toDateString() === new Date().toDateString();
         }).length;
 
@@ -276,7 +282,7 @@ export default function Applications() {
           todayApps: resData.stats?.todayApps ?? todayApps,
           pending: resData.stats?.pending ?? pendingReviewCount,
           processing: resData.stats?.processing ?? processingCount,
-          completed: resData.stats?.completed ?? completedTodayCount,
+          completed: Math.max(Number(resData.stats?.completed ?? 0), completedTodayCount),
         };
         const pipeline = {
           submitted: resData.pipeline?.submitted ?? submittedCount,
@@ -294,13 +300,61 @@ export default function Applications() {
         debounceTimer = setTimeout(() => {
           socket.emit('request_applications_data');
           fetchApplicationsRest();
-        }, 800);
+        }, 300);
+      };
+
+      const handleStatusChanged = (evtData: any) => {
+        if (evtData && (evtData.id || evtData.rawId || evtData.refNumber)) {
+          const targetId = evtData.rawId || evtData.id;
+          const targetRef = evtData.refNumber;
+          const newStatus = evtData.status;
+          setData((prev: any) => {
+            if (!prev || !prev.applications) return prev;
+            const updated = prev.applications.map((a: any) => {
+              if (a.rawId === targetId || a.id === targetId || a.refNumber === targetRef) {
+                const statusObj = normalizeStatus(newStatus);
+                return {
+                  ...a,
+                  rawStatus: newStatus,
+                  status: statusObj.label,
+                  updatedAt: evtData.updatedAt || new Date().toISOString(),
+                };
+              }
+              return a;
+            });
+            const submitted = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED').length;
+            const underReview = updated.filter((a: any) => ['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
+            const processing = updated.filter((a: any) => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
+            const approved = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
+            const completed = updated.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
+            const pending = submitted + underReview;
+            const completedToday = updated.filter((a: any) => {
+              const isDone = ['APPROVED', 'COMPLETED'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Approved' || a.status === 'Completed';
+              if (!isDone) return false;
+              const updDate = a.updatedAt || a.rawApp?.updatedAt || a.rawApp?.submittedAt;
+              return updDate ? new Date(updDate).toDateString() === new Date().toDateString() : false;
+            }).length;
+
+            return {
+              ...prev,
+              stats: {
+                ...prev.stats,
+                pending,
+                processing,
+                completed: completedToday,
+              },
+              pipeline: { submitted, underReview, processing, approved, completed },
+              applications: updated,
+            };
+          });
+        }
+        handleRefresh();
       };
 
       socket.on('response_applications_data', handleSocketData);
       socket.on('applications_updated', handleRefresh);
       socket.on('new_application_submitted', handleRefresh);
-      socket.on('application_status_changed', handleRefresh);
+      socket.on('application_status_changed', handleStatusChanged);
 
       return () => {
         clearInterval(pollInterval);
@@ -309,7 +363,7 @@ export default function Applications() {
         socket.off('response_applications_data', handleSocketData);
         socket.off('applications_updated', handleRefresh);
         socket.off('new_application_submitted', handleRefresh);
-        socket.off('application_status_changed', handleRefresh);
+        socket.off('application_status_changed', handleStatusChanged);
       };
     } else {
       return () => {
@@ -332,7 +386,7 @@ export default function Applications() {
       if (!prev || !prev.applications) return prev;
       const updated = prev.applications.map((a: any) => {
         if (a.rawId === targetId || a.id === targetId || a.refNumber === refNum) {
-          return { ...a, status: 'Approved', rawStatus: 'APPROVED' };
+          return { ...a, status: 'Approved', rawStatus: 'APPROVED', updatedAt: new Date().toISOString() };
         }
         return a;
       });
@@ -448,7 +502,7 @@ export default function Applications() {
       if (!prev || !prev.applications) return prev;
       const updated = prev.applications.map((a: any) => {
         if (selectedAppIds.includes(a.rawId) || selectedAppIds.includes(a.id) || selectedAppIds.includes(a.refNumber)) {
-          return { ...a, status: 'Approved', rawStatus: 'APPROVED' };
+          return { ...a, status: 'Approved', rawStatus: 'APPROVED', updatedAt: new Date().toISOString() };
         }
         return a;
       });
