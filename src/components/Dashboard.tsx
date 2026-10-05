@@ -649,12 +649,9 @@ export default function Dashboard() {
               ? Number(stats.revenueToday) 
               : (stats?.todayGross !== undefined ? Number(stats.todayGross) : 0)));
 
-    const totalLifetime = col?.totalLifetime !== undefined
-      ? Number(col.totalLifetime)
-      : Number(stats?.grossInflow ?? stats?.totalRevenue ?? 0);
-
-    const online = col?.onlinePayments !== undefined 
-      ? Number(col.onlinePayments)
+    const rawOnline = col?.onlinePayments !== undefined ? Number(col.onlinePayments) : undefined;
+    const online = (rawOnline !== undefined && (totalToday === 0 || rawOnline <= totalToday))
+      ? (totalToday === 0 ? 0 : rawOnline)
       : (totalToday > 0 ? totalToday : 0);
 
     const cash = col?.cashCollections !== undefined 
@@ -679,13 +676,11 @@ export default function Dashboard() {
 
     return { 
       total: totalToday, 
-      totalLifetime, 
       online, 
       cash, 
       onlinePct, 
       cashPct,
       netToday: totalToday,
-      netLifetime: Number(col?.netLifetime ?? stats?.totalRevenue ?? totalLifetime)
     };
   }, [data]);
 
@@ -1359,37 +1354,32 @@ export default function Dashboard() {
               {i18n.totalCollectionsToday}
             </div>
             <div style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', marginTop: '4px', letterSpacing: '-0.02em' }}>
-              ₹{collectionsData.total.toLocaleString('en-IN')}
+              {collectionsData.total > 0 ? `₹${collectionsData.total.toLocaleString('en-IN')}` : '₹0'}
             </div>
-            {collectionsData.totalLifetime > 0 && (
-              <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '4px', fontWeight: 500 }}>
-                Lifetime Collections: <strong style={{ color: '#1E293B', fontWeight: 700 }}>₹{collectionsData.totalLifetime.toLocaleString('en-IN')}</strong>
-              </div>
-            )}
           </div>
 
           <div style={{ marginTop: '18px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12.5px' }}>
               <span style={{ color: '#64748B', fontWeight: 500 }}>
-                {i18n.onlinePayments} ({collectionsData.total > 0 ? collectionsData.onlinePct : (collectionsData.online > 0 ? 100 : 0)}%)
+                {i18n.onlinePayments} {collectionsData.total > 0 && collectionsData.online > 0 ? `(${collectionsData.onlinePct}%)` : ''}
               </span>
-              <span style={{ color: '#0F172A', fontWeight: 700 }}>
-                ₹{collectionsData.online.toLocaleString('en-IN')}
+              <span style={{ color: collectionsData.online > 0 ? '#0F172A' : '#94A3B8', fontWeight: 700 }}>
+                {collectionsData.online > 0 ? `₹${collectionsData.online.toLocaleString('en-IN')}` : '—'}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', fontSize: '12.5px' }}>
               <span style={{ color: '#64748B', fontWeight: 500 }}>
-                {i18n.cashCollections} ({collectionsData.total > 0 ? collectionsData.cashPct : (collectionsData.cash > 0 ? 100 : 0)}%)
+                {i18n.cashCollections} {collectionsData.total > 0 && collectionsData.cash > 0 ? `(${collectionsData.cashPct}%)` : ''}
               </span>
-              <span style={{ color: '#0F172A', fontWeight: 700 }}>
-                ₹{collectionsData.cash.toLocaleString('en-IN')}
+              <span style={{ color: collectionsData.cash > 0 ? '#0F172A' : '#94A3B8', fontWeight: 700 }}>
+                {collectionsData.cash > 0 ? `₹${collectionsData.cash.toLocaleString('en-IN')}` : '—'}
               </span>
             </div>
 
             {/* Dual Segment Progress Bar */}
             <div style={{ width: '100%', height: '8px', borderRadius: '4px', background: '#F1F5F9', overflow: 'hidden', display: 'flex' }}>
-              <div style={{ width: `${collectionsData.total > 0 ? collectionsData.onlinePct : (collectionsData.online > 0 ? 100 : 0)}%`, height: '100%', background: '#2563EB', transition: 'width 0.3s ease' }} />
-              <div style={{ width: `${collectionsData.total > 0 ? collectionsData.cashPct : (collectionsData.cash > 0 ? 100 : 0)}%`, height: '100%', background: '#10B981', transition: 'width 0.3s ease' }} />
+              <div style={{ width: `${collectionsData.total > 0 ? collectionsData.onlinePct : 0}%`, height: '100%', background: '#2563EB', transition: 'width 0.3s ease' }} />
+              <div style={{ width: `${collectionsData.total > 0 ? collectionsData.cashPct : 0}%`, height: '100%', background: '#10B981', transition: 'width 0.3s ease' }} />
             </div>
           </div>
         </div>
@@ -1404,17 +1394,24 @@ export default function Dashboard() {
           display: 'flex',
           flexDirection: 'column'
         }}>
-          <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0, marginBottom: '14px' }}>
-            {i18n.operatorLogs}
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+              {i18n.operatorLogs}
+            </h3>
+            {operatorLogsData.length > 0 && (
+              <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', background: '#F1F5F9', padding: '2px 8px', borderRadius: '12px' }}>
+                {operatorLogsData.length} Activities
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '330px', overflowY: 'auto', paddingRight: '4px' }}>
             {operatorLogsData.length === 0 ? (
               <div style={{ padding: '24px 0', textAlign: 'center', color: '#94A3B8', fontSize: '13px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                 <ShieldCheck size={22} color="#94A3B8" />
-                <span>No operator activities recorded today</span>
+                <span>No operator activities recorded</span>
               </div>
             ) : (
-              operatorLogsData.slice(0, 5).map((log: any, idx: number) => {
+              operatorLogsData.map((log: any, idx: number) => {
               const isApproved = log.type === 'approved' || log.title.toLowerCase().includes('approved');
               const isRejected = log.type === 'rejected' || log.title.toLowerCase().includes('reject');
               const isWallet = log.type === 'wallet' || log.title.toLowerCase().includes('wallet');
