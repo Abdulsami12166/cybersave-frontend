@@ -311,8 +311,10 @@ export default function OperatorDetail() {
         socket.emit('update_operator_status', { id: operator.id, status: targetStatus });
       }
 
+      const displayStatus = targetStatus === 'SUSPENDED' ? 'Suspended' : 'Active';
+      setOperator((prev: any) => prev ? { ...prev, status: displayStatus } : prev);
       window.dispatchEvent(new CustomEvent('cybersave_toast', { 
-        detail: { message: `Operator account ${targetStatus === 'SUSPENDED' ? 'suspended' : 'activated'} successfully!` } 
+        detail: { message: `Operator account ${targetStatus === 'SUSPENDED' ? 'suspended' : 'reactivated'} successfully!` } 
       }));
       fetchOperatorRest();
     } catch (e) {
@@ -349,7 +351,11 @@ export default function OperatorDetail() {
   const handleResetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPassword || newPassword !== confirmPassword) {
-      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Passwords do not match!' } }));
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Passwords do not match!', type: 'error' } }));
+      return;
+    }
+    if (newPassword.length < 6) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Password must be at least 6 characters long!', type: 'error' } }));
       return;
     }
     setActionLoading(true);
@@ -365,12 +371,14 @@ export default function OperatorDetail() {
         socket.emit('reset_operator_password', { id: operator.id, password: newPassword });
       }
 
-      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Password reset successfully!' } }));
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Password reset successfully for ${operator.name}!` } }));
       setShowPasswordModal(false);
       setNewPassword('');
       setConfirmPassword('');
+      fetchOperatorRest();
     } catch (e) {
       console.warn('Password reset error:', e);
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Failed to reset password', type: 'error' } }));
     } finally {
       setActionLoading(false);
     }
@@ -391,7 +399,8 @@ export default function OperatorDetail() {
         socket.emit('update_operator_access', { id: operator.id, permissions: finalPermissions });
       }
 
-      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Permissions saved and enforced across portal!' } }));
+      setOperator((prev: any) => prev ? { ...prev, permissions: finalPermissions } : prev);
+      window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Permissions updated and enforced for ${operator.name}!` } }));
       fetchOperatorRest();
     } catch (e) {
       console.warn('Permissions save error:', e);
@@ -804,6 +813,28 @@ export default function OperatorDetail() {
                 fontSize: 13, 
                 fontWeight: 600, 
                 borderRadius: 8, 
+                border: '1.5px solid #2563EB', 
+                background: '#EFF6FF', 
+                color: '#1D4ED8', 
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+              onClick={() => {
+                setSelectedPermissions(Array.isArray(operator?.permissions) ? operator.permissions : []);
+                setShowAccessModal(true);
+              }}
+            >
+              <Shield size={14} />
+              Manage Access
+            </button>
+            <button 
+              style={{ 
+                padding: '8px 16px', 
+                fontSize: 13, 
+                fontWeight: 600, 
+                borderRadius: 8, 
                 border: '1px solid #CBD5E1', 
                 background: '#FFFFFF', 
                 color: '#334155', 
@@ -953,7 +984,9 @@ export default function OperatorDetail() {
                     LAST LOGIN DATE/TIME
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
-                    {operator.lastLogin || 'Never logged in'}
+                    {operator.lastLogin || (operator.lastLoginAt ? new Date(operator.lastLoginAt).toLocaleString('en-IN', {
+                      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    }) : (operator.lastActive || 'Active recently'))}
                   </div>
                 </div>
                 <div>
@@ -961,7 +994,7 @@ export default function OperatorDetail() {
                     ACTIVE SESSIONS
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
-                    {operator.activeSessions || '0 active sessions'}
+                    {operator.status === 'Suspended' ? '0 sessions (Suspended)' : (operator.activeSessions || '1 active session')}
                   </div>
                 </div>
                 <div>
@@ -971,6 +1004,58 @@ export default function OperatorDetail() {
                   <div style={{ fontWeight: 600, fontSize: 13, color: operator.ipWhitelisting?.includes('Enabled') ? '#10b981' : '#94a3b8' }}>
                     {operator.ipWhitelisting || 'Disabled'}
                   </div>
+                </div>
+              </div>
+
+              {/* Least Privilege Summary & Manage Access */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingTop: 16, borderTop: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>
+                    Least Privilege Feature Access
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                    Currently granted <strong style={{ color: '#2563eb' }}>{(operator.permissions || []).length} / {ALL_PERMISSION_KEYS.length}</strong> system screens
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('Permissions')}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 8,
+                      border: '1px solid #e2e8f0',
+                      background: '#ffffff',
+                      color: '#334155',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    View Permissions
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPermissions(Array.isArray(operator?.permissions) ? operator.permissions : []);
+                      setShowAccessModal(true);
+                    }}
+                    style={{
+                      padding: '6px 16px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: '#2563eb',
+                      color: '#ffffff',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5
+                    }}
+                  >
+                    <Shield size={13} /> Manage Access
+                  </button>
                 </div>
               </div>
             </div>
@@ -1204,11 +1289,35 @@ export default function OperatorDetail() {
             
             {/* Permissions & Security Level */}
             <div className="table-card" style={{ padding: 24, borderRadius: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 10 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>Permissions & Security Level</h3>
-                <span style={{ background: '#2563eb', color: '#ffffff', padding: '4px 12px', borderRadius: 14, fontSize: 11, fontWeight: 700 }}>
-                  Internal Tier-2
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPermissions(Array.isArray(operator?.permissions) ? operator.permissions : []);
+                      setShowAccessModal(true);
+                    }}
+                    style={{
+                      padding: '5px 14px',
+                      borderRadius: 8,
+                      border: '1.5px solid #2563eb',
+                      background: '#eff6ff',
+                      color: '#1d4ed8',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5
+                    }}
+                  >
+                    <Shield size={13} /> Manage Access Modal
+                  </button>
+                  <span style={{ background: '#2563eb', color: '#ffffff', padding: '4px 12px', borderRadius: 14, fontSize: 11, fontWeight: 700 }}>
+                    Internal Tier-2
+                  </span>
+                </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
                 <div>
@@ -2360,8 +2469,7 @@ export default function OperatorDetail() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {group.items.map((item) => {
-                        const isAlways = item.id === 'SETTINGS';
-                        const isEnabled = isAlways || selectedPermissions.includes(item.id);
+                        const isEnabled = selectedPermissions.includes(item.id);
                         return (
                           <label 
                             key={item.id} 
@@ -2370,29 +2478,23 @@ export default function OperatorDetail() {
                               alignItems: 'flex-start', 
                               gap: 12, 
                               padding: '10px 14px', 
-                              background: isAlways ? '#f0fdf4' : (isEnabled ? '#f0f7ff' : '#ffffff'),
+                              background: isEnabled ? '#f0f7ff' : '#ffffff',
                               borderBottom: '1px solid #f8fafc',
-                              cursor: isAlways ? 'default' : 'pointer',
+                              cursor: 'pointer',
                               transition: 'background 0.15s ease'
                             }}
                           >
                             <input 
                               type="checkbox" 
                               checked={isEnabled} 
-                              disabled={isAlways}
-                              onChange={() => !isAlways && togglePermission(item.id)}
-                              style={{ marginTop: 3, width: 17, height: 17, accentColor: isAlways ? '#16a34a' : '#2563eb', cursor: isAlways ? 'default' : 'pointer' }}
+                              onChange={() => togglePermission(item.id)}
+                              style={{ marginTop: 3, width: 17, height: 17, accentColor: '#2563eb', cursor: 'pointer' }}
                             />
                             <div style={{ flex: 1 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: isAlways ? '#15803d' : (isEnabled ? '#1e40af' : '#1e293b') }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: isEnabled ? '#1e40af' : '#1e293b' }}>
                                   {item.title}
                                 </span>
-                                {isAlways && (
-                                  <span style={{ background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0', padding: '1px 7px', borderRadius: 4, fontSize: 10.5, fontWeight: 700 }}>
-                                    Normal for Everyone (Always Active)
-                                  </span>
-                                )}
                               </div>
                               <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
                                 {item.desc}

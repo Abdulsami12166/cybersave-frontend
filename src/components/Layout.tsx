@@ -23,6 +23,7 @@ const TRANSLATIONS: Record<string, Record<string, string>> = {
     dashboard: 'Dashboard',
     users: 'User Management',
     applications: 'Applications',
+    refunds: 'Refund Claims',
     services: 'Services',
     operators: 'Operators',
     transactions: 'Transactions',
@@ -40,6 +41,7 @@ const TRANSLATIONS: Record<string, Record<string, string>> = {
     dashboard: 'डैशबोर्ड (Dashboard)',
     users: 'उपयोगकर्ता प्रबंधन (User Management)',
     applications: 'आवेदन (Applications)',
+    refunds: 'रिफंड दावे (Refund Claims)',
     services: 'सेवाएं (Services)',
     operators: 'ऑपरेटर्स (Operators)',
     transactions: 'लेनदेन (Transactions)',
@@ -57,6 +59,7 @@ const TRANSLATIONS: Record<string, Record<string, string>> = {
     dashboard: 'ડેશબોર્ડ (Dashboard)',
     users: 'વપરાશકર્તા વ્યવસ્થાપન (User Management)',
     applications: 'અરજીઓ (Applications)',
+    refunds: 'રીફંડ દાવાઓ (Refund Claims)',
     services: 'સેવાઓ (Services)',
     operators: 'ઓપરેટર્સ (Operators)',
     transactions: 'વ્યવહારો (Transactions)',
@@ -74,6 +77,7 @@ const TRANSLATIONS: Record<string, Record<string, string>> = {
     dashboard: 'डॅशबोर्ड (Dashboard)',
     users: 'वापरकर्ता व्यवस्थापन (User Management)',
     applications: 'अर्ज (Applications)',
+    refunds: 'परतावा दावे (Refund Claims)',
     services: 'सेवा (Services)',
     operators: 'ऑपरेटर्स (Operators)',
     transactions: 'व्यवहार (Transactions)',
@@ -497,9 +501,11 @@ export default function Layout() {
 
   // Live permission updates from Super Admin via WebSockets
   useEffect(() => {
-    if (socket && admin?.id) {
-      const handlePermissionsUpdated = (data: { id: string; permissions: string[] }) => {
-        if (data?.id === admin.id) {
+    if (socket && (admin?.id || admin?.email)) {
+      const handlePermissionsUpdated = (data: { id?: string; email?: string; permissions: string[] }) => {
+        const isMatch = (data?.id && admin?.id && data.id === admin.id) ||
+                        (data?.email && admin?.email && data.email.toLowerCase() === admin.email.toLowerCase());
+        if (isMatch) {
           updateAdmin({ permissions: data.permissions });
           window.dispatchEvent(new CustomEvent('cybersave_toast', {
             detail: { message: 'Your administrative access permissions have been updated in real-time.', type: 'success' }
@@ -508,7 +514,10 @@ export default function Layout() {
       };
 
       const handleForceLogout = (data: any) => {
-        if (!data?.userId || data.userId === admin.id) {
+        const isMatch = (!data?.userId && !data?.email) ||
+                        (data?.userId && admin?.id && data.userId === admin.id) ||
+                        (data?.email && admin?.email && data.email.toLowerCase() === admin.email.toLowerCase());
+        if (isMatch) {
           showToast(data?.message || 'Your account has been suspended by an Administrator.', 'error');
           setTimeout(() => {
             logout();
@@ -527,7 +536,7 @@ export default function Layout() {
         socket.off('operator_suspended', handleForceLogout);
       };
     }
-  }, [socket, admin?.id, logout, navigate, updateAdmin]);
+  }, [socket, admin?.id, admin?.email, logout, navigate, updateAdmin]);
 
   // Real-time Support Chat Citizen Message Notifications (Bell Icon)
   useEffect(() => {
@@ -574,6 +583,7 @@ export default function Layout() {
     { icon: <LayoutDashboard size={18} />, label: currentTranslations.dashboard, path: '/', requiredPermission: 'DASHBOARD' },
     { icon: <Users size={18} />, label: currentTranslations.users, path: '/users', requiredPermission: 'USERS' },
     { icon: <FileText size={18} />, label: currentTranslations.applications, path: '/applications', requiredPermission: 'APPLICATIONS' },
+    { icon: <RotateCcw size={18} />, label: currentTranslations.refunds || 'Refund Claims', path: '/refunds', requiredPermission: 'REFUNDS' },
     { icon: <Grid size={18} />, label: currentTranslations.services, path: '/services', requiredPermission: 'SERVICES' },
     { icon: <UserSquare2 size={18} />, label: currentTranslations.operators, path: '/operators', requiredPermission: 'OPERATORS' },
     { icon: <ArrowLeftRight size={18} />, label: currentTranslations.transactions, path: '/transactions', requiredPermission: 'TRANSACTIONS' },

@@ -154,6 +154,15 @@ export default function Operators() {
     if (!managingOp) return;
     const finalPermissions = Array.from(new Set(opPermissions));
     try {
+      // Optimistically update local operator list
+      setData((prev: any) => {
+        if (!prev?.operators) return prev;
+        return {
+          ...prev,
+          operators: prev.operators.map((o: any) => o.id === managingOp.id ? { ...o, permissions: finalPermissions } : o)
+        };
+      });
+
       await apiFetch(`/api/v1/operators/${managingOp.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
