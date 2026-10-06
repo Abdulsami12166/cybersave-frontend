@@ -458,13 +458,19 @@ export default function Dashboard() {
     }
   }, [socket, connected, fetchLiveApplications]);
 
-  // Normalize all applications with strict data sanitization
+  // Normalize all applications with strict data sanitization and authoritative newest-first ordering
   const normalizedApplications: NormalizedApplication[] = useMemo(() => {
     const sourceApps = (rawApps && rawApps.length > 0) 
       ? rawApps 
       : (data?.recentApps && data.recentApps.length > 0 ? data.recentApps : []);
     
-    return sourceApps.map((a: any) => normalizeApplication(a));
+    const mapped = sourceApps.map((a: any) => normalizeApplication(a));
+    return mapped.sort((a, b) => {
+      const ta = a.rawApp?.submittedAt || a.rawApp?.createdAt ? new Date(a.rawApp.submittedAt || a.rawApp.createdAt).getTime() : 0;
+      const tb = b.rawApp?.submittedAt || b.rawApp?.createdAt ? new Date(b.rawApp.submittedAt || b.rawApp.createdAt).getTime() : 0;
+      if (tb !== ta) return tb - ta;
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
   }, [rawApps, data]);
 
   // Compute live operational metrics

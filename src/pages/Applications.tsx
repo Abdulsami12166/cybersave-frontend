@@ -178,6 +178,19 @@ export default function Applications() {
     };
   };
 
+  const sortApplicationsDesc = (apps: any[]) => {
+    return [...apps].sort((a, b) => {
+      const ta = a.submittedDate instanceof Date
+        ? a.submittedDate.getTime()
+        : new Date(a.submittedAt || a.submittedDate || a.createdAt || 0).getTime();
+      const tb = b.submittedDate instanceof Date
+        ? b.submittedDate.getTime()
+        : new Date(b.submittedAt || b.submittedDate || b.createdAt || 0).getTime();
+      if (tb !== ta) return tb - ta;
+      return String(b.rawId || b.id || b.refNumber || '').localeCompare(String(a.rawId || a.id || a.refNumber || ''));
+    });
+  };
+
   const deduplicateApplicationList = (apps: any[]) => {
     const seen = new Set<string>();
     return apps.filter(a => {
@@ -201,7 +214,8 @@ export default function Applications() {
         const list = await res.json().catch(() => []);
         if (Array.isArray(list)) {
           const rawFormatted = list.map((item, idx) => formatApplication(item, idx));
-          const formatted = deduplicateApplicationList(rawFormatted);
+          const deduplicated = deduplicateApplicationList(rawFormatted);
+          const formatted = sortApplicationsDesc(deduplicated);
           const totalApps = formatted.length;
           const todayApps = formatted.filter(a => {
             const sub = new Date(a.submittedAt || a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
@@ -274,7 +288,8 @@ export default function Applications() {
         }
         const rawList = Array.isArray(resData.applications) ? resData.applications : [];
         const rawFormatted = rawList.map((item: any, idx: number) => formatApplication(item, idx));
-        const formatted = deduplicateApplicationList(rawFormatted);
+        const deduplicated = deduplicateApplicationList(rawFormatted);
+        const formatted = sortApplicationsDesc(deduplicated);
         const totalApps = formatted.length;
         const todayApps = formatted.filter(a => {
           const sub = new Date(a.submittedAt || a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
@@ -319,6 +334,68 @@ export default function Applications() {
           socket.emit('request_applications_data');
           fetchApplicationsRest();
         }, 300);
+      };
+
+      const handleNewApplicationSubmitted = (newApp: any) => {
+        if (!newApp) return;
+        setData((prev: any) => {
+          if (!prev || !prev.applications) return prev;
+          const formattedNew = formatApplication(newApp, 0);
+          const targetRawId = formattedNew.rawId || formattedNew.id;
+          const targetRef = formattedNew.refNumber;
+          const subKey = newApp.clientSubmissionId;
+          const orderKey = newApp.razorpayOrderId;
+
+          const existingIndex = prev.applications.findIndex((a: any) => {
+            if (targetRawId && (a.rawId === targetRawId || a.id === targetRawId)) return true;
+            if (targetRef && (a.refNumber === targetRef || a.id === targetRef)) return true;
+            if (subKey && (a.rawApp?.clientSubmissionId === subKey || a.clientSubmissionId === subKey)) return true;
+            if (orderKey && (a.rawApp?.razorpayOrderId === orderKey || a.razorpayOrderId === orderKey)) return true;
+            return false;
+          });
+
+          let updatedApps: any[];
+          if (existingIndex >= 0) {
+            updatedApps = [...prev.applications];
+            updatedApps[existingIndex] = { ...updatedApps[existingIndex], ...formattedNew };
+          } else {
+            updatedApps = [formattedNew, ...prev.applications];
+          }
+
+          const deduplicated = deduplicateApplicationList(updatedApps);
+          const sorted = sortApplicationsDesc(deduplicated);
+
+          const totalApps = sorted.length;
+          const todayApps = sorted.filter((a: any) => {
+            const sub = new Date(a.submittedAt || a.submittedDate || Date.now());
+            return sub.toDateString() === new Date().toDateString();
+          }).length;
+          const submittedCount = sorted.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED' || a.status === 'Submitted').length;
+          const underReviewCount = sorted.filter((a: any) => (['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review' || a.status === 'Pending' || a.status === 'Under Review') && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
+          const processingCount = sorted.filter((a: any) => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
+          const approvedCount = sorted.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
+          const completedCount = sorted.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
+          const pendingReviewCount = submittedCount + underReviewCount;
+
+          return {
+            ...prev,
+            stats: {
+              ...prev.stats,
+              totalApps: Math.max(prev.stats?.totalApps || 0, totalApps),
+              todayApps,
+              pending: pendingReviewCount,
+              processing: processingCount,
+            },
+            pipeline: {
+              submitted: submittedCount,
+              underReview: underReviewCount,
+              processing: processingCount,
+              approved: approvedCount,
+              completed: completedCount,
+            },
+            applications: sorted,
+          };
+        });
       };
 
       const handleStatusChanged = (evtData: any) => {
@@ -371,7 +448,7 @@ export default function Applications() {
 
       socket.on('response_applications_data', handleSocketData);
       socket.on('applications_updated', handleRefresh);
-      socket.on('new_application_submitted', handleRefresh);
+      socket.on('new_application_submitted', handleNewApplicationSubmitted);
       socket.on('application_status_changed', handleStatusChanged);
 
       return () => {
@@ -380,7 +457,7 @@ export default function Applications() {
         if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_applications_data', handleSocketData);
         socket.off('applications_updated', handleRefresh);
-        socket.off('new_application_submitted', handleRefresh);
+        socket.off('new_application_submitted', handleNewApplicationSubmitted);
         socket.off('application_status_changed', handleStatusChanged);
       };
     } else {
@@ -669,7 +746,7 @@ export default function Applications() {
 
   // Filtering Logic
   const filteredApplications = useMemo(() => {
-    return (applications as any[]).filter(app => {
+    const list = (applications as any[]).filter(app => {
       // Category Filter Pills
       if (selectedCategory !== 'All Applications') {
         const cat = selectedCategory.toLowerCase().replace(' services', '');
@@ -685,7 +762,6 @@ export default function Applications() {
         if (s === 'submitted') {
           if (raw !== 'SUBMITTED' && app.status !== 'Submitted') return false;
         } else if (s === 'pending' || s === 'in review' || s === 'under review') {
-          // underreview means pending or inreview
           if (!['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(raw) && app.status !== 'In Review' && app.status !== 'Pending' && app.status !== 'Under Review') return false;
         } else if (s === 'processing') {
           if (!['IN_PROGRESS', 'PROCESSING'].includes(raw) && app.status !== 'Processing') return false;
@@ -727,6 +803,7 @@ export default function Applications() {
 
       return true;
     });
+    return sortApplicationsDesc(list);
   }, [applications, selectedCategory, filterStatus, filterPriority, filterAssigned, searchQuery]);
 
   // Pagination Slice

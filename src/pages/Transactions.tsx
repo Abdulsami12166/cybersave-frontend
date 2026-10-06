@@ -77,6 +77,14 @@ export default function Transactions() {
           };
         });
 
+        // ponytail: authoritative newest-first ordering for transactions
+        txns.sort((a: any, b: any) => {
+          const ta = a.date ? new Date(a.date).getTime() : 0;
+          const tb = b.date ? new Date(b.date).getTime() : 0;
+          if (tb !== ta) return tb - ta;
+          return String(b.id || '').localeCompare(String(a.id || ''));
+        });
+
         const grossInflow = txns.reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
         const refundedAmount = txns.filter((t: any) => t.status === 'REFUNDED').reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
         const totalAmount = grossInflow - refundedAmount;
