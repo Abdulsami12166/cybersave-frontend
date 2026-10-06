@@ -63,7 +63,56 @@ export default function SupportTickets() {
           cachedSupportData = resData;
         }
       };
-      const handleNew = () => {
+      const handleNew = (newTkt?: any) => {
+        if (newTkt && (newTkt.id || newTkt.refNumber || newTkt.title)) {
+          const tktId = newTkt.refNumber || newTkt.id;
+          const formattedTkt = {
+            id: tktId,
+            rawId: newTkt.rawId || newTkt.id,
+            refNumber: newTkt.refNumber || tktId,
+            title: newTkt.title || `Refund Claim: ₹${newTkt.amount || 50} - ${newTkt.serviceTitle || 'Government Service'}`,
+            description: newTkt.description || newTkt.reason || 'Refund Request',
+            category: newTkt.category || 'Refund Request',
+            priority: newTkt.priority || 'High',
+            status: newTkt.status || 'OPEN',
+            createdOn: 'Today',
+            lastUpdated: 'Today',
+            createdAt: newTkt.createdAt || new Date().toISOString(),
+            updatedAt: newTkt.updatedAt || new Date().toISOString(),
+            attachmentUrl: newTkt.attachmentUrl || newTkt.proofUrl || null,
+            refundAmount: newTkt.refundAmount || newTkt.amount || 50,
+            refundStatus: newTkt.refundStatus || newTkt.status || 'PENDING',
+            refundId: newTkt.refundId || newTkt.id,
+            applicationRef: newTkt.applicationRef || newTkt.applicationId,
+            reporter: newTkt.reporter || { name: 'Citizen Applicant', email: '' },
+            messages: Array.isArray(newTkt.messages) ? newTkt.messages : []
+          };
+
+          setData((prev: any) => {
+            if (!prev || !Array.isArray(prev.tickets)) return prev;
+            const existingIdx = prev.tickets.findIndex((t: any) =>
+              (t.id && t.id === formattedTkt.id) ||
+              (t.refNumber && t.refNumber === formattedTkt.refNumber) ||
+              (t.rawId && t.rawId === formattedTkt.rawId)
+            );
+            let updatedList: any[];
+            if (existingIdx >= 0) {
+              updatedList = [...prev.tickets];
+              updatedList[existingIdx] = { ...updatedList[existingIdx], ...formattedTkt };
+            } else {
+              updatedList = [formattedTkt, ...prev.tickets];
+            }
+            return {
+              ...prev,
+              stats: {
+                ...prev.stats,
+                totalTickets: updatedList.length,
+                openTickets: updatedList.filter((t: any) => t.status === 'OPEN').length
+              },
+              tickets: updatedList
+            };
+          });
+        }
         fetchTicketsRest();
         socket.emit('request_support_tickets');
       };
@@ -71,6 +120,10 @@ export default function SupportTickets() {
       socket.on('response_support_tickets', handleResponse);
       socket.on('new_support_ticket', handleNew);
       socket.on('support_tickets_updated', handleNew);
+      socket.on('new_refund_requested', handleNew);
+      socket.on('new_refund_request', handleNew);
+      socket.on('refunds_updated', handleNew);
+      socket.on('create_refund_request_success', handleNew);
       socket.on('create_support_ticket_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Ticket created successfully!' } }));
         setShowCreateModal(false);
@@ -98,6 +151,10 @@ export default function SupportTickets() {
         socket.off('response_support_tickets');
         socket.off('new_support_ticket');
         socket.off('support_tickets_updated');
+        socket.off('new_refund_requested');
+        socket.off('new_refund_request');
+        socket.off('refunds_updated');
+        socket.off('create_refund_request_success');
         socket.off('create_support_ticket_success');
       }
     };
