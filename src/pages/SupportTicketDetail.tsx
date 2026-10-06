@@ -21,7 +21,55 @@ export default function SupportTicketDetail() {
   const [userTyping, setUserTyping] = useState(false);
   const [userTypingName, setUserTypingName] = useState('Citizen');
   const [processingRefund, setProcessingRefund] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [availableOperators, setAvailableOperators] = useState<any[]>([
+    { id: 'op-1', name: 'Rajesh Kumar', role: 'Senior Field Officer (SDM Delhi)' },
+    { id: 'op-2', name: 'Pooja Sharma', role: 'Verification Officer (HSR Layout)' },
+    { id: 'op-3', name: 'Vikram Tiwari', role: 'VLE Field Specialist (Noida)' },
+    { id: 'op-4', name: 'Amit Singh', role: 'Identity Compliance Desk' },
+    { id: 'op-5', name: 'Support Desk Officer', role: 'CSC Central Operations' },
+  ]);
   const adminTypingTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    apiFetch('/api/v1/operators')
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d?.operators) && d.operators.length > 0) {
+          setAvailableOperators(d.operators);
+        }
+      })
+      .catch(() => null);
+  }, []);
+
+  const handleAssignTicket = async (operatorName: string) => {
+    if (assigning || !ticket) return;
+    setAssigning(true);
+    const targetLookupId = ticket?.rawId || ticket?.refNumber || ticket?.id || id;
+    try {
+      if (socket && connected) {
+        socket.emit('assign_support_ticket', { id: targetLookupId, assignedTo: operatorName });
+      }
+      await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(targetLookupId)}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignedTo: operatorName }),
+      });
+      setTicket((prev: any) => (prev ? { ...prev, assignedTo: operatorName } : prev));
+      window.dispatchEvent(
+        new CustomEvent('cybersave_toast', {
+          detail: { message: `Ticket #${ticket.refNumber || id} assigned to ${operatorName || 'Unassigned'}!` },
+        })
+      );
+    } catch (e) {
+      console.warn('Assign ticket error:', e);
+    } finally {
+      setAssigning(false);
+      setShowAssignModal(false);
+      fetchTicketData();
+    }
+  };
 
   const fetchTicketData = useCallback(async () => {
     if (!id) return;
@@ -158,13 +206,22 @@ export default function SupportTicketDetail() {
     }
 
     try {
-      await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(ticket?.id || id)}/resolve`, {
+      const res = await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(ticket?.id || id)}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      setTicket((prev: any) => prev ? { ...prev, status: 'RESOLVED' } : null);
+      if (res && res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json?.ticket) {
+          setTicket(json.ticket);
+        } else {
+          setTicket((prev: any) => prev ? { ...prev, status: 'RESOLVED', refundStatus: prev.refundStatus ? 'APPROVED' : undefined } : null);
+        }
+      } else {
+        setTicket((prev: any) => prev ? { ...prev, status: 'RESOLVED', refundStatus: prev.refundStatus ? 'APPROVED' : undefined } : null);
+      }
       setShowResolveModal(false);
 
       window.dispatchEvent(new CustomEvent('cybersave_toast', {
@@ -172,11 +229,10 @@ export default function SupportTicketDetail() {
       }));
     } catch (e) {
       console.warn('REST support resolve error:', e);
-      setTicket((prev: any) => prev ? { ...prev, status: 'RESOLVED' } : null);
+      setTicket((prev: any) => prev ? { ...prev, status: 'RESOLVED', refundStatus: prev.refundStatus ? 'APPROVED' : undefined } : null);
       setShowResolveModal(false);
     } finally {
       setResolvingInline(false);
-      fetchTicketData();
     }
   };
 
@@ -887,8 +943,25 @@ export default function SupportTicketDetail() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14, alignItems: 'center', borderTop: '1px solid #F1F5F9', paddingTop: 14 }}>
               <span style={{ color: '#64748B', fontSize: 13 }}>Assigned Officer</span>
-              <div style={{ fontWeight: 600, fontSize: 13, color: assignedName ? '#0F172A' : '#94A3B8' }}>
-                {assignedName || '— (Unassigned)'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 600, fontSize: 13, color: assignedName ? '#0F172A' : '#94A3B8' }}>
+                  {assignedName || '— (Unassigned)'}
+                </span>
+                <button
+                  onClick={() => setShowAssignModal(true)}
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    border: '1px solid #CBD5E1',
+                    background: '#F8FAFC',
+                    color: '#2563EB',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  {assignedName ? 'Change' : 'Assign'}
+                </button>
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, alignItems: 'center' }}>
@@ -1046,6 +1119,99 @@ export default function SupportTicketDetail() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Officer Modal */}
+      {showAssignModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '16px'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '480px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+            overflow: 'hidden',
+            border: '1px solid #E2E8F0'
+          }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0F172A' }}>
+                  Assign Support Ticket #{ticket.refNumber || ticket.id || id}
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748B' }}>
+                  Select an official desk officer to take ownership of this grievance.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAssignModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: 18, color: '#94A3B8', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {availableOperators.map((op: any) => {
+                const opName = `${op.name} (${op.role || 'Officer'})`;
+                const isCurrent = assignedName === opName || assignedName === op.name;
+                return (
+                  <button
+                    key={op.id || op.name}
+                    onClick={() => handleAssignTicket(opName)}
+                    disabled={assigning}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      border: isCurrent ? '2px solid #2563EB' : '1px solid #E2E8F0',
+                      background: isCurrent ? '#EFF6FF' : '#FFFFFF',
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A' }}>{op.name}</div>
+                      <div style={{ fontSize: 11.5, color: '#64748B' }}>{op.role || 'Verification Desk'}</div>
+                    </div>
+                    {isCurrent && <span style={{ fontSize: 11, fontWeight: 700, color: '#2563EB' }}>Current</span>}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => handleAssignTicket('')}
+                disabled={assigning}
+                style={{
+                  marginTop: 6,
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: '1px dashed #CBD5E1',
+                  background: '#F8FAFC',
+                  color: '#64748B',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Clear Assignment (Mark Unassigned)
+              </button>
             </div>
           </div>
         </div>

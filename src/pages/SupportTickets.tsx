@@ -391,9 +391,9 @@ export default function SupportTickets() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      background: '#FEF3C7',
-                      color: '#92400E',
-                      border: '1px solid #FDE68A',
+                      background: (t.refundStatus === 'APPROVED' || t.status === 'RESOLVED') ? '#DCFCE7' : t.refundStatus === 'REJECTED' ? '#FEE2E2' : '#FEF3C7',
+                      color: (t.refundStatus === 'APPROVED' || t.status === 'RESOLVED') ? '#166534' : t.refundStatus === 'REJECTED' ? '#991B1B' : '#92400E',
+                      border: (t.refundStatus === 'APPROVED' || t.status === 'RESOLVED') ? '1px solid #BBF7D0' : t.refundStatus === 'REJECTED' ? '1px solid #FECACA' : '1px solid #FDE68A',
                       borderRadius: '8px',
                       padding: '4px 10px',
                       fontSize: '11.5px',
@@ -402,7 +402,7 @@ export default function SupportTickets() {
                     }}>
                       <span>💰 ₹{Number(t.refundAmount || 50).toLocaleString('en-IN')} Refund Claim</span>
                       <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.85 }}>
-                        {t.refundStatus === 'APPROVED' ? '✓ Credited' : t.refundStatus === 'REJECTED' ? '✕ Declined' : 'Pending'}
+                        {(t.refundStatus === 'APPROVED' || t.status === 'RESOLVED') ? '✓ Credited' : t.refundStatus === 'REJECTED' ? '✕ Declined' : 'Pending'}
                       </span>
                     </div>
                   )}
