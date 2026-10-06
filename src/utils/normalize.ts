@@ -182,7 +182,7 @@ export const formatIndianDate = (dateVal?: any): { formatted: string; relative: 
 };
 
 export const normalizeStatus = (rawStatus?: string): {
-  label: 'In Review' | 'Pending' | 'Processing' | 'Approved' | 'Completed' | 'Rejected';
+  label: 'In Review' | 'Pending' | 'Processing' | 'Approved' | 'Completed' | 'Rejected' | 'Submitted';
   raw: string;
   badgeBg: string;
   badgeColor: string;
@@ -190,7 +190,16 @@ export const normalizeStatus = (rawStatus?: string): {
 } => {
   const upper = (rawStatus || '').toUpperCase().trim();
 
-  if (upper === 'APPROVED' || upper === 'COMPLETED') {
+  if (upper === 'COMPLETED') {
+    return {
+      label: 'Completed',
+      raw: upper,
+      badgeBg: '#D1FAE5',
+      badgeColor: '#047857',
+      badgeBorder: '#6EE7B7',
+    };
+  }
+  if (upper === 'APPROVED') {
     return {
       label: 'Approved',
       raw: upper,
@@ -217,9 +226,18 @@ export const normalizeStatus = (rawStatus?: string): {
       badgeBorder: '#BFDBFE',
     };
   }
+  if (upper === 'SUBMITTED') {
+    return {
+      label: 'Submitted',
+      raw: upper,
+      badgeBg: '#F1F5F9',
+      badgeColor: '#475569',
+      badgeBorder: '#CBD5E1',
+    };
+  }
   return {
     label: 'In Review',
-    raw: upper || 'SUBMITTED',
+    raw: upper || 'PENDING',
     badgeBg: '#FFFBEB',
     badgeColor: '#92400E',
     badgeBorder: '#FDE68A',

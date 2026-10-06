@@ -641,9 +641,11 @@ export default function ApplicationDetail() {
   }
 
   const statusUpper = (app.status || '').toUpperCase();
-  const isApproved = statusUpper === 'APPROVED' || statusUpper === 'COMPLETED';
+  const isCompleted = statusUpper === 'COMPLETED';
+  const isApproved = statusUpper === 'APPROVED';
   const isRejected = statusUpper === 'REJECTED';
-  const isInProgress = statusUpper === 'IN_PROGRESS';
+  const isInProgress = statusUpper === 'IN_PROGRESS' || statusUpper === 'PROCESSING';
+  const isSubmitted = statusUpper === 'SUBMITTED';
   const paidDate = app?.submittedAt ? new Date(app.submittedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A';
   const txnId = app?.razorpayPaymentId || `TXN-${(app?.refNumber || '').slice(-4)}-${(app?.rawId || app?.id || '').slice(-4)}`;
   const timeline = buildTimeline(app, checklist);
@@ -695,9 +697,9 @@ export default function ApplicationDetail() {
     }));
   };
 
-  const statusLabel = isApproved ? 'Approved' : isRejected ? 'Rejected' : isInProgress ? 'In Progress' : 'In Review';
-  const statusColor = isApproved ? '#10b981' : isRejected ? '#ef4444' : isInProgress ? '#2563eb' : '#f59e0b';
-  const statusBg = isApproved ? '#d1fae5' : isRejected ? '#fee2e2' : isInProgress ? '#dbeafe' : '#fef3c7';
+  const statusLabel = isCompleted ? 'Completed' : isApproved ? 'Approved' : isRejected ? 'Rejected' : isInProgress ? 'Processing' : isSubmitted ? 'Submitted' : 'Under Review';
+  const statusColor = isCompleted ? '#047857' : isApproved ? '#10b981' : isRejected ? '#ef4444' : isInProgress ? '#2563eb' : isSubmitted ? '#475569' : '#f59e0b';
+  const statusBg = isCompleted ? '#d1fae5' : isApproved ? '#ecfdf5' : isRejected ? '#fee2e2' : isInProgress ? '#eff6ff' : isSubmitted ? '#f1f5f9' : '#fef3c7';
 
   const priorityLabel = 'High Priority';
 
