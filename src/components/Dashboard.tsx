@@ -412,7 +412,7 @@ export default function Dashboard() {
           socket.emit('request_transactions_data');
           socket.emit('request_operators_data');
           fetchLiveApplications();
-        }, 800);
+        }, 200);
       };
 
       const handleInstantStatusChange = (updatedApp: any) => {
@@ -422,12 +422,38 @@ export default function Dashboard() {
         handleAppUpdate();
       };
 
+      const handleNewApp = (newApp: any) => {
+        if (newApp && (newApp.id || newApp.refNumber)) {
+          setRawApps(prev => {
+            const exists = (prev || []).some(a => a.id === newApp.id || a.refNumber === newApp.refNumber);
+            if (exists) {
+              return (prev || []).map(a => (a.id === newApp.id || a.refNumber === newApp.refNumber) ? { ...a, ...newApp } : a);
+            }
+            return [newApp, ...(prev || [])];
+          });
+          setData((prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              stats: {
+                ...prev.stats,
+                totalApps: Math.max((prev.stats?.totalApps || 0) + 1, 1),
+                todayApps: Math.max((prev.stats?.todayApps || 0) + 1, 1),
+                pendingApps: Math.max((prev.stats?.pendingApps || 0) + 1, 1),
+              }
+            };
+          });
+        }
+        handleAppUpdate();
+      };
+
       socket.on('response_dashboard_data', handleDash);
       socket.on('response_transactions_data', handleTransactionsData);
       socket.on('response_operators_data', handleOperatorsData);
       socket.on('dashboard_updated', handleAppUpdate);
       socket.on('applications_updated', handleAppUpdate);
-      socket.on('new_application_submitted', handleAppUpdate);
+      socket.on('new_application_submitted', handleNewApp);
+      socket.on('application_submitted', handleNewApp);
       socket.on('application_status_changed', handleInstantStatusChange);
       socket.on('refunds_updated', handleAppUpdate);
       socket.on('refund_approved', handleAppUpdate);

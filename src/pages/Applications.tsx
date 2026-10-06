@@ -209,7 +209,12 @@ export default function Applications() {
 
   const fetchApplicationsRest = async () => {
     try {
-      const res = await apiFetch('/api/v1/applications').catch(() => null);
+      const res = await apiFetch(`/api/v1/applications?_t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      }).catch(() => null);
       if (res && res.ok) {
         const list = await res.json().catch(() => []);
         if (Array.isArray(list)) {
@@ -237,23 +242,51 @@ export default function Applications() {
             return upd.toDateString() === new Date().toDateString();
           }).length;
 
-          setData((prev: any) => ({
-            stats: { 
-              totalApps: prev?.stats?.totalApps && prev.stats.totalApps >= totalApps ? prev.stats.totalApps : totalApps, 
-              todayApps: todayApps, 
-              pending: pendingReviewCount, 
-              processing: processingCount, 
-              completed: completedTodayCount 
-            },
-            pipeline: {
-              submitted: submittedCount,
-              underReview: underReviewCount,
-              processing: processingCount,
-              approved: approvedCount,
-              completed: completedCount
-            },
-            applications: formatted,
-          }));
+          setData((prev: any) => {
+            const merged = [...formatted];
+            if (prev?.applications && Array.isArray(prev.applications)) {
+              for (const prevApp of prev.applications) {
+                const exists = merged.some(m =>
+                  (m.rawId && (m.rawId === prevApp.rawId || m.id === prevApp.rawId)) ||
+                  (m.refNumber && (m.refNumber === prevApp.refNumber || m.id === prevApp.refNumber)) ||
+                  (m.id && (m.id === prevApp.id || m.rawId === prevApp.id))
+                );
+                if (!exists) {
+                  merged.push(prevApp);
+                }
+              }
+            }
+            const finalApps = sortApplicationsDesc(deduplicateApplicationList(merged));
+            const finalTotal = Math.max(prev?.stats?.totalApps || 0, finalApps.length);
+            const finalToday = finalApps.filter(a => {
+              const sub = new Date(a.submittedAt || a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
+              return sub.toDateString() === new Date().toDateString();
+            }).length;
+            const finalSubmitted = finalApps.filter(a => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED' || a.status === 'Submitted').length;
+            const finalUnderReview = finalApps.filter(a => (['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review' || a.status === 'Pending' || a.status === 'Under Review') && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
+            const finalProcessing = finalApps.filter(a => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
+            const finalApproved = finalApps.filter(a => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
+            const finalCompleted = finalApps.filter(a => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
+            const finalPending = finalSubmitted + finalUnderReview;
+
+            return {
+              stats: {
+                totalApps: finalTotal,
+                todayApps: finalToday,
+                pending: finalPending,
+                processing: finalProcessing,
+                completed: Math.max(Number(prev?.stats?.completed || 0), completedTodayCount)
+              },
+              pipeline: {
+                submitted: finalSubmitted,
+                underReview: finalUnderReview,
+                processing: finalProcessing,
+                approved: finalApproved,
+                completed: finalCompleted
+              },
+              applications: finalApps,
+            };
+          });
           setLoading(false);
           return formatted;
         }
@@ -310,21 +343,49 @@ export default function Applications() {
           return upd.toDateString() === new Date().toDateString();
         }).length;
 
-        const stats = {
-          totalApps: resData.stats?.totalApps ?? totalApps,
-          todayApps: resData.stats?.todayApps ?? todayApps,
-          pending: resData.stats?.pending ?? pendingReviewCount,
-          processing: resData.stats?.processing ?? processingCount,
-          completed: Math.max(Number(resData.stats?.completed ?? 0), completedTodayCount),
-        };
-        const pipeline = {
-          submitted: resData.pipeline?.submitted ?? submittedCount,
-          underReview: resData.pipeline?.underReview ?? underReviewCount,
-          processing: resData.pipeline?.processing ?? processingCount,
-          approved: resData.pipeline?.approved ?? approvedCount,
-          completed: resData.pipeline?.completed ?? completedCount,
-        };
-        setData({ stats, pipeline, applications: formatted });
+        setData((prev: any) => {
+          const merged = [...formatted];
+          if (prev?.applications && Array.isArray(prev.applications)) {
+            for (const prevApp of prev.applications) {
+              const exists = merged.some(m =>
+                (m.rawId && (m.rawId === prevApp.rawId || m.id === prevApp.rawId)) ||
+                (m.refNumber && (m.refNumber === prevApp.refNumber || m.id === prevApp.refNumber)) ||
+                (m.id && (m.id === prevApp.id || m.rawId === prevApp.id))
+              );
+              if (!exists) {
+                merged.push(prevApp);
+              }
+            }
+          }
+          const finalApps = sortApplicationsDesc(deduplicateApplicationList(merged));
+          const finalTotal = Math.max(resData.stats?.totalApps ?? totalApps, prev?.stats?.totalApps || 0, finalApps.length);
+          const finalToday = finalApps.filter(a => {
+            const sub = new Date(a.submittedAt || a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
+            return sub.toDateString() === new Date().toDateString();
+          }).length;
+          const finalSubmitted = finalApps.filter(a => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED' || a.status === 'Submitted').length;
+          const finalUnderReview = finalApps.filter(a => (['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review' || a.status === 'Pending' || a.status === 'Under Review') && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
+          const finalProcessing = finalApps.filter(a => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
+          const finalApproved = finalApps.filter(a => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
+          const finalCompleted = finalApps.filter(a => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
+          const finalPending = finalSubmitted + finalUnderReview;
+
+          const stats = {
+            totalApps: finalTotal,
+            todayApps: finalToday,
+            pending: resData.stats?.pending ?? finalPending,
+            processing: resData.stats?.processing ?? finalProcessing,
+            completed: Math.max(Number(resData.stats?.completed ?? 0), Number(prev?.stats?.completed ?? 0), completedTodayCount),
+          };
+          const pipeline = {
+            submitted: resData.pipeline?.submitted ?? finalSubmitted,
+            underReview: resData.pipeline?.underReview ?? finalUnderReview,
+            processing: resData.pipeline?.processing ?? finalProcessing,
+            approved: resData.pipeline?.approved ?? finalApproved,
+            completed: resData.pipeline?.completed ?? finalCompleted,
+          };
+          return { stats, pipeline, applications: finalApps };
+        });
         setLoading(false);
       };
 
@@ -333,20 +394,26 @@ export default function Applications() {
         debounceTimer = setTimeout(() => {
           socket.emit('request_applications_data');
           fetchApplicationsRest();
-        }, 300);
+        }, 200);
       };
 
       const handleNewApplicationSubmitted = (newApp: any) => {
         if (!newApp) return;
+        const formattedNew = formatApplication(newApp, 0);
+        setCurrentPage(1);
+
+        window.dispatchEvent(new CustomEvent('cybersave_toast', {
+          detail: { message: `New application #${formattedNew.refNumber} submitted dynamically! 📝` }
+        }));
+
         setData((prev: any) => {
-          if (!prev || !prev.applications) return prev;
-          const formattedNew = formatApplication(newApp, 0);
+          const baseApps = prev?.applications && Array.isArray(prev.applications) ? prev.applications : [];
           const targetRawId = formattedNew.rawId || formattedNew.id;
           const targetRef = formattedNew.refNumber;
           const subKey = newApp.clientSubmissionId;
           const orderKey = newApp.razorpayOrderId;
 
-          const existingIndex = prev.applications.findIndex((a: any) => {
+          const existingIndex = baseApps.findIndex((a: any) => {
             if (targetRawId && (a.rawId === targetRawId || a.id === targetRawId)) return true;
             if (targetRef && (a.refNumber === targetRef || a.id === targetRef)) return true;
             if (subKey && (a.rawApp?.clientSubmissionId === subKey || a.clientSubmissionId === subKey)) return true;
@@ -356,16 +423,16 @@ export default function Applications() {
 
           let updatedApps: any[];
           if (existingIndex >= 0) {
-            updatedApps = [...prev.applications];
+            updatedApps = [...baseApps];
             updatedApps[existingIndex] = { ...updatedApps[existingIndex], ...formattedNew };
           } else {
-            updatedApps = [formattedNew, ...prev.applications];
+            updatedApps = [formattedNew, ...baseApps];
           }
 
           const deduplicated = deduplicateApplicationList(updatedApps);
           const sorted = sortApplicationsDesc(deduplicated);
 
-          const totalApps = sorted.length;
+          const totalApps = Math.max(prev?.stats?.totalApps || 0, sorted.length);
           const todayApps = sorted.filter((a: any) => {
             const sub = new Date(a.submittedAt || a.submittedDate || Date.now());
             return sub.toDateString() === new Date().toDateString();
@@ -378,13 +445,12 @@ export default function Applications() {
           const pendingReviewCount = submittedCount + underReviewCount;
 
           return {
-            ...prev,
             stats: {
-              ...prev.stats,
-              totalApps: Math.max(prev.stats?.totalApps || 0, totalApps),
+              totalApps,
               todayApps,
               pending: pendingReviewCount,
               processing: processingCount,
+              completed: prev?.stats?.completed || 0,
             },
             pipeline: {
               submitted: submittedCount,
@@ -396,6 +462,8 @@ export default function Applications() {
             applications: sorted,
           };
         });
+
+        handleRefresh();
       };
 
       const handleStatusChanged = (evtData: any) => {
@@ -449,6 +517,8 @@ export default function Applications() {
       socket.on('response_applications_data', handleSocketData);
       socket.on('applications_updated', handleRefresh);
       socket.on('new_application_submitted', handleNewApplicationSubmitted);
+      socket.on('application_submitted', handleNewApplicationSubmitted);
+      socket.on('dashboard_updated', handleRefresh);
       socket.on('application_status_changed', handleStatusChanged);
 
       return () => {
@@ -458,6 +528,8 @@ export default function Applications() {
         socket.off('response_applications_data', handleSocketData);
         socket.off('applications_updated', handleRefresh);
         socket.off('new_application_submitted', handleNewApplicationSubmitted);
+        socket.off('application_submitted', handleNewApplicationSubmitted);
+        socket.off('dashboard_updated', handleRefresh);
         socket.off('application_status_changed', handleStatusChanged);
       };
     } else {

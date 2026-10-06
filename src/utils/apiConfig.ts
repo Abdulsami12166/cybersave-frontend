@@ -108,8 +108,15 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
       const timeoutMs = options.method && options.method !== 'GET' ? 35000 : 8000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+      const reqHeaders = new Headers(options.headers || {});
+      if (!reqHeaders.has('Cache-Control') && (!options.method || options.method === 'GET')) {
+        reqHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        reqHeaders.set('Pragma', 'no-cache');
+      }
+
       const res = await fetch(url, {
         ...options,
+        headers: reqHeaders,
         signal: options.signal || controller.signal
       });
       clearTimeout(timeoutId);
