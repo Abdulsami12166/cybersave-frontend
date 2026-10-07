@@ -2604,9 +2604,9 @@ export default function UserManagementDetail() {
         isOpen={notifModalOpen}
         onClose={() => setNotifModalOpen(false)}
         defaultRecipient={{
-          id: safeData.rawId || user?.id || id || '',
-          name: safeData.fullName || user?.name || 'Citizen User',
-          citId: safeData.id || `CIT-${(user?.id || '').slice(-5).toUpperCase()}`,
+          id: user?.dbId || safeData.rawId || user?.id || id || '',
+          name: user?.fullName || safeData.fullName || user?.name || 'Citizen User',
+          citId: safeData.id || (user?.dbId ? `CIT-${user.dbId.slice(-6).toUpperCase()}` : (user?.id ? `CIT-${user.id.slice(-6).toUpperCase()}` : 'CIT-PORTAL')),
           email: safeData.email || user?.email || '',
           phone: safeData.phone || user?.phone || ''
         }}

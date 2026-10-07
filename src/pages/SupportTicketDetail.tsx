@@ -115,6 +115,7 @@ export default function SupportTicketDetail() {
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
+    setTicket(null);
 
     // 1. Initial REST fetch for instant sub-second rendering
     fetchTicketData();
@@ -530,6 +531,9 @@ export default function SupportTicketDetail() {
   const reporterId = typeof ticket.reporter === 'object' ? (ticket.reporter?.id || 'citizen') : (ticket.userId || 'citizen');
   const reporterEmail = typeof ticket.reporter === 'object' ? ticket.reporter?.email : (ticket.user?.email || '');
 
+  const isRefundTicket = ticket.category === 'Refund Request' || ticket.type === 'REFUND_REQUEST' || String(ticket.refNumber || ticket.id).startsWith('REF-');
+  const isFeedbackTicket = !isRefundTicket && (ticket.category === 'Citizen Feedback' || ticket.category === 'Feedback' || ticket.type === 'CITIZEN_FEEDBACK' || String(ticket.refNumber || ticket.id).startsWith('FDB-'));
+
   return (
     <>
       <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -588,7 +592,7 @@ export default function SupportTicketDetail() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
           {/* ─── Refund Request Details & Action Banner ─── */}
-          {(ticket.category === 'Refund Request' || ticket.refundAmount) && (
+          {isRefundTicket && (
             <div style={{
               background: '#FFFBEB',
               border: '1px solid #FDE68A',
@@ -674,7 +678,7 @@ export default function SupportTicketDetail() {
           )}
 
           {/* ─── Citizen Mobile Feedback Banner ─── */}
-          {(ticket.category === 'Citizen Feedback' || ticket.rating) && (
+          {isFeedbackTicket && (
             <div style={{
               background: '#F0F9FF',
               border: '1px solid #BAE6FD',
@@ -734,7 +738,9 @@ export default function SupportTicketDetail() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>📎 Citizen Document Proof / Screenshot</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                      📎 {isRefundTicket ? 'Verified Proof Image' : (isFeedbackTicket ? 'Citizen Feedback Screenshot' : 'Citizen Document Proof / Screenshot')}
+                    </span>
                     <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6 }}>
                       Verified Evidence
                     </span>

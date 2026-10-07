@@ -72,17 +72,24 @@ export default function SendNotificationModal({
       .then(data => {
         const userList = Array.isArray(data) ? data : (data.users || []);
         if (Array.isArray(userList) && userList.length > 0) {
-          const mapped: NotificationRecipient[] = userList.map((u: any) => ({
-            id: u.id,
-            name: u.profile?.fullName || u.email?.split('@')[0] || 'Citizen',
-            citId: u.citNumber || `CIT-${u.id.slice(-5).toUpperCase()}`,
-            email: u.email || '',
-            phone: u.phone || u.profile?.phone || ''
-          }));
+          const mapped: NotificationRecipient[] = userList.map((u: any) => {
+            const rawId = u.dbId || u.id || u._id || '';
+            const fullName = u.fullName || u.profile?.fullName || u.name || (u.email ? u.email.split('@')[0] : 'Citizen User');
+            const citId = u.citNumber || (typeof u.id === 'string' && u.id.startsWith('CIT-') ? u.id : (rawId ? `CIT-${rawId.slice(-6).toUpperCase()}` : 'CIT-PORTAL'));
+            const email = u.email || u.profile?.email || '';
+            const phone = u.phone || u.profile?.phone || '';
+            return {
+              id: rawId,
+              name: fullName,
+              citId,
+              email,
+              phone
+            };
+          });
           setCitizens(mapped);
           if (!defaultRecipient && mapped.length > 0) {
             // Find Priya Sharma or first user
-            const priya = mapped.find(m => m.name.toLowerCase().includes('priya')) || mapped[0];
+            const priya = mapped.find(m => m.name.toLowerCase().includes('priya') || m.email?.toLowerCase().includes('priya')) || mapped[0];
             setRecipient(priya);
           }
         }
@@ -133,8 +140,15 @@ export default function SendNotificationModal({
       const payload = {
         recipientId: recipient.id,
         userId: recipient.id,
+        dbId: recipient.id,
+        citId: recipient.citId,
+        citNumber: recipient.citId,
         userEmail: recipient.email,
+        email: recipient.email,
         userName: recipient.name,
+        name: recipient.name,
+        userPhone: recipient.phone,
+        phone: recipient.phone,
         notificationType,
         channel: notificationType === 'Email Notification' ? 'EMAIL' : 'PUSH',
         type: notificationType,
@@ -142,7 +156,16 @@ export default function SendNotificationModal({
         title: cleanSubject,
         body: cleanBody,
         message: cleanBody,
+        content: cleanBody,
+        text: cleanBody,
+        fromAdmin: true,
+        forceNotify: true
       };
+
+      if (socket && socket.connected) {
+        socket.emit('send_push_notification', payload);
+        socket.emit('user_push_notification', payload);
+      }
 
       const res = await apiFetch('/api/v1/notifications/send', {
         method: 'POST',
@@ -291,10 +314,10 @@ export default function SendNotificationModal({
           )}
 
           {/* Target Citizen Selector (when no default recipient is specified) */}
-          {citizens.length > 1 && !defaultRecipient && (
+          {!defaultRecipient && (
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
-                Select Target Citizen
+                Select Target Citizen {citizens.length > 0 ? `(${citizens.length} registered)` : ''}
               </label>
               <select
                 aria-label="Select Target Citizen"
@@ -316,11 +339,17 @@ export default function SendNotificationModal({
                   if (selected) setRecipient(selected);
                 }}
               >
-                {citizens.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.citId ? `(${c.citId})` : ''} - {c.email || c.phone || 'Citizen'}
+                {citizens.length === 0 ? (
+                  <option value={recipient.id}>
+                    {recipient.name} {recipient.citId ? `(${recipient.citId})` : ''} - {recipient.email || recipient.phone || 'Citizen'}
                   </option>
-                ))}
+                ) : (
+                  citizens.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.citId ? `(${c.citId})` : ''} - {c.email || c.phone || 'Citizen'}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
           )}

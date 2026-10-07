@@ -68,6 +68,7 @@ export default function SupportTicketResolve() {
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
+    setTicket(null);
     fetchTicketData();
 
     if (socket && connected) {
@@ -203,9 +204,10 @@ export default function SupportTicketResolve() {
   const reporterName = typeof ticket?.reporter === 'object'
     ? (ticket?.reporter?.name || ticket?.reporter?.email || '')
     : (ticket?.user?.profile?.fullName || ticket?.user?.fullName || ticket?.user?.name || ticket?.user?.email || (typeof ticket?.reporter === 'string' ? ticket.reporter : ''));
-  const assignedName = typeof ticket?.assignedTo === 'object'
+  const rawAssigned = typeof ticket?.assignedTo === 'object'
     ? (ticket?.assignedTo?.name || '')
     : (typeof ticket?.assignedTo === 'string' && ticket.assignedTo.trim() ? ticket.assignedTo : (ticket?.officialOfficer || ''));
+  const assignedName = (rawAssigned.includes('Amit S.') || rawAssigned.includes('Pooja V.')) ? '' : rawAssigned;
   const subjectTitle = ticket?.title || ticket?.subject || '';
   const createdDateStr = ticket?.createdAt || ticket?.createdOn || ticket?.submittedAt;
   const formattedCreated = createdDateStr ? new Date(createdDateStr).toLocaleDateString('en-GB') : '';

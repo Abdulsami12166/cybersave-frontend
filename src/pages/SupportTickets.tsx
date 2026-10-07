@@ -66,24 +66,31 @@ export default function SupportTickets() {
       const handleNew = (newTkt?: any) => {
         if (newTkt && (newTkt.id || newTkt.refNumber || newTkt.title)) {
           const tktId = newTkt.refNumber || newTkt.id;
+          const isRef = newTkt.category === 'Refund Request' || newTkt.type === 'REFUND_REQUEST' || String(tktId).startsWith('REF-') || Boolean(newTkt.refundAmount);
+          const isFb = !isRef && (newTkt.category === 'Citizen Feedback' || newTkt.type === 'CITIZEN_FEEDBACK' || String(tktId).startsWith('FDB-') || Boolean(newTkt.rating));
+
           const formattedTkt = {
             id: tktId,
             rawId: newTkt.rawId || newTkt.id,
             refNumber: newTkt.refNumber || tktId,
-            title: newTkt.title || `Refund Claim: ₹${newTkt.amount || 50} - ${newTkt.serviceTitle || 'Government Service'}`,
-            description: newTkt.description || newTkt.reason || 'Refund Request',
-            category: newTkt.category || 'Refund Request',
-            priority: newTkt.priority || 'High',
+            type: isRef ? 'REFUND_REQUEST' : (isFb ? 'CITIZEN_FEEDBACK' : (newTkt.type || 'SUPPORT_TICKET')),
+            title: newTkt.title || (isRef ? `Refund Claim: ₹${newTkt.amount || 50} - ${newTkt.serviceTitle || 'Government Service'}` : (isFb ? `Citizen Feedback (${newTkt.rating || 5}★)` : 'Support Ticket')),
+            description: newTkt.description || newTkt.reason || (isRef ? 'Refund Request' : 'Support Ticket'),
+            category: isRef ? 'Refund Request' : (isFb ? 'Citizen Feedback' : (newTkt.category || 'Technical Support')),
+            priority: newTkt.priority || (isRef ? 'High' : (isFb ? 'Low' : 'Medium')),
             status: newTkt.status || 'OPEN',
             createdOn: 'Today',
             lastUpdated: 'Today',
             createdAt: newTkt.createdAt || new Date().toISOString(),
             updatedAt: newTkt.updatedAt || new Date().toISOString(),
-            attachmentUrl: newTkt.attachmentUrl || newTkt.proofUrl || null,
-            refundAmount: newTkt.refundAmount || newTkt.amount || 50,
-            refundStatus: newTkt.refundStatus || newTkt.status || 'PENDING',
-            refundId: newTkt.refundId || newTkt.id,
-            applicationRef: newTkt.applicationRef || newTkt.applicationId,
+            attachmentUrl: newTkt.attachmentUrl || (isRef ? newTkt.proofUrl : (isFb ? newTkt.imageUrl : null)) || null,
+            refundAmount: isRef ? (newTkt.refundAmount || newTkt.amount || 50) : undefined,
+            refundStatus: isRef ? (newTkt.refundStatus || newTkt.status || 'PENDING') : undefined,
+            refundId: isRef ? (newTkt.refundId || newTkt.id) : undefined,
+            applicationRef: isRef ? (newTkt.applicationRef || newTkt.applicationId) : undefined,
+            rating: isFb ? (newTkt.rating ?? 5) : undefined,
+            feedbackCategory: isFb ? (newTkt.feedbackCategory || newTkt.improvementCategory || 'App Experience') : undefined,
+            feedbackText: isFb ? (newTkt.feedbackText || newTkt.description) : undefined,
             reporter: newTkt.reporter || { name: 'Citizen Applicant', email: '' },
             messages: Array.isArray(newTkt.messages) ? newTkt.messages : []
           };
@@ -198,7 +205,13 @@ export default function SupportTickets() {
   const { stats, tickets } = data;
 
   const filteredTickets = (tickets || []).filter((t: any) => {
-    if (categoryFilter !== 'All Categories' && t.category !== categoryFilter) return false;
+    if (categoryFilter !== 'All Categories') {
+      const isRef = t.category === 'Refund Request' || t.type === 'REFUND_REQUEST' || String(t.refNumber || t.id).startsWith('REF-');
+      const isFb = !isRef && (t.category === 'Citizen Feedback' || t.category === 'Feedback' || t.type === 'CITIZEN_FEEDBACK' || String(t.refNumber || t.id).startsWith('FDB-'));
+      if (categoryFilter === 'Refund Request' && !isRef) return false;
+      if (categoryFilter === 'Citizen Feedback' && !isFb) return false;
+      if (categoryFilter !== 'Refund Request' && categoryFilter !== 'Citizen Feedback' && t.category !== categoryFilter) return false;
+    }
     if (statusFilter !== 'All Status' && t.status !== statusFilter) return false;
     if (priorityFilter !== 'All Priority' && t.priority !== priorityFilter) return false;
     if (searchQuery.trim()) {
@@ -373,8 +386,8 @@ export default function SupportTickets() {
               if (t.status === 'RESOLVED') { statusColor = '#10b981'; statusBg = '#d1fae5'; }
               if (t.status === 'ESCALATED') { statusColor = '#ef4444'; statusBg = '#fee2e2'; }
 
-              const isRefundTicket = t.category === 'Refund Request' || Boolean(t.refundAmount);
-              const isFeedbackTicket = t.category === 'Citizen Feedback' || Boolean(t.rating);
+              const isRefundTicket = t.category === 'Refund Request' || t.type === 'REFUND_REQUEST' || String(t.refNumber || t.id).startsWith('REF-');
+              const isFeedbackTicket = !isRefundTicket && (t.category === 'Citizen Feedback' || t.category === 'Feedback' || t.type === 'CITIZEN_FEEDBACK' || String(t.refNumber || t.id).startsWith('FDB-'));
 
               return (
                 <div key={i} style={{background: 'white', borderRadius: 12, padding: 24, border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column'}}>
@@ -463,8 +476,8 @@ export default function SupportTickets() {
                     <div style={{
                       marginBottom: 16,
                       padding: '8px 12px',
-                      background: '#f0fdf4',
-                      border: '1px solid #bbf7d0',
+                      background: isRefundTicket ? '#f0fdf4' : (isFeedbackTicket ? '#eff6ff' : '#f8fafc'),
+                      border: `1px solid ${isRefundTicket ? '#bbf7d0' : (isFeedbackTicket ? '#bfdbfe' : '#e2e8f0')}`,
                       borderRadius: 8,
                       display: 'flex',
                       alignItems: 'center',
@@ -477,11 +490,11 @@ export default function SupportTickets() {
                       >
                         <img 
                           src={t.attachmentUrl} 
-                          alt="Proof" 
-                          style={{width: 32, height: 32, borderRadius: 6, objectFit: 'cover', border: '1px solid #86efac'}}
+                          alt={isRefundTicket ? 'Proof' : 'Screenshot'} 
+                          style={{width: 32, height: 32, borderRadius: 6, objectFit: 'cover', border: `1px solid ${isRefundTicket ? '#86efac' : '#93c5fd'}`}}
                         />
-                        <span style={{fontSize: 12, fontWeight: 600, color: '#166534', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden'}}>
-                          📎 Verified Proof Image
+                        <span style={{fontSize: 12, fontWeight: 600, color: isRefundTicket ? '#166534' : (isFeedbackTicket ? '#1e40af' : '#334155'), whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden'}}>
+                          📎 {isRefundTicket ? 'Verified Proof Image' : (isFeedbackTicket ? 'Feedback Screenshot' : 'Attached Document')}
                         </span>
                       </div>
                       <button 
