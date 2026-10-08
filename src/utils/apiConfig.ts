@@ -81,11 +81,9 @@ export function getSocketUrl(): string {
   return getApiBaseUrl();
 }
 
-/**
- * Fast & robust fetch with intelligent caching, HTML rejection, and sub-second candidate switching
- */
-export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+const inFlightGetRequests = new Map<string, Promise<Response>>();
+
+async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise<Response> {
   const candidates = getCandidateBackendUrls();
   
   // Try current activeBaseUrl first
@@ -158,6 +156,38 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   }
 
   throw lastError || new Error(`Failed to fetch ${cleanPath} from all backend candidates`);
+}
+
+/**
+ * Fast & robust fetch with intelligent caching, HTML rejection, in-flight deduplication, and sub-second candidate switching
+ */
+export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const method = (options.method || 'GET').toUpperCase();
+
+  // Deduplicate concurrent in-flight GET requests
+  if (method === 'GET' && !options.signal) {
+    const existing = inFlightGetRequests.get(cleanPath);
+    if (existing) {
+      try {
+        const res = await existing;
+        return res.clone();
+      } catch (_) {
+        // Fall through on cached promise error
+      }
+    }
+
+    const fetchPromise = doApiFetch(cleanPath, options);
+    inFlightGetRequests.set(cleanPath, fetchPromise);
+    try {
+      const res = await fetchPromise;
+      return res.clone();
+    } finally {
+      inFlightGetRequests.delete(cleanPath);
+    }
+  }
+
+  return doApiFetch(cleanPath, options);
 }
 
 /**

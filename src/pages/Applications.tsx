@@ -209,7 +209,7 @@ export default function Applications() {
 
   const fetchApplicationsRest = async () => {
     try {
-      const res = await apiFetch(`/api/v1/applications?_t=${Date.now()}`, {
+      const res = await apiFetch('/api/v1/applications', {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache'
@@ -242,53 +242,24 @@ export default function Applications() {
             return upd.toDateString() === new Date().toDateString();
           }).length;
 
-          setData((prev: any) => {
-            const merged = [...formatted];
-            if (prev?.applications && Array.isArray(prev.applications)) {
-              for (const prevApp of prev.applications) {
-                const exists = merged.some(m =>
-                  (m.rawId && (m.rawId === prevApp.rawId || m.id === prevApp.rawId)) ||
-                  (m.refNumber && (m.refNumber === prevApp.refNumber || m.id === prevApp.refNumber)) ||
-                  (m.id && (m.id === prevApp.id || m.rawId === prevApp.id))
-                );
-                if (!exists) {
-                  merged.push(prevApp);
-                }
-              }
-            }
-            const finalApps = sortApplicationsDesc(deduplicateApplicationList(merged));
-            const finalTotal = Math.max(prev?.stats?.totalApps || 0, finalApps.length);
-            const finalToday = finalApps.filter(a => {
-              const sub = new Date(a.submittedAt || a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
-              return sub.toDateString() === new Date().toDateString();
-            }).length;
-            const finalSubmitted = finalApps.filter(a => String(a.rawStatus || '').toUpperCase() === 'SUBMITTED' || a.status === 'Submitted').length;
-            const finalUnderReview = finalApps.filter(a => (['VERIFYING', 'PENDING', 'UNDER_REVIEW', 'IN_REVIEW', 'REVIEW'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'In Review' || a.status === 'Pending' || a.status === 'Under Review') && String(a.rawStatus || '').toUpperCase() !== 'SUBMITTED').length;
-            const finalProcessing = finalApps.filter(a => ['IN_PROGRESS', 'PROCESSING'].includes(String(a.rawStatus || '').toUpperCase()) || a.status === 'Processing').length;
-            const finalApproved = finalApps.filter(a => String(a.rawStatus || '').toUpperCase() === 'APPROVED' || a.status === 'Approved').length;
-            const finalCompleted = finalApps.filter(a => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
-            const finalPending = finalSubmitted + finalUnderReview;
-
-            return {
-              stats: {
-                totalApps: finalTotal,
-                todayApps: finalToday,
-                pending: finalPending,
-                processing: finalProcessing,
-                completed: Math.max(Number(prev?.stats?.completed || 0), completedTodayCount)
-              },
-              pipeline: {
-                submitted: finalSubmitted,
-                underReview: finalUnderReview,
-                processing: finalProcessing,
-                approved: finalApproved,
-                completed: finalCompleted
-              },
-              applications: finalApps,
-            };
+          setData({
+            stats: {
+              totalApps,
+              todayApps,
+              pending: pendingReviewCount,
+              processing: processingCount,
+              completed: completedTodayCount
+            },
+            pipeline: {
+              submitted: submittedCount,
+              underReview: underReviewCount,
+              processing: processingCount,
+              approved: approvedCount,
+              completed: completedCount
+            },
+            applications: formatted,
           });
           setLoading(false);
-          return formatted;
         }
       }
     } catch (e) {
@@ -306,10 +277,6 @@ export default function Applications() {
     const pollInterval = setInterval(() => {
       fetchApplicationsRest();
     }, 8000);
-
-    const safetyTimer = setTimeout(() => {
-      setLoading(false);
-    }, 1500);
 
     if (socket && connected) {
       socket.emit('request_applications_data');
@@ -1543,12 +1510,41 @@ export default function Applications() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '40px 16px', color: '#64748B' }}>
-                    <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 8px' }} />
-                    <div>Loading applications from live database...</div>
-                  </td>
-                </tr>
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={`skeleton-${i}`} style={{ borderBottom: '1px solid #F1F5F9', background: '#FFFFFF' }}>
+                    <td style={{ padding: '14px', width: '40px' }}>
+                      <div style={{ width: 16, height: 16, background: '#F1F5F9', borderRadius: 4 }} />
+                    </td>
+                    <td style={{ padding: '14px' }}>
+                      <div style={{ width: 110, height: 16, background: '#E2E8F0', borderRadius: 4 }} />
+                    </td>
+                    <td style={{ padding: '14px' }}>
+                      <div style={{ width: 130, height: 16, background: '#E2E8F0', borderRadius: 4, marginBottom: 5 }} />
+                      <div style={{ width: 90, height: 12, background: '#F1F5F9', borderRadius: 4 }} />
+                    </td>
+                    <td style={{ padding: '14px' }}>
+                      <div style={{ width: 100, height: 16, background: '#E2E8F0', borderRadius: 4 }} />
+                    </td>
+                    <td style={{ padding: '14px' }}>
+                      <div style={{ width: 65, height: 22, background: '#F1F5F9', borderRadius: 12 }} />
+                    </td>
+                    <td style={{ padding: '14px' }}>
+                      <div style={{ width: 75, height: 22, background: '#F1F5F9', borderRadius: 12 }} />
+                    </td>
+                    <td style={{ padding: '14px' }}>
+                      <div style={{ width: 110, height: 16, background: '#E2E8F0', borderRadius: 4 }} />
+                    </td>
+                    <td style={{ padding: '14px' }}>
+                      <div style={{ width: 120, height: 16, background: '#E2E8F0', borderRadius: 4 }} />
+                    </td>
+                    <td style={{ padding: '14px' }}>
+                      <div style={{ width: 45, height: 16, background: '#E2E8F0', borderRadius: 4 }} />
+                    </td>
+                    <td style={{ padding: '14px', textAlign: 'center' }}>
+                      <div style={{ width: 18, height: 18, background: '#F1F5F9', borderRadius: 4, margin: '0 auto' }} />
+                    </td>
+                  </tr>
+                ))
               ) : paginatedApplications.length === 0 ? (
                 <tr>
                   <td colSpan={10} style={{ textAlign: 'center', padding: '40px 16px', color: '#94A3B8' }}>

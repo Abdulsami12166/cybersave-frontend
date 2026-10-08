@@ -234,6 +234,19 @@ export default function ApplicationDetail() {
   };
 
   useEffect(() => {
+    // Reset state for new ID to prevent displaying stale data from previous application
+    const cached = id ? detailCache.get(id) || null : null;
+    setApp(cached);
+    setLoading(!cached);
+    setInternalNotes([]);
+    setChecklist([
+      { id: 'aadhaar-check', label: 'Identity verified against Aadhaar database', checked: true },
+      { id: 'address-check', label: 'Current address matches official records', checked: true },
+      { id: 'doc-validity', label: 'Address proof document is valid and recent (< 3 months)', checked: true },
+      { id: 'geo-verify', label: 'New address geo-verification completed', checked: false },
+      { id: 'operator-verify', label: 'Operator physical verification done', checked: false },
+    ]);
+
     let debounceTimer: any = null;
 
     // 1. Immediately invoke REST on mount for instant zero-latency paint

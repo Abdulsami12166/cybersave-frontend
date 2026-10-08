@@ -347,17 +347,22 @@ export default function ServiceWizard() {
         .find((v) => v.toLowerCase() === String(t).toLowerCase());
       return match || String(t);
     };
-    const restoredFields: FormElementItem[] = Array.isArray(s.formDataSchema)
-      ? s.formDataSchema.map((f: any) => ({
-          label: f.label || 'Field Label',
-          type: restoreType(f.type),
-          placeholder: f.placeholder || '',
-          required: f.required !== false,
-          validationRule: f.validationRule || 'None',
-          options: typeof f.options === 'string' ? f.options : (Array.isArray(f.options) ? f.options.join(', ') : undefined),
-          section: f.section,
-        }))
-      : [];
+    const rawFormList = Array.isArray(s.formDataSchema)
+      ? s.formDataSchema
+      : (Array.isArray(s.formDataSchema?.formElements)
+        ? s.formDataSchema.formElements
+        : (Array.isArray(s.formElements) ? s.formElements : []));
+
+    const restoredFields: FormElementItem[] = rawFormList.map((f: any, idx: number) => ({
+      id: f.id || `field_${idx + 1}`,
+      label: f.label || 'Field Label',
+      type: restoreType(f.type),
+      placeholder: f.placeholder || '',
+      required: f.required !== false,
+      validationRule: f.validationRule || 'None',
+      options: typeof f.options === 'string' ? f.options : (Array.isArray(f.options) ? f.options.join(', ') : undefined),
+      section: f.section || 'General',
+    }));
 
     const restoredSubs: SubServiceItem[] = Array.isArray(s.subServices)
       ? s.subServices.map((sub: any) => ({

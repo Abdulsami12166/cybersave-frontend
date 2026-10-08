@@ -259,6 +259,44 @@ export default function Layout() {
     }
   };
 
+  const fetchRealNotifications = async () => {
+    try {
+      const endpoints = ['/api/v1/notifications', '/api/notifications'];
+      let notifData: any = null;
+      for (const ep of endpoints) {
+        try {
+          const res = await apiFetch(ep).catch(() => null);
+          if (res && res.ok) {
+            notifData = await res.json().catch(() => null);
+            if (notifData && Array.isArray(notifData.notifications)) break;
+          }
+        } catch (_) {}
+      }
+
+      if (notifData && Array.isArray(notifData.notifications)) {
+        const mapped = notifData.notifications.map((n: any) => {
+          const isSupport = n.type === 'SUPPORT_TICKET_UPDATE' || (n.title || '').toLowerCase().includes('support');
+          const match = (n.body || '').match(/Ticket\s*#?([A-Za-z0-9-]+)/i);
+          const ticketRef = match ? match[1] : '';
+          return {
+            id: n.id,
+            title: n.title,
+            desc: n.body,
+            time: n.time || (n.createdAt ? formatMsgRelativeTime(n.createdAt) : 'Today'),
+            read: n.status === 'READ',
+            path: isSupport && ticketRef ? `/support/${ticketRef}` : (isSupport ? '/support' : undefined)
+          };
+        });
+        if (mapped.length > 0) {
+          setNotificationList(mapped);
+          setNotifCount(typeof notifData.unread === 'number' ? notifData.unread : mapped.filter((n: any) => !n.read).length);
+        }
+      }
+    } catch (e) {
+      console.warn('[Layout] fetchRealNotifications error:', e);
+    }
+  };
+
   const handleSendQuickReply = async () => {
     if (!selectedMsgForReply || !replyText.trim()) return;
     const text = replyText.trim();
@@ -612,9 +650,10 @@ export default function Layout() {
     }
   }, [socket, admin?.id, admin?.email, logout, navigate, updateAdmin]);
 
-  // Fetch real messages on mount and route changes
+  // Fetch real messages and notifications on mount and route changes
   useEffect(() => {
     fetchRealMessages();
+    fetchRealNotifications();
   }, [location.pathname]);
 
   // Real-time Support Chat Citizen Message Notifications (Bell Icon & Header Message Icon)
@@ -626,17 +665,19 @@ export default function Layout() {
       const rawText = data?.text || data?.message?.text || 'Sent an attachment';
       const textSnippet = rawText.length > 55 ? `${rawText.substring(0, 52)}...` : rawText;
       const ticketRef = data?.ticketId || data?.refNumber || data?.id || 'Support';
+      const ticketId = data?.ticketMongoId || data?.ticketId || ticketRef;
+      const notifPath = data?.path || (ticketId && ticketId !== 'Support' ? `/support/${ticketId}` : '/support');
 
       const newNotif = {
-        id: `chat-notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id: data?.id || `chat-notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         title: `Support Message from ${sender}`,
         desc: `Ticket #${ticketRef}: "${textSnippet}"`,
-        time: 'Just now',
+        time: data?.time || 'Just now',
         read: false,
-        path: `/support`
+        path: notifPath
       };
 
-      setNotificationList((prev) => [newNotif, ...prev]);
+      setNotificationList((prev) => [newNotif, ...prev.filter(n => n.id !== newNotif.id)]);
       setNotifCount((prev) => prev + 1);
 
       const newMsgItem = {
@@ -673,12 +714,16 @@ export default function Layout() {
     socket.on('new_ticket_message', handleNewTicketMessage);
     socket.on('new_support_ticket', handleSupportTicketsUpdated);
     socket.on('support_tickets_updated', handleSupportTicketsUpdated);
+    socket.on('notifications_updated', fetchRealNotifications);
+    socket.on('new_notification', fetchRealNotifications);
 
     return () => {
       socket.off('support_message_notification', handleCitizenSupportMessage);
       socket.off('new_ticket_message', handleNewTicketMessage);
       socket.off('new_support_ticket', handleSupportTicketsUpdated);
       socket.off('support_tickets_updated', handleSupportTicketsUpdated);
+      socket.off('notifications_updated', fetchRealNotifications);
+      socket.off('new_notification', fetchRealNotifications);
     };
   }, [socket]);
 
