@@ -375,21 +375,42 @@ export default function SupportTickets() {
         ) : (
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24}}>
             {filteredTickets.map((t: any, i: number) => {
-              let statusColor = '#2563eb';
-              let statusBg = '#eff6ff';
-              if (t.status === 'IN_PROGRESS') { statusColor = '#f59e0b'; statusBg = '#fef3c7'; }
-              if (t.status === 'RESOLVED') { statusColor = '#10b981'; statusBg = '#d1fae5'; }
-              if (t.status === 'ESCALATED') { statusColor = '#ef4444'; statusBg = '#fee2e2'; }
-
               const isRefundTicket = t.category === 'Refund Request' || t.type === 'REFUND_REQUEST' || String(t.refNumber || t.id).startsWith('REF-');
               const isFeedbackTicket = !isRefundTicket && (t.category === 'Citizen Feedback' || t.category === 'Feedback' || t.type === 'CITIZEN_FEEDBACK' || String(t.refNumber || t.id).startsWith('FDB-'));
+
+              const isRefundDeclined = isRefundTicket && (t.refundStatus === 'REJECTED' || t.refundStatus === 'DECLINED' || t.status === 'DECLINED' || t.status === 'REJECTED');
+              const isRefundApproved = isRefundTicket && !isRefundDeclined && (t.refundStatus === 'APPROVED' || t.status === 'APPROVED');
+
+              let statusColor = '#2563eb';
+              let statusBg = '#eff6ff';
+              let statusLabel = t.status === 'IN_PROGRESS' ? 'In Progress' : t.status === 'OPEN' ? 'Open' : t.status === 'RESOLVED' ? 'Resolved' : 'Escalated';
+
+              if (isRefundTicket) {
+                if (isRefundDeclined) {
+                  statusColor = '#b91c1c';
+                  statusBg = '#fee2e2';
+                  statusLabel = 'Declined';
+                } else if (isRefundApproved) {
+                  statusColor = '#15803d';
+                  statusBg = '#dcfce7';
+                  statusLabel = 'Approved';
+                } else {
+                  statusColor = '#b45309';
+                  statusBg = '#fef3c7';
+                  statusLabel = 'Pending Review';
+                }
+              } else {
+                if (t.status === 'IN_PROGRESS') { statusColor = '#f59e0b'; statusBg = '#fef3c7'; statusLabel = 'In Progress'; }
+                if (t.status === 'RESOLVED') { statusColor = '#10b981'; statusBg = '#d1fae5'; statusLabel = 'Resolved'; }
+                if (t.status === 'ESCALATED') { statusColor = '#ef4444'; statusBg = '#fee2e2'; statusLabel = 'Escalated'; }
+              }
 
               return (
                 <div key={i} style={{background: 'white', borderRadius: 12, padding: 24, border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column'}}>
                   <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center'}}>
                     <span style={{fontSize: 11, color: '#6b7280', fontWeight: 600}}>{t.id}</span>
                     <span style={{background: statusBg, color: statusColor, padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600}}>
-                      {t.status === 'IN_PROGRESS' ? 'In Progress' : t.status === 'OPEN' ? 'Open' : t.status === 'RESOLVED' ? 'Resolved' : 'Escalated'}
+                      {statusLabel}
                     </span>
                   </div>
 
@@ -399,9 +420,9 @@ export default function SupportTickets() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      background: (t.refundStatus === 'APPROVED' || t.status === 'RESOLVED') ? '#DCFCE7' : t.refundStatus === 'REJECTED' ? '#FEE2E2' : '#FEF3C7',
-                      color: (t.refundStatus === 'APPROVED' || t.status === 'RESOLVED') ? '#166534' : t.refundStatus === 'REJECTED' ? '#991B1B' : '#92400E',
-                      border: (t.refundStatus === 'APPROVED' || t.status === 'RESOLVED') ? '1px solid #BBF7D0' : t.refundStatus === 'REJECTED' ? '1px solid #FECACA' : '1px solid #FDE68A',
+                      background: isRefundDeclined ? '#FEE2E2' : (isRefundApproved ? '#DCFCE7' : '#FEF3C7'),
+                      color: isRefundDeclined ? '#991B1B' : (isRefundApproved ? '#166534' : '#92400E'),
+                      border: isRefundDeclined ? '1px solid #FECACA' : (isRefundApproved ? '1px solid #BBF7D0' : '1px solid #FDE68A'),
                       borderRadius: '8px',
                       padding: '4px 10px',
                       fontSize: '11.5px',
@@ -410,7 +431,7 @@ export default function SupportTickets() {
                     }}>
                       <span>💰 ₹{Number(t.refundAmount || 50).toLocaleString('en-IN')} Refund Claim</span>
                       <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.85 }}>
-                        {(t.refundStatus === 'APPROVED' || t.status === 'RESOLVED') ? '✓ Credited' : t.refundStatus === 'REJECTED' ? '✕ Declined' : 'Pending'}
+                        {isRefundDeclined ? '✕ Declined' : (isRefundApproved ? '✓ Credited' : 'Pending')}
                       </span>
                     </div>
                   )}

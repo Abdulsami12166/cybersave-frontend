@@ -394,18 +394,22 @@ export default function SupportTicketDetail() {
         })
       });
 
-      // Also resolve support ticket
+      // Also resolve support ticket with approval
       await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(ticket.id || id)}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          isReject: false,
+          action: 'APPROVE',
+          status: 'APPROVED',
+          resolutionCategory: 'Approved',
           resolutionSummary: `Refund claim of ₹${amount} approved by Admin. Amount credited to citizen wallet.`
         })
       }).catch(() => null);
 
       setTicket((prev: any) => prev ? {
         ...prev,
-        status: 'RESOLVED',
+        status: 'APPROVED',
         refundStatus: 'APPROVED',
         messages: [
           ...(prev.messages || []),
@@ -460,18 +464,22 @@ export default function SupportTicketDetail() {
         })
       });
 
-      // Also mark support ticket resolved
+      // Also mark support ticket declined
       await apiFetch(`/api/v1/support/tickets/${encodeURIComponent(ticket.id || id)}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          isReject: true,
+          action: 'REJECT',
+          status: 'DECLINED',
+          resolutionCategory: 'Rejected',
           resolutionSummary: `Refund request declined. Reason: ${reason}`
         })
       }).catch(() => null);
 
       setTicket((prev: any) => prev ? {
         ...prev,
-        status: 'RESOLVED',
+        status: 'DECLINED',
         refundStatus: 'REJECTED',
         messages: [
           ...(prev.messages || []),
@@ -551,15 +559,31 @@ export default function SupportTicketDetail() {
               {ticket.title || 'Citizen Grievance Support'}
             </h1>
             <span style={{
-              background: ticket.status === 'RESOLVED' ? '#dcfce7' : '#eff6ff',
-              color: ticket.status === 'RESOLVED' ? '#15803d' : '#2563eb',
+              background: isRefundTicket
+                ? (ticket.refundStatus === 'REJECTED' || ticket.status === 'DECLINED' || ticket.status === 'REJECTED'
+                  ? '#fee2e2'
+                  : (ticket.refundStatus === 'APPROVED' || ticket.status === 'APPROVED' ? '#dcfce7' : '#fef3c7'))
+                : (ticket.status === 'RESOLVED' ? '#dcfce7' : ticket.status === 'DECLINED' ? '#fee2e2' : '#eff6ff'),
+              color: isRefundTicket
+                ? (ticket.refundStatus === 'REJECTED' || ticket.status === 'DECLINED' || ticket.status === 'REJECTED'
+                  ? '#b91c1c'
+                  : (ticket.refundStatus === 'APPROVED' || ticket.status === 'APPROVED' ? '#15803d' : '#b45309'))
+                : (ticket.status === 'RESOLVED' ? '#15803d' : ticket.status === 'DECLINED' ? '#b91c1c' : '#2563eb'),
               padding: '3px 10px',
               borderRadius: 12,
               fontSize: 12,
               fontWeight: 700,
-              border: ticket.status === 'RESOLVED' ? '1px solid #bbf7d0' : '1px solid #bfdbfe'
+              border: isRefundTicket
+                ? (ticket.refundStatus === 'REJECTED' || ticket.status === 'DECLINED' || ticket.status === 'REJECTED'
+                  ? '1px solid #fecaca'
+                  : (ticket.refundStatus === 'APPROVED' || ticket.status === 'APPROVED' ? '1px solid #bbf7d0' : '1px solid #fde68a'))
+                : (ticket.status === 'RESOLVED' ? '1px solid #bbf7d0' : ticket.status === 'DECLINED' ? '1px solid #fecaca' : '1px solid #bfdbfe')
             }}>
-              {ticket.status || 'OPEN'}
+              {isRefundTicket
+                ? (ticket.refundStatus === 'REJECTED' || ticket.status === 'DECLINED' || ticket.status === 'REJECTED'
+                  ? 'DECLINED'
+                  : (ticket.refundStatus === 'APPROVED' || ticket.status === 'APPROVED' ? 'APPROVED & CREDITED' : 'PENDING REVIEW'))
+                : (ticket.status || 'OPEN')}
             </span>
           </div>
           <p style={{ color: '#6b7280', fontSize: 13, margin: 0 }}>{ticket.description || 'Support ticket thread with official citizen communication logs.'}</p>
@@ -576,7 +600,7 @@ export default function SupportTicketDetail() {
           >
             <RefreshCw size={14} /> Refresh Thread
           </button>
-          {ticket.status !== 'RESOLVED' && (
+          {!(ticket.status === 'RESOLVED' || ticket.status === 'DECLINED' || ticket.status === 'APPROVED' || ticket.refundStatus === 'APPROVED' || ticket.refundStatus === 'REJECTED') && (
             <button 
               onClick={() => navigate(`/support/${ticket.id || id}/resolve`)}
               className="action-btn"
@@ -615,11 +639,27 @@ export default function SupportTicketDetail() {
                         fontWeight: 800,
                         padding: '3px 10px',
                         borderRadius: 10,
-                        background: (ticket.refundStatus === 'APPROVED' || ticket.status === 'RESOLVED') ? '#DCFCE7' : ticket.refundStatus === 'REJECTED' ? '#FEE2E2' : '#FEF3C7',
-                        color: (ticket.refundStatus === 'APPROVED' || ticket.status === 'RESOLVED') ? '#15803D' : ticket.refundStatus === 'REJECTED' ? '#B91C1C' : '#B45309',
-                        border: (ticket.refundStatus === 'APPROVED' || ticket.status === 'RESOLVED') ? '1px solid #BBF7D0' : ticket.refundStatus === 'REJECTED' ? '1px solid #FECACA' : '1px solid #FDE68A'
+                        background: (ticket.refundStatus === 'REJECTED' || ticket.status === 'DECLINED' || ticket.status === 'REJECTED')
+                          ? '#FEE2E2'
+                          : (ticket.refundStatus === 'APPROVED' || ticket.status === 'APPROVED')
+                          ? '#DCFCE7'
+                          : '#FEF3C7',
+                        color: (ticket.refundStatus === 'REJECTED' || ticket.status === 'DECLINED' || ticket.status === 'REJECTED')
+                          ? '#B91C1C'
+                          : (ticket.refundStatus === 'APPROVED' || ticket.status === 'APPROVED')
+                          ? '#15803D'
+                          : '#B45309',
+                        border: (ticket.refundStatus === 'REJECTED' || ticket.status === 'DECLINED' || ticket.status === 'REJECTED')
+                          ? '1px solid #FECACA'
+                          : (ticket.refundStatus === 'APPROVED' || ticket.status === 'APPROVED')
+                          ? '1px solid #BBF7D0'
+                          : '1px solid #FDE68A'
                       }}>
-                        {(ticket.refundStatus === 'APPROVED' || ticket.status === 'RESOLVED') ? '✓ Refund Approved & Credited' : ticket.refundStatus === 'REJECTED' ? '✕ Refund Declined' : '⚠️ Pending Administrative Review'}
+                        {(ticket.refundStatus === 'REJECTED' || ticket.status === 'DECLINED' || ticket.status === 'REJECTED')
+                          ? '✕ Refund Declined'
+                          : (ticket.refundStatus === 'APPROVED' || ticket.status === 'APPROVED')
+                          ? '✓ Refund Approved & Credited'
+                          : '⚠️ Pending Administrative Review'}
                       </span>
                     </div>
                     <div style={{ fontSize: 13, color: '#78350F', marginTop: 4 }}>
@@ -629,7 +669,7 @@ export default function SupportTicketDetail() {
                 </div>
 
                 {/* Refund Action Buttons (Only when Pending) */}
-                {!(ticket.refundStatus === 'APPROVED' || ticket.refundStatus === 'REJECTED' || ticket.status === 'RESOLVED') && (
+                {!(ticket.refundStatus === 'APPROVED' || ticket.refundStatus === 'REJECTED' || ticket.status === 'APPROVED' || ticket.status === 'DECLINED' || ticket.status === 'RESOLVED') && (
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <button
                       onClick={handleApproveRefund}
