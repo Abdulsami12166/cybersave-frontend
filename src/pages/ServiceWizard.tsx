@@ -418,8 +418,8 @@ export default function ServiceWizard() {
       department: s.department || prev.department,
       departmentRole: s.department || prev.departmentRole,
       serviceType: s.serviceType || rawPricing.serviceType || prev.serviceType,
-      processingSla: s.processingTime || prev.processingSla,
-      tat: s.processingTime || prev.tat,
+      processingSla: s.tat || s.processingTime || s.processingSla || rawPricing.tat || rawPricing.processingTime || prev.processingSla,
+      tat: s.tat || s.processingTime || s.processingSla || rawPricing.tat || rawPricing.processingTime || prev.tat,
       // Sections are authoritative from the record: if a section was never
       // configured, it must show EMPTY — not template content that would get
       // published as if the admin had entered it.
@@ -750,9 +750,9 @@ export default function ServiceWizard() {
       description: serviceData.description,
       shortDescription: serviceData.shortDescription,
       detailedDescription: serviceData.detailedDescription,
-      serviceType: serviceData.serviceType,
-      processingTime: serviceData.processingSla || serviceData.tat || '24 Hours',
-      tat: serviceData.processingSla || serviceData.tat || '24 Hours',
+      processingTime: serviceData.tat || serviceData.processingSla || '24 Hours',
+      tat: serviceData.tat || serviceData.processingSla || '24 Hours',
+      processingSla: serviceData.tat || serviceData.processingSla || '24 Hours',
       fee: serviceData.pricing.fee,
       status: serviceData.status,
       isActive: serviceData.status === 'Active',
@@ -769,6 +769,8 @@ export default function ServiceWizard() {
       pricingConfig: {
         ...serviceData.pricing,
         iconUrl: serviceData.iconUrl,
+        tat: serviceData.tat || serviceData.processingSla || '24 Hours',
+        processingTime: serviceData.tat || serviceData.processingSla || '24 Hours',
         // Publish-step configuration round-trips with the record so a later
         // edit restores the previously published visibility/settings.
         portalVisibility: serviceData.portalVisibility,
@@ -831,7 +833,13 @@ export default function ServiceWizard() {
         // Record created (create mode) or id re-confirmed (edit mode): pin it
         // so subsequent saves keep operating on the same service.
         modeRef.current = { mode: 'edit', serviceId: saved.id };
-        setServiceData(prev => ({ ...prev, id: saved.id, slug: saved.slug || prev.slug }));
+        setServiceData(prev => ({
+          ...prev,
+          id: saved.id,
+          slug: saved.slug || prev.slug,
+          tat: saved.tat || saved.processingTime || prev.tat,
+          processingSla: saved.tat || saved.processingTime || prev.processingSla,
+        }));
       }
 
       if (socket) {
@@ -1822,7 +1830,10 @@ export default function ServiceWizard() {
               <input
                 type="text"
                 value={serviceData.tat}
-                onChange={e => setServiceData({ ...serviceData, tat: e.target.value })}
+                onChange={e => {
+                  const val = e.target.value;
+                  setServiceData(prev => ({ ...prev, tat: val, processingSla: val }));
+                }}
                 style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13.5, outline: 'none' }}
               />
             </div>
