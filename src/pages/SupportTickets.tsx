@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { HelpCircle, Clock, CheckCircle, Image as ImageIcon, RefreshCw, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
@@ -199,7 +199,48 @@ export default function SupportTickets() {
 
   const { stats, tickets } = data;
 
-  const filteredTickets = (tickets || []).filter((t: any) => {
+  // Deduplicate tickets so no ghost ticket or repeated feedback is ever displayed twice
+  const deduplicatedTickets = useMemo(() => {
+    if (!tickets || !Array.isArray(tickets)) return [];
+    const seen = new Set<string>();
+    const result: any[] = [];
+
+    for (const t of tickets) {
+      const ref = String(t.refNumber || t.id || '').toUpperCase();
+
+      // 1. Skip epoch-timestamped ghost tickets (TKT-17... or TKT-18...)
+      if (/^TKT-\d{13}$/.test(ref)) {
+        continue;
+      }
+
+      // 2. Deduplicate Citizen Feedback (same reporter name, rating, and feedback text)
+      const isFb = t.category === 'Citizen Feedback' || t.type === 'CITIZEN_FEEDBACK' || ref.startsWith('FDB-');
+      if (isFb) {
+        const repName = (t.reporter?.name || t.user?.profile?.fullName || 'cit').trim().toLowerCase();
+        const rating = t.rating || 5;
+        const textKey = (t.feedbackText || t.description || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 30);
+        const fbKey = `fb_${repName}_${rating}_${textKey}`;
+        if (seen.has(fbKey)) continue;
+        seen.add(fbKey);
+      }
+
+      // 3. Deduplicate by unique reference or ID
+      if (seen.has(ref)) continue;
+      seen.add(ref);
+
+      // 4. Deduplicate Support Tickets with identical reporter and title
+      const repName = (t.reporter?.name || t.user?.profile?.fullName || 'cit').trim().toLowerCase();
+      const titleKey = (t.title || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 30);
+      const generalKey = `tkt_${repName}_${titleKey}`;
+      if (seen.has(generalKey)) continue;
+      seen.add(generalKey);
+
+      result.push(t);
+    }
+    return result;
+  }, [tickets]);
+
+  const filteredTickets = deduplicatedTickets.filter((t: any) => {
     if (categoryFilter !== 'All Categories') {
       const isRef = t.category === 'Refund Request' || t.type === 'REFUND_REQUEST' || String(t.refNumber || t.id).startsWith('REF-');
       const isFb = !isRef && (t.category === 'Citizen Feedback' || t.category === 'Feedback' || t.type === 'CITIZEN_FEEDBACK' || String(t.refNumber || t.id).startsWith('FDB-'));
