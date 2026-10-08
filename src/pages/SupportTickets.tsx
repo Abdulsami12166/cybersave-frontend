@@ -170,12 +170,7 @@ export default function SupportTickets() {
   const handleCreateTicket = async () => {
     if (!newTitle.trim() || !newDesc.trim()) return;
 
-    // Try socket first
-    if (socket && connected) {
-      socket.emit('create_support_ticket', { title: newTitle, category: newCat, priority: newPri, description: newDesc });
-    }
-
-    // Also REST dispatch for 100% guaranteed delivery
+    // Dispatched via REST API (single source of truth; backend broadcasts new_support_ticket & support_tickets_updated via WebSocket)
     try {
       const res = await apiFetch('/api/v1/support/tickets', {
         method: 'POST',
