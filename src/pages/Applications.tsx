@@ -490,7 +490,6 @@ export default function Applications() {
 
       return () => {
         clearInterval(pollInterval);
-        clearTimeout(safetyTimer);
         if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_applications_data', handleSocketData);
         socket.off('applications_updated', handleRefresh);
@@ -502,7 +501,6 @@ export default function Applications() {
     } else {
       return () => {
         clearInterval(pollInterval);
-        clearTimeout(safetyTimer);
       };
     }
   }, [socket, connected]);
@@ -1790,7 +1788,7 @@ export default function Applications() {
           color: '#64748B'
         }}>
           <div>
-            Showing {filteredApplications.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0} - {Math.min(currentPage * rowsPerPage, filteredApplications.length)} of {filteredApplications.length > 0 ? filteredApplications.length : (stats?.todayApps || 1247)} today's applications
+            Showing {filteredApplications.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0} - {Math.min(currentPage * rowsPerPage, filteredApplications.length)} of {filteredApplications.length > 0 ? filteredApplications.length : (stats?.todayApps || 0)} today's applications
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
