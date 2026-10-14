@@ -212,18 +212,18 @@ export default function UserManagementDetail() {
   const populateEditForm = (userData: any) => {
     if (!userData) return;
     setEditForm({
-      fullName: userData.fullName || '',
-      fatherName: userData.fatherName || '',
-      dob: userData.dob || '',
-      gender: userData.gender || '',
-      aadhaar: userData.aadhaar || '',
-      pan: userData.pan || '',
-      mobile: userData.mobile || userData.phone || '',
-      email: userData.email || '',
-      address: userData.address || '',
-      district: userData.district || '',
-      state: userData.state || '',
-      pinCode: userData.pinCode || '',
+      fullName: userData.fullName || userData.profile?.fullName || '',
+      fatherName: userData.fatherName || userData.profile?.fatherName || '',
+      dob: userData.dob || userData.profile?.dob || '',
+      gender: userData.gender || userData.profile?.gender || '',
+      aadhaar: userData.aadhaarNumber || userData.aadhaar || userData.profile?.aadhaarNumber || '',
+      pan: userData.panNumber || userData.pan || userData.profile?.panNumber || '',
+      mobile: userData.mobile || userData.phone || userData.profile?.phone || '',
+      email: userData.email || userData.profile?.email || '',
+      address: userData.address || userData.profile?.address || '',
+      district: userData.district || userData.profile?.district || '',
+      state: userData.state || userData.profile?.state || '',
+      pinCode: userData.pinCode || userData.profile?.pinCode || '',
       registeredCentre: userData.quickStats?.registeredCentre || '',
       assignedOperator: userData.quickStats?.assignedOperator || '',
     });
@@ -510,25 +510,91 @@ export default function UserManagementDetail() {
 
   const handleSaveProfile = async () => {
     if (!user) return;
+    const targetUserId = user.dbId || user.id || id;
+    const payload = {
+      ...editForm,
+      phone: editForm.mobile || (editForm as any).phone,
+      mobile: editForm.mobile,
+      aadhaarNumber: editForm.aadhaar,
+      panNumber: editForm.pan,
+      aadhaar: editForm.aadhaar,
+      pan: editForm.pan,
+      fatherName: editForm.fatherName,
+    };
+
     if (socket && connected) {
       socket.emit('update_citizen_profile', {
-        id: user.dbId || user.id,
-        ...editForm,
+        id: targetUserId,
+        ...payload,
       });
+      socket.emit('user_profile_updated', {
+        userId: targetUserId,
+        ...payload,
+      });
+      socket.emit('users_updated');
     }
+
     try {
-      const res = await apiFetch(`/api/v1/users/${user.dbId || user.id}`, {
+      let res = await apiFetch(`/api/v1/users/${encodeURIComponent(targetUserId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
+        body: JSON.stringify(payload),
       });
-      if (res.ok) {
+      if (!res || !res.ok) {
+        res = await apiFetch(`/api/admin/users/${encodeURIComponent(targetUserId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (res && res.ok) {
+        const result = await res.json().catch(() => null);
+        const updatedCitizen = result?.user || result?.citizen;
+        if (updatedCitizen) {
+          setUser(updatedCitizen);
+          populateEditForm(updatedCitizen);
+        } else {
+          setUser((prev: any) => ({
+            ...prev,
+            ...payload,
+            fullName: payload.fullName,
+            fatherName: payload.fatherName,
+            dob: payload.dob,
+            gender: payload.gender,
+            mobile: payload.mobile,
+            phone: payload.mobile,
+            email: payload.email,
+            address: payload.address,
+            district: payload.district,
+            state: payload.state,
+            pinCode: payload.pinCode,
+            aadhaar: payload.aadhaar,
+            aadhaarNumber: payload.aadhaarNumber,
+            pan: payload.pan,
+            panNumber: payload.panNumber,
+            profile: {
+              ...(prev?.profile || {}),
+              ...payload,
+            },
+            quickStats: {
+              ...(prev?.quickStats || {}),
+              registeredCentre: editForm.registeredCentre || prev?.quickStats?.registeredCentre,
+              assignedOperator: editForm.assignedOperator || prev?.quickStats?.assignedOperator,
+            },
+          }));
+        }
         showToast('Profile updated successfully');
         setEditModalOpen(false);
         fetchUserRest();
+      } else {
+        const errorData = await res?.json().catch(() => null);
+        showToast(errorData?.message || errorData?.error || 'Failed to update profile', 'error');
       }
     } catch {
-      // Socket fallback
+      showToast('Profile update submitted', 'info');
+      setEditModalOpen(false);
+      fetchUserRest();
     }
   };
 
@@ -704,10 +770,11 @@ export default function UserManagementDetail() {
 
   // Aadhaar masking
   const displayAadhaar = useMemo(() => {
-    if (!user?.aadhaar || user.aadhaar === 'Not Given') return '-';
-    if (showAadhaar) return user.aadhaar;
-    if (user.aadhaar.includes('••••') || user.aadhaar.includes('XXXX')) return user.aadhaar;
-    return `XXXX XXXX ${user.aadhaar.slice(-4)}`;
+    const rawAadhaar = user?.aadhaarNumber || user?.aadhaar;
+    if (!rawAadhaar || rawAadhaar === 'Not Given') return '-';
+    if (showAadhaar) return rawAadhaar;
+    if (rawAadhaar.includes('••••') || rawAadhaar.includes('XXXX')) return rawAadhaar;
+    return `XXXX XXXX ${rawAadhaar.slice(-4)}`;
   }, [user, showAadhaar]);
 
   if (loading && !user) {
@@ -729,18 +796,18 @@ export default function UserManagementDetail() {
 
   // Safe real data fallbacks (if user didn't provide, display clean placeholder rather than hardcoded demo)
   const safeData = {
-    fullName: user?.fullName || 'Citizen User',
-    fatherName: user?.fatherName || '-',
+    fullName: user?.fullName || user?.profile?.fullName || 'Citizen User',
+    fatherName: user?.fatherName || user?.profile?.fatherName || '-',
     dob: formattedDobWithAge,
-    gender: user?.gender || '-',
+    gender: user?.gender || user?.profile?.gender || '-',
     aadhaar: displayAadhaar,
-    pan: user?.pan || '-',
-    mobile: user?.mobile || user?.phone || '-',
-    email: user?.email || '-',
-    address: user?.address || '-',
-    district: user?.district || '-',
-    state: user?.state || '-',
-    pinCode: user?.pinCode || '-',
+    pan: user?.panNumber || user?.pan || user?.profile?.panNumber || '-',
+    mobile: user?.mobile || user?.phone || user?.profile?.phone || '-',
+    email: user?.email || user?.profile?.email || '-',
+    address: user?.address || user?.profile?.address || '-',
+    district: user?.district || user?.profile?.district || '-',
+    state: user?.state || user?.profile?.state || '-',
+    pinCode: user?.pinCode || user?.profile?.pinCode || '-',
     joinedDate: user?.joinedDate || '15 March 2024',
     status: (user?.status === 'BLOCKED' || user?.status === 'SUSPENDED') ? 'Blocked' : ((user?.status === 'PENDING' || user?.status === 'UNVERIFIED') ? 'Pending' : 'Verified'),
     id: user?.id || `CIT-${(id || '00482').slice(-5).toUpperCase()}`,
@@ -2514,6 +2581,28 @@ export default function UserManagementDetail() {
                   type="text"
                   value={editForm.email}
                   onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Aadhaar Number</label>
+                <input
+                  type="text"
+                  value={editForm.aadhaar}
+                  onChange={(e) => setEditForm({ ...editForm, aadhaar: e.target.value })}
+                  placeholder="e.g. 5421 8902 4321"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>PAN Card Number</label>
+                <input
+                  type="text"
+                  value={editForm.pan}
+                  onChange={(e) => setEditForm({ ...editForm, pan: e.target.value.toUpperCase() })}
+                  placeholder="e.g. ABCDE1234F"
                   style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', outline: 'none' }}
                 />
               </div>
