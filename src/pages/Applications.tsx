@@ -251,11 +251,11 @@ export default function Applications() {
               completed: completedTodayCount
             },
             pipeline: {
-              submitted: submittedCount,
-              underReview: underReviewCount,
+              submitted: totalApps,
+              underReview: pendingReviewCount,
               processing: processingCount,
               approved: approvedCount,
-              completed: completedCount
+              completed: completedTodayCount
             },
             applications: formatted,
           });
@@ -345,11 +345,11 @@ export default function Applications() {
             completed: Math.max(Number(resData.stats?.completed ?? 0), Number(prev?.stats?.completed ?? 0), completedTodayCount),
           };
           const pipeline = {
-            submitted: resData.pipeline?.submitted ?? finalSubmitted,
-            underReview: resData.pipeline?.underReview ?? finalUnderReview,
+            submitted: finalTotal,
+            underReview: resData.stats?.pending ?? finalPending,
             processing: resData.pipeline?.processing ?? finalProcessing,
-            approved: resData.pipeline?.approved ?? finalApproved,
-            completed: resData.pipeline?.completed ?? finalCompleted,
+            approved: Math.max(Number(resData.pipeline?.approved ?? 0), finalApproved),
+            completed: Math.max(Number(resData.stats?.completed ?? 0), completedTodayCount),
           };
           return { stats, pipeline, applications: finalApps };
         });
@@ -420,11 +420,11 @@ export default function Applications() {
               completed: prev?.stats?.completed || 0,
             },
             pipeline: {
-              submitted: submittedCount,
-              underReview: underReviewCount,
+              submitted: totalApps,
+              underReview: pendingReviewCount,
               processing: processingCount,
               approved: approvedCount,
-              completed: completedCount,
+              completed: prev?.stats?.completed || 0,
             },
             applications: sorted,
           };
@@ -473,7 +473,7 @@ export default function Applications() {
                 processing,
                 completed: completedToday,
               },
-              pipeline: { submitted, underReview, processing, approved, completed },
+              pipeline: { submitted: updated.length, underReview: pending, processing, approved, completed: completedToday },
               applications: updated,
             };
           });
@@ -532,7 +532,7 @@ export default function Applications() {
       return {
         ...prev,
         stats: { ...prev.stats, pending, processing, completed: (prev.stats?.completed || 0) + 1 },
-        pipeline: { submitted, underReview, processing, approved, completed },
+        pipeline: { submitted: updated.length, underReview: pending, processing, approved, completed: (prev.stats?.completed || 0) + 1 },
         applications: updated,
       };
     });
@@ -591,7 +591,7 @@ export default function Applications() {
       return {
         ...prev,
         stats: { ...prev.stats, pending, processing },
-        pipeline: { submitted, underReview, processing, approved, completed },
+        pipeline: { submitted: updated.length, underReview: pending, processing, approved, completed: prev?.stats?.completed || 0 },
         applications: updated,
       };
     });
@@ -648,7 +648,7 @@ export default function Applications() {
       return {
         ...prev,
         stats: { ...prev.stats, pending, processing, completed: (prev.stats?.completed || 0) + count },
-        pipeline: { submitted, underReview, processing, approved, completed },
+        pipeline: { submitted: updated.length, underReview: pending, processing, approved, completed: (prev.stats?.completed || 0) + count },
         applications: updated,
       };
     });
@@ -1186,7 +1186,7 @@ export default function Applications() {
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
               <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
-                {(data?.pipeline?.submitted ?? 0).toLocaleString()}
+                {(data?.pipeline?.submitted ?? data?.stats?.totalApps ?? data?.applications?.length ?? 0).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 500 }}>Active</span>
             </div>
@@ -1213,7 +1213,7 @@ export default function Applications() {
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
               <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
-                {(data?.pipeline?.underReview ?? 0).toLocaleString()}
+                {(data?.pipeline?.underReview ?? data?.stats?.pending ?? 0).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#D97706', fontWeight: 500 }}>Needs VLE</span>
             </div>
@@ -1240,7 +1240,7 @@ export default function Applications() {
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
               <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
-                {(data?.pipeline?.processing ?? 0).toLocaleString()}
+                {(data?.pipeline?.processing ?? data?.stats?.processing ?? 0).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#2563EB', fontWeight: 500 }}>At Dept</span>
             </div>
@@ -1294,7 +1294,7 @@ export default function Applications() {
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
               <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
-                {(data?.pipeline?.completed ?? 0).toLocaleString()}
+                {(data?.pipeline?.completed ?? data?.stats?.completed ?? 0).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#047857', fontWeight: 500 }}>Archived</span>
             </div>

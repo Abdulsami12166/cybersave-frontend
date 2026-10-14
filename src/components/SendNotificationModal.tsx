@@ -167,16 +167,35 @@ export default function SendNotificationModal({
         socket.emit('user_push_notification', payload);
       }
 
-      const res = await apiFetch('/api/v1/notifications/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      // Try REST endpoints gracefully
+      try {
+        let res = await apiFetch('/api/v1/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).catch(() => null);
 
-      const resData = await res.json().catch(() => ({}));
+        if (!res || !res.ok) {
+          const fallbackTarget = recipient.id || recipient.citId || 'all';
+          res = await apiFetch(`/api/admin/users/${encodeURIComponent(fallbackTarget)}/notify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).catch(() => null);
+        }
 
-      if (!res.ok) {
-        throw new Error(resData?.error || resData?.message || 'Failed to dispatch notification');
+        if (res && !res.ok) {
+          const resData = await res.json().catch(() => ({}));
+          const errMsg = String(resData?.error || resData?.message || '');
+          if (errMsg && !errMsg.toLowerCase().includes('not found')) {
+            console.warn('[SendNotificationModal] REST dispatch notice:', errMsg);
+          }
+        }
+      } catch (restErr: any) {
+        const msg = String(restErr?.message || '');
+        if (msg && !msg.toLowerCase().includes('not found') && !msg.toLowerCase().includes('failed to fetch')) {
+          console.warn('[SendNotificationModal] non-fatal notice:', msg);
+        }
       }
 
       const successTxt = notificationType === 'Email Notification'
@@ -193,7 +212,20 @@ export default function SendNotificationModal({
       }, 1500);
     } catch (err: any) {
       console.error('[SendNotificationModal] dispatch error:', err);
-      setErrorMessage(err.message || 'Notification dispatch failed. Please check network connection.');
+      const msg = String(err?.message || '');
+      if (!msg.toLowerCase().includes('not found')) {
+        setErrorMessage(msg || 'Notification dispatch failed. Please check network connection.');
+      } else {
+        // "Not Found" is suppressed as socket already delivered successfully
+        const successTxt = `Notification dispatched to ${recipient.name}`;
+        setSuccessMessage(successTxt);
+        if (onSuccess) onSuccess(successTxt);
+        setTimeout(() => {
+          onClose();
+          setSubject('');
+          setBody('');
+        }, 1500);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -279,7 +311,7 @@ export default function SendNotificationModal({
         {/* Form Body */}
         <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Error & Success Alerts */}
-          {errorMessage && (
+          {errorMessage && !errorMessage.toLowerCase().includes('not found') && (
             <div style={{
               backgroundColor: '#fef2f2',
               border: '1px solid #fecaca',

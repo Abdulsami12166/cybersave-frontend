@@ -5,26 +5,51 @@ import { SocketProvider } from './context/SocketContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import axios from 'axios';
 
+// Helper to auto-recover when Vite asset hashes change on new deployments
+function lazyWithRetry<T extends React.ComponentType<any>>(factory: () => Promise<{ default: T }>) {
+  return lazy(async () => {
+    try {
+      return await factory();
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      if (
+        msg.includes('Failed to fetch dynamically imported module') ||
+        msg.includes('Loading chunk') ||
+        msg.includes('Failed to load module script')
+      ) {
+        const reloadKey = 'cybersave_chunk_reload';
+        const lastReload = Number(sessionStorage.getItem(reloadKey) || '0');
+        if (Date.now() - lastReload > 8000) {
+          sessionStorage.setItem(reloadKey, Date.now().toString());
+          window.location.reload();
+          return new Promise<{ default: T }>(() => {});
+        }
+      }
+      throw err;
+    }
+  });
+}
+
 // Lazy load pages to drastically reduce initial JS bundle size
-const Dashboard = lazy(() => import('./components/Dashboard'));
-const UserManagement = lazy(() => import('./pages/UserManagement'));
-const Applications = lazy(() => import('./pages/Applications'));
-const Services = lazy(() => import('./pages/Services'));
-const Operators = lazy(() => import('./pages/Operators'));
-const Notifications = lazy(() => import('./pages/Notifications'));
-const SupportTickets = lazy(() => import('./pages/SupportTickets'));
-const Analytics = lazy(() => import('./pages/Analytics'));
-const AuditLogs = lazy(() => import('./pages/AuditLogs'));
-const Settings = lazy(() => import('./pages/Settings'));
-const Transactions = lazy(() => import('./pages/Transactions'));
-const Refunds = lazy(() => import('./pages/Refunds'));
-const UserManagementDetail = lazy(() => import('./pages/UserManagementDetail'));
-const ApplicationDetail = lazy(() => import('./pages/ApplicationDetail'));
-const OperatorDetail = lazy(() => import('./pages/OperatorDetail'));
-const SupportTicketDetail = lazy(() => import('./pages/SupportTicketDetail'));
-const SupportTicketResolve = lazy(() => import('./pages/SupportTicketResolve'));
-const ServiceWizard = lazy(() => import('./pages/ServiceWizard'));
-const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazyWithRetry(() => import('./components/Dashboard'));
+const UserManagement = lazyWithRetry(() => import('./pages/UserManagement'));
+const Applications = lazyWithRetry(() => import('./pages/Applications'));
+const Services = lazyWithRetry(() => import('./pages/Services'));
+const Operators = lazyWithRetry(() => import('./pages/Operators'));
+const Notifications = lazyWithRetry(() => import('./pages/Notifications'));
+const SupportTickets = lazyWithRetry(() => import('./pages/SupportTickets'));
+const Analytics = lazyWithRetry(() => import('./pages/Analytics'));
+const AuditLogs = lazyWithRetry(() => import('./pages/AuditLogs'));
+const Settings = lazyWithRetry(() => import('./pages/Settings'));
+const Transactions = lazyWithRetry(() => import('./pages/Transactions'));
+const Refunds = lazyWithRetry(() => import('./pages/Refunds'));
+const UserManagementDetail = lazyWithRetry(() => import('./pages/UserManagementDetail'));
+const ApplicationDetail = lazyWithRetry(() => import('./pages/ApplicationDetail'));
+const OperatorDetail = lazyWithRetry(() => import('./pages/OperatorDetail'));
+const SupportTicketDetail = lazyWithRetry(() => import('./pages/SupportTicketDetail'));
+const SupportTicketResolve = lazyWithRetry(() => import('./pages/SupportTicketResolve'));
+const ServiceWizard = lazyWithRetry(() => import('./pages/ServiceWizard'));
+const Login = lazyWithRetry(() => import('./pages/Login'));
 
 // Axios interceptor for JWT
 axios.interceptors.request.use((config) => {
