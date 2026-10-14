@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { 
@@ -141,6 +141,9 @@ export default function UserManagementDetail() {
 
   // Edit Profile Modal
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const editModalOpenRef = useRef(false);
+  editModalOpenRef.current = editModalOpen;
+
   const [editForm, setEditForm] = useState({
     fullName: '',
     fatherName: '',
@@ -167,7 +170,9 @@ export default function UserManagementDetail() {
         const data = await res.json();
         if (data && !data.error) {
           setUser(data);
-          populateEditForm(data);
+          if (!editModalOpenRef.current) {
+            populateEditForm(data);
+          }
           setLoading(false);
           // Also fetch dedicated feedback records to guarantee 100% sync
           fetchUserFeedbacks(data.dbId || data.id || id);
@@ -180,7 +185,9 @@ export default function UserManagementDetail() {
         const data = await fallbackRes.json();
         if (data && !data.error) {
           setUser(data);
-          populateEditForm(data);
+          if (!editModalOpenRef.current) {
+            populateEditForm(data);
+          }
           setLoading(false);
           fetchUserFeedbacks(data.dbId || data.id || id);
         }
@@ -209,23 +216,30 @@ export default function UserManagementDetail() {
     } catch (_) {}
   };
 
-  const populateEditForm = (userData: any) => {
+  const populateEditForm = (userData: any, force = false) => {
     if (!userData) return;
+    if (editModalOpenRef.current && !force) return;
+
+    const cleanField = (val: any) => {
+      if (!val || val === '-' || val === 'Not Given' || val === 'N/A' || val === 'undefined' || val === 'null') return '';
+      return String(val).trim();
+    };
+
     setEditForm({
-      fullName: userData.fullName || userData.profile?.fullName || '',
-      fatherName: userData.fatherName || userData.profile?.fatherName || '',
-      dob: userData.dob || userData.profile?.dob || '',
-      gender: userData.gender || userData.profile?.gender || '',
-      aadhaar: userData.aadhaarNumber || userData.aadhaar || userData.profile?.aadhaarNumber || '',
-      pan: userData.panNumber || userData.pan || userData.profile?.panNumber || '',
-      mobile: userData.mobile || userData.phone || userData.profile?.phone || '',
-      email: userData.email || userData.profile?.email || '',
-      address: userData.address || userData.profile?.address || '',
-      district: userData.district || userData.profile?.district || '',
-      state: userData.state || userData.profile?.state || '',
-      pinCode: userData.pinCode || userData.profile?.pinCode || '',
-      registeredCentre: userData.quickStats?.registeredCentre || '',
-      assignedOperator: userData.quickStats?.assignedOperator || '',
+      fullName: cleanField(userData.fullName || userData.profile?.fullName || (userData.fullName === 'Citizen User' ? '' : userData.fullName)),
+      fatherName: cleanField(userData.fatherName || userData.profile?.fatherName),
+      dob: cleanField(userData.dob || userData.profile?.dob || userData.rawDob),
+      gender: cleanField(userData.gender || userData.profile?.gender),
+      aadhaar: cleanField(userData.aadhaarNumber || userData.aadhaar || userData.profile?.aadhaarNumber),
+      pan: cleanField(userData.panNumber || userData.pan || userData.profile?.panNumber),
+      mobile: cleanField(userData.mobile || userData.phone || userData.profile?.phone),
+      email: cleanField(userData.email || userData.profile?.email),
+      address: cleanField(userData.address || userData.profile?.address),
+      district: cleanField(userData.district || userData.profile?.district),
+      state: cleanField(userData.state || userData.profile?.state),
+      pinCode: cleanField(userData.pinCode || userData.profile?.pinCode),
+      registeredCentre: cleanField(userData.quickStats?.registeredCentre || userData.registeredCentre),
+      assignedOperator: cleanField(userData.quickStats?.assignedOperator || userData.assignedOperator),
     });
   };
 
@@ -237,9 +251,11 @@ export default function UserManagementDetail() {
       setLoading(false);
     }, 8000);
 
-    // Smart real-time presence & session polling
+    // Smart real-time presence & session polling (paused during modal edit)
     const pollInterval = setInterval(() => {
-      fetchUserRest();
+      if (!editModalOpenRef.current) {
+        fetchUserRest();
+      }
     }, 3500);
 
     if (socket && connected) {
@@ -248,14 +264,18 @@ export default function UserManagementDetail() {
       const handleUserDetail = (data: any) => {
         if (data && !data.error) {
           setUser(data);
-          populateEditForm(data);
+          if (!editModalOpenRef.current) {
+            populateEditForm(data);
+          }
           setLoading(false);
         }
       };
 
       const handleRefresh = () => {
         socket.emit('request_user_detail', { id });
-        fetchUserRest();
+        if (!editModalOpenRef.current) {
+          fetchUserRest();
+        }
       };
 
       const handlePushSent = (res: any) => {
@@ -279,8 +299,12 @@ export default function UserManagementDetail() {
       const handleUpdateSuccess = (data: any) => {
         showToast('Citizen profile updated');
         setEditModalOpen(false);
-        if (data) setUser(data);
-        else handleRefresh();
+        if (data) {
+          setUser(data);
+          populateEditForm(data, true);
+        } else {
+          handleRefresh();
+        }
       };
 
       const handleFeedbackEvent = (eventData: any) => {
@@ -553,7 +577,7 @@ export default function UserManagementDetail() {
         const updatedCitizen = result?.user || result?.citizen;
         if (updatedCitizen) {
           setUser(updatedCitizen);
-          populateEditForm(updatedCitizen);
+          populateEditForm(updatedCitizen, true);
         } else {
           setUser((prev: any) => ({
             ...prev,
@@ -586,7 +610,7 @@ export default function UserManagementDetail() {
         }
         showToast('Profile updated successfully');
         setEditModalOpen(false);
-        fetchUserRest();
+        setTimeout(() => fetchUserRest(), 1200);
       } else {
         const errorData = await res?.json().catch(() => null);
         showToast(errorData?.message || errorData?.error || 'Failed to update profile', 'error');
@@ -594,7 +618,7 @@ export default function UserManagementDetail() {
     } catch {
       showToast('Profile update submitted', 'info');
       setEditModalOpen(false);
-      fetchUserRest();
+      setTimeout(() => fetchUserRest(), 1200);
     }
   };
 
@@ -1009,7 +1033,7 @@ export default function UserManagementDetail() {
 
             <button
               onClick={() => {
-                populateEditForm(user || safeData);
+                populateEditForm(user || safeData, true);
                 setEditModalOpen(true);
               }}
               style={{
@@ -1186,7 +1210,7 @@ export default function UserManagementDetail() {
 
                 <button
                   onClick={() => {
-                    populateEditForm(user || safeData);
+                    populateEditForm(user || safeData, true);
                     setEditModalOpen(true);
                   }}
                   style={{

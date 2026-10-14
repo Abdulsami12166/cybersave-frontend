@@ -325,7 +325,7 @@ export default function UserManagement() {
       // that fall back to CIT- display ids cannot be targeted by block/unblock
       // and would cause 'Citizen not found' — exclude them until the server
       // provides their dbId.
-      const dbId = isRealDbId(u.dbId) ? u.dbId.trim() : (isRealDbId(u._id) ? u._id.trim() : '');
+      const dbId = isRealDbId(u.id) ? u.id.trim() : (isRealDbId(u.dbId) ? u.dbId.trim() : (isRealDbId(u._id) ? u._id.trim() : String(u.id || u.dbId || u._id || '')));
       if (!dbId) return;
       if (seenDbIds.has(dbId)) return;
 
@@ -1222,7 +1222,7 @@ export default function UserManagement() {
                 </tr>
               ) : (
                 paginatedCitizens.map((c: any, i: number) => {
-                  const citizenKey = c.dbId || c.id;
+                  const citizenKey = c.dbId || c.raw?.id || c.raw?._id || c.id;
                   const isChecked = selectedCitizenIds.includes(citizenKey);
                   return (
                     <tr 
