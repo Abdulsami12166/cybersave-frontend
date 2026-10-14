@@ -225,13 +225,22 @@ export default function UserManagementDetail() {
       return String(val).trim();
     };
 
+    const unmask = (val: any) => {
+      if (!val) return '';
+      const str = String(val).trim();
+      if (str.includes('••••') || str.includes('XXXX') || str.startsWith('****') || str === 'Not Given' || str === 'N/A') {
+        return '';
+      }
+      return str;
+    };
+
     setEditForm({
       fullName: cleanField(userData.fullName || userData.profile?.fullName || (userData.fullName === 'Citizen User' ? '' : userData.fullName)),
       fatherName: cleanField(userData.fatherName || userData.profile?.fatherName),
       dob: cleanField(userData.dob || userData.profile?.dob || userData.rawDob),
       gender: cleanField(userData.gender || userData.profile?.gender),
-      aadhaar: cleanField(userData.aadhaarNumber || userData.aadhaar || userData.profile?.aadhaarNumber),
-      pan: cleanField(userData.panNumber || userData.pan || userData.profile?.panNumber),
+      aadhaar: cleanField(userData.profile?.aadhaarNumber || userData.aadhaarNumber || unmask(userData.aadhaar)),
+      pan: cleanField(userData.profile?.panNumber || userData.panNumber || userData.pan),
       mobile: cleanField(userData.mobile || userData.phone || userData.profile?.phone),
       email: cleanField(userData.email || userData.profile?.email),
       address: cleanField(userData.address || userData.profile?.address),
@@ -537,13 +546,21 @@ export default function UserManagementDetail() {
     const targetUserId = user.dbId || user.id || id;
     const payload = {
       ...editForm,
-      phone: editForm.mobile || (editForm as any).phone,
-      mobile: editForm.mobile,
-      aadhaarNumber: editForm.aadhaar,
-      panNumber: editForm.pan,
-      aadhaar: editForm.aadhaar,
-      pan: editForm.pan,
-      fatherName: editForm.fatherName,
+      fullName: editForm.fullName.trim(),
+      fatherName: editForm.fatherName.trim(),
+      email: editForm.email.trim().toLowerCase(),
+      phone: (editForm.mobile || (editForm as any).phone || '').trim(),
+      mobile: (editForm.mobile || (editForm as any).phone || '').trim(),
+      aadhaarNumber: editForm.aadhaar.trim(),
+      panNumber: editForm.pan.trim().toUpperCase(),
+      aadhaar: editForm.aadhaar.trim(),
+      pan: editForm.pan.trim().toUpperCase(),
+      address: editForm.address.trim(),
+      district: editForm.district.trim(),
+      state: editForm.state.trim(),
+      pinCode: editForm.pinCode.trim(),
+      dob: editForm.dob.trim(),
+      gender: editForm.gender.trim(),
     };
 
     if (socket && connected) {
@@ -794,7 +811,7 @@ export default function UserManagementDetail() {
 
   // Aadhaar masking
   const displayAadhaar = useMemo(() => {
-    const rawAadhaar = user?.aadhaarNumber || user?.aadhaar;
+    const rawAadhaar = user?.profile?.aadhaarNumber || user?.aadhaarNumber || user?.aadhaar;
     if (!rawAadhaar || rawAadhaar === 'Not Given') return '-';
     if (showAadhaar) return rawAadhaar;
     if (rawAadhaar.includes('••••') || rawAadhaar.includes('XXXX')) return rawAadhaar;

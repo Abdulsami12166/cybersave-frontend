@@ -188,6 +188,7 @@ export default function UserManagement() {
       socket.on('citizen_app_closed', (d: any) => handlePresenceChange({ ...d, isOnline: false }));
       socket.on('user_activity_updated', handleRefresh);
       socket.on('user_updated', handleRefresh);
+      socket.on('user_profile_updated', handleRefresh);
       socket.on('user_detail_updated', handleRefresh);
       socket.on('users_updated', handleRefresh);
       socket.on('new_user_feedback', handleRefresh);
@@ -207,6 +208,7 @@ export default function UserManagement() {
         clearInterval(pollInterval);
         clearTimeout(safetyTimer);
         socket.off('user_updated', handleRefresh);
+        socket.off('user_profile_updated', handleRefresh);
         socket.off('user_detail_updated', handleRefresh);
         socket.off('users_updated', handleRefresh);
         socket.off('response_users_data', handleUsers);
