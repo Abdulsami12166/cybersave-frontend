@@ -67,6 +67,22 @@ interface ChargeItem {
   condition: string;
 }
 
+const normalizeFormElementType = (t?: string): string => {
+  if (!t) return 'Text Input';
+  const lower = t.toLowerCase().trim();
+  if (lower === 'text area' || lower === 'text-area' || lower === 'textarea' || lower.includes('multi-line')) {
+    return 'Text Area / Multi-line';
+  }
+  if (lower === 'select' || lower === 'dropdown') return 'Dropdown Select';
+  if (lower === 'radio') return 'Radio Control';
+  if (lower === 'checkbox') return 'Checkbox Option';
+  if (lower === 'number') return 'Number Input';
+  if (lower === 'phone') return 'Phone Field';
+  if (lower === 'email') return 'Email Address';
+  if (lower === 'date') return 'Date Picker';
+  return t;
+};
+
 export default function ServiceWizard() {
   const { socket } = useSocket();
   const navigate = useNavigate();
@@ -83,7 +99,7 @@ export default function ServiceWizard() {
   // "Add New Service" would silently reopen the last-edited service instead of
   // creating a fresh one.
   const serviceIdParam = searchParams.get('id') || routeId || null;
-  const isExplicitCreateRoute = window.location.pathname === '/services/new';
+  const isExplicitCreateRoute = window.location.pathname === '/services/new' || (window.location.pathname === '/services/create' && !searchParams.get('id'));
   const effectiveServiceId = (() => {
     if (serviceIdParam) {
       try { sessionStorage.setItem('cybersave_edit_service_id', serviceIdParam); } catch (_) {}
@@ -193,10 +209,10 @@ export default function ServiceWizard() {
     assignedTeams: ['Identity verification', 'Risk team', 'SLA level-1'],
     searchTags: ['identity', 'address', 'kyc', 'uidai'],
     formElements: [
-      { label: 'Full Name', type: 'Text Input', placeholder: 'e.g. Rajesh Kumar', required: true, validationRule: 'None' },
-      { label: 'Date of Birth', type: 'Date Picker', placeholder: 'DD/MM/YYYY', required: true, validationRule: 'Date in Past' },
-      { label: 'New Address', type: 'Text Area', placeholder: 'Enter complete residential address with landmarks', required: true, validationRule: 'None' },
-      { label: 'Pin Code', type: 'Number Input', placeholder: 'e.g. 560001', required: true, validationRule: 'Exact 6 Digit Number' }
+      { id: 'f_name', label: 'Full Name', type: 'Text Input', placeholder: 'e.g. Rajesh Kumar', required: true, validationRule: 'None' },
+      { id: 'f_dob', label: 'Date of Birth', type: 'Date Picker', placeholder: 'DD/MM/YYYY', required: true, validationRule: 'Date in Past' },
+      { id: 'f_addr', label: 'New Address', type: 'Text Area / Multi-line', placeholder: 'Enter complete residential address with landmarks', required: true, validationRule: 'None' },
+      { id: 'f_pin', label: 'Pin Code', type: 'Number Input', placeholder: 'e.g. 560001', required: true, validationRule: 'Exact 6 Digit Number' }
     ],
     documents: [
       { type: 'Proof of Identity (POI)', subtitle: 'Passport, PAN Card, or Voter ID', formats: 'PDF, JPG, PNG', size: '2 MB', req: 'Required' },
@@ -337,14 +353,19 @@ export default function ServiceWizard() {
     const TYPE_MAP: Record<string, string> = {
       text: 'Text Input', number: 'Number Input', phone: 'Phone Field',
       email: 'Email Address', date: 'Date Picker', select: 'Dropdown Select',
-      textarea: 'Text Area', 'text-area': 'Text Area',
+      textarea: 'Text Area / Multi-line', 'text-area': 'Text Area / Multi-line',
+      'text area': 'Text Area / Multi-line', 'text area / multi-line': 'Text Area / Multi-line',
       radio: 'Radio Control', checkbox: 'Checkbox Option',
     };
     const restoreType = (t: any) => {
       if (!t) return 'Text Input';
-      if (TYPE_MAP[String(t).toLowerCase()]) return TYPE_MAP[String(t).toLowerCase()];
-      const match = ['Text Input', 'Number Input', 'Phone Field', 'Email Address', 'Date Picker', 'Dropdown Select', 'Text Area', 'Radio Control', 'Checkbox Option']
-        .find((v) => v.toLowerCase() === String(t).toLowerCase());
+      const key = String(t).toLowerCase().trim();
+      if (TYPE_MAP[key]) return TYPE_MAP[key];
+      const match = [
+        'Text Input', 'Number Input', 'Phone Field', 'Email Address',
+        'Date Picker', 'Dropdown Select', 'Text Area / Multi-line',
+        'Radio Control', 'Checkbox Option'
+      ].find((v) => v.toLowerCase() === key || (key === 'text area' && v.startsWith('Text Area')));
       return match || String(t);
     };
     const rawFormList = Array.isArray(s.formDataSchema)
@@ -526,31 +547,34 @@ export default function ServiceWizard() {
 
       // Step 4: Form Builder auto-fill
       if (targetStep === 4) {
+        if (prev.formElements && prev.formElements.length > 0) {
+          return updated;
+        }
         const isAddrOrLand = /address|land|property|domicile|caste|birth|death/i.test(sName + ' ' + sCat);
         const isFinancial = /banking|insurance|tax|pan|income|pension/i.test(sName + ' ' + sCat);
 
         const fields: FormElementItem[] = [
-          { label: 'Citizen Full Name', type: 'Text Input', placeholder: 'Enter official name per Aadhaar', required: true, validationRule: 'None' },
-          { label: 'Mobile Number', type: 'Number Input', placeholder: '10-digit registered mobile', required: true, validationRule: 'Exact 10 Digit Phone' },
-          { label: 'Date of Birth', type: 'Date Picker', placeholder: 'DD/MM/YYYY', required: true, validationRule: 'Date in Past' },
-          { label: 'Aadhaar / National ID', type: 'Number Input', placeholder: '12-digit UIDAI Aadhaar', required: true, validationRule: 'Exact 12 Digit Number' },
+          { id: 'f_name', label: 'Citizen Full Name', type: 'Text Input', placeholder: 'Enter official name per Aadhaar', required: true, validationRule: 'None' },
+          { id: 'f_phone', label: 'Mobile Number', type: 'Number Input', placeholder: '10-digit registered mobile', required: true, validationRule: 'Exact 10 Digit Phone' },
+          { id: 'f_dob', label: 'Date of Birth', type: 'Date Picker', placeholder: 'DD/MM/YYYY', required: true, validationRule: 'Date in Past' },
+          { id: 'f_aadhaar', label: 'Aadhaar / National ID', type: 'Number Input', placeholder: '12-digit UIDAI Aadhaar', required: true, validationRule: 'Exact 12 Digit Number' },
         ];
 
         if (isAddrOrLand) {
           fields.push(
-            { label: 'Current Residential Address', type: 'Text Area', placeholder: 'Complete house no., street, locality, landmark', required: true, validationRule: 'None' },
-            { label: 'District / Tehsil', type: 'Text Input', placeholder: 'e.g. South Delhi / Central', required: true, validationRule: 'None' },
-            { label: 'Postal Pin Code', type: 'Number Input', placeholder: '6-digit postal code', required: true, validationRule: 'Exact 6 Digit Number' }
+            { id: 'f_addr', label: 'Current Residential Address', type: 'Text Area / Multi-line', placeholder: 'Complete house no., street, locality, landmark', required: true, validationRule: 'None' },
+            { id: 'f_dist', label: 'District / Tehsil', type: 'Text Input', placeholder: 'e.g. South Delhi / Central', required: true, validationRule: 'None' },
+            { id: 'f_pin', label: 'Postal Pin Code', type: 'Number Input', placeholder: '6-digit postal code', required: true, validationRule: 'Exact 6 Digit Number' }
           );
         } else if (isFinancial) {
           fields.push(
-            { label: 'PAN or Account Identifier', type: 'Text Input', placeholder: 'Enter alphanumeric reference', required: true, validationRule: 'None' },
-            { label: 'Annual Income Range', type: 'Text Input', placeholder: 'e.g. ₹2,50,000 to ₹5,00,000', required: true, validationRule: 'None' }
+            { id: 'f_pan', label: 'PAN or Account Identifier', type: 'Text Input', placeholder: 'Enter alphanumeric reference', required: true, validationRule: 'None' },
+            { id: 'f_income', label: 'Annual Income Range', type: 'Text Input', placeholder: 'e.g. ₹2,50,000 to ₹5,00,000', required: true, validationRule: 'None' }
           );
         } else {
           fields.push(
-            { label: 'Application Details / Remarks', type: 'Text Area', placeholder: 'Specify purpose of application or remarks', required: true, validationRule: 'None' },
-            { label: 'Residential District', type: 'Text Input', placeholder: 'e.g. New Delhi', required: true, validationRule: 'None' }
+            { id: 'f_details', label: 'Application Details / Remarks', type: 'Text Area / Multi-line', placeholder: 'Specify purpose of application or remarks', required: true, validationRule: 'None' },
+            { id: 'f_res_dist', label: 'Residential District', type: 'Text Input', placeholder: 'e.g. New Delhi', required: true, validationRule: 'None' }
           );
         }
 
@@ -839,6 +863,9 @@ export default function ServiceWizard() {
           slug: saved.slug || prev.slug,
           tat: saved.tat || saved.processingTime || prev.tat,
           processingSla: saved.tat || saved.processingTime || prev.processingSla,
+          formElements: Array.isArray(saved.formDataSchema) && saved.formDataSchema.length > 0
+            ? saved.formDataSchema
+            : (Array.isArray(saved.formElements) && saved.formElements.length > 0 ? saved.formElements : prev.formElements),
         }));
       }
 
@@ -995,30 +1022,55 @@ export default function ServiceWizard() {
   const handleApplyFormTemplate = (templateKey: string) => {
     const tpl = FORM_TEMPLATES[templateKey];
     if (!tpl) return;
+    const clonedFields: FormElementItem[] = tpl.fields.map((f, idx) => ({
+      ...f,
+      id: f.id || `field_${templateKey}_${idx + 1}_${Date.now()}`,
+      type: normalizeFormElementType(f.type)
+    }));
     setServiceData(prev => ({
       ...prev,
-      formElements: [...tpl.fields]
+      formElements: clonedFields
     }));
     setSelectedElementIndex(0);
-    showToast(`Applied "${tpl.name}" template with ${tpl.fields.length} fields!`);
+    showToast(`Applied "${tpl.name}" template with ${clonedFields.length} fields!`);
   };
 
   // Move element up or down in workspace
   const handleMoveFormElement = (index: number, direction: 'up' | 'down') => {
-    const list = [...serviceData.formElements];
+    setServiceData(prev => {
+      const list = [...prev.formElements];
+      if (direction === 'up' && index > 0) {
+        const temp = list[index - 1];
+        list[index - 1] = list[index];
+        list[index] = temp;
+        return { ...prev, formElements: list };
+      } else if (direction === 'down' && index < list.length - 1) {
+        const temp = list[index + 1];
+        list[index + 1] = list[index];
+        list[index] = temp;
+        return { ...prev, formElements: list };
+      }
+      return prev;
+    });
     if (direction === 'up' && index > 0) {
-      const temp = list[index - 1];
-      list[index - 1] = list[index];
-      list[index] = temp;
-      setServiceData(prev => ({ ...prev, formElements: list }));
       setSelectedElementIndex(index - 1);
-    } else if (direction === 'down' && index < list.length - 1) {
-      const temp = list[index + 1];
-      list[index + 1] = list[index];
-      list[index] = temp;
-      setServiceData(prev => ({ ...prev, formElements: list }));
+    } else if (direction === 'down' && index < serviceData.formElements.length - 1) {
       setSelectedElementIndex(index + 1);
     }
+  };
+
+  // Update a single form element property immutably
+  const handleUpdateFormElement = (index: number, field: keyof FormElementItem, value: any) => {
+    setServiceData(prev => {
+      if (!prev.formElements || !prev.formElements[index]) return prev;
+      const updated = prev.formElements.map((item, idx) => {
+        if (idx === index) {
+          return { ...item, [field]: value };
+        }
+        return item;
+      });
+      return { ...prev, formElements: updated };
+    });
   };
 
   // Add form element from Available Elements
@@ -1026,22 +1078,25 @@ export default function ServiceWizard() {
     const defaultLabels: Record<string, string> = {
       'Text Input': 'Custom Text Input',
       'Number Input': 'Numeric Identifier',
-      'Email Address': 'Email Address',
       'Phone Field': 'Mobile Phone Number',
+      'Email Address': 'Email Address',
       'Date Picker': 'Select Date',
       'Dropdown Select': 'Select Category Option',
       'Text Area / Multi-line': 'Detailed Description / Notes',
+      'Text Area': 'Detailed Description / Notes',
       'File Upload': 'Upload Document Proof',
       'Checkbox Option': 'Acknowledgement Consent',
       'Radio Control': 'Choose Option Selection'
     };
+    const normType = normalizeFormElementType(type);
     const newElement: FormElementItem = {
-      label: defaultLabels[type] || type,
-      type,
+      id: `field_custom_${Date.now()}_${serviceData.formElements.length + 1}`,
+      label: defaultLabels[type] || defaultLabels[normType] || type,
+      type: normType,
       placeholder: `Enter ${type.toLowerCase()}`,
       required: true,
-      validationRule: type === 'Number Input' ? 'Exact 6 Digit Number' : (type === 'Email Address' ? 'Valid Email' : (type === 'Phone Field' ? '10 Digit Mobile' : 'None')),
-      options: type === 'Dropdown Select' || type === 'Radio Control' ? 'Option 1, Option 2, Option 3' : undefined
+      validationRule: normType === 'Number Input' ? 'Exact 6 Digit Number' : (normType === 'Email Address' ? 'Valid Email' : (normType === 'Phone Field' ? '10 Digit Mobile' : 'None')),
+      options: normType === 'Dropdown Select' || normType === 'Radio Control' ? 'Option 1, Option 2, Option 3' : undefined
     };
     setServiceData(prev => ({
       ...prev,
@@ -1126,7 +1181,7 @@ export default function ServiceWizard() {
     }));
   };
 
-  if (!effectiveServiceId) {
+  if (searchParams.get('mode') === 'simple' || searchParams.get('legacy') === 'true') {
     return <AddNewService />;
   }
 
@@ -2222,11 +2277,7 @@ export default function ServiceWizard() {
                     <input
                       type="text"
                       value={serviceData.formElements[selectedElementIndex]?.label || ''}
-                      onChange={e => {
-                        const list = [...serviceData.formElements];
-                        list[selectedElementIndex].label = e.target.value;
-                        setServiceData({ ...serviceData, formElements: list });
-                      }}
+                      onChange={e => handleUpdateFormElement(selectedElementIndex, 'label', e.target.value)}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
                     />
                   </div>
@@ -2236,12 +2287,8 @@ export default function ServiceWizard() {
                       Field Type
                     </label>
                     <select
-                      value={serviceData.formElements[selectedElementIndex]?.type || 'Text Input'}
-                      onChange={e => {
-                        const list = [...serviceData.formElements];
-                        list[selectedElementIndex].type = e.target.value;
-                        setServiceData({ ...serviceData, formElements: list });
-                      }}
+                      value={normalizeFormElementType(serviceData.formElements[selectedElementIndex]?.type)}
+                      onChange={e => handleUpdateFormElement(selectedElementIndex, 'type', e.target.value)}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
                     >
                       <option value="Text Input">Text Input</option>
@@ -2256,8 +2303,8 @@ export default function ServiceWizard() {
                     </select>
                   </div>
 
-                  {(serviceData.formElements[selectedElementIndex]?.type === 'Dropdown Select' ||
-                    serviceData.formElements[selectedElementIndex]?.type === 'Radio Control') && (
+                  {(normalizeFormElementType(serviceData.formElements[selectedElementIndex]?.type) === 'Dropdown Select' ||
+                    normalizeFormElementType(serviceData.formElements[selectedElementIndex]?.type) === 'Radio Control') && (
                     <div style={{ marginBottom: 14 }}>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
                         Options (Comma-separated)
@@ -2266,11 +2313,7 @@ export default function ServiceWizard() {
                         type="text"
                         placeholder="Option 1, Option 2, Option 3"
                         value={serviceData.formElements[selectedElementIndex]?.options || ''}
-                        onChange={e => {
-                          const list = [...serviceData.formElements];
-                          list[selectedElementIndex].options = e.target.value;
-                          setServiceData({ ...serviceData, formElements: list });
-                        }}
+                        onChange={e => handleUpdateFormElement(selectedElementIndex, 'options', e.target.value)}
                         style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
                       />
                     </div>
@@ -2283,11 +2326,7 @@ export default function ServiceWizard() {
                     <input
                       type="text"
                       value={serviceData.formElements[selectedElementIndex]?.placeholder || ''}
-                      onChange={e => {
-                        const list = [...serviceData.formElements];
-                        list[selectedElementIndex].placeholder = e.target.value;
-                        setServiceData({ ...serviceData, formElements: list });
-                      }}
+                      onChange={e => handleUpdateFormElement(selectedElementIndex, 'placeholder', e.target.value)}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
                     />
                   </div>
@@ -2300,21 +2339,13 @@ export default function ServiceWizard() {
                       <input
                         type="checkbox"
                         checked={serviceData.formElements[selectedElementIndex]?.required || false}
-                        onChange={e => {
-                          const list = [...serviceData.formElements];
-                          list[selectedElementIndex].required = e.target.checked;
-                          setServiceData({ ...serviceData, formElements: list });
-                        }}
+                        onChange={e => handleUpdateFormElement(selectedElementIndex, 'required', e.target.checked)}
                       />
                       Mandatory Required Field
                     </label>
                     <select
                       value={serviceData.formElements[selectedElementIndex]?.validationRule || 'None'}
-                      onChange={e => {
-                        const list = [...serviceData.formElements];
-                        list[selectedElementIndex].validationRule = e.target.value;
-                        setServiceData({ ...serviceData, formElements: list });
-                      }}
+                      onChange={e => handleUpdateFormElement(selectedElementIndex, 'validationRule', e.target.value)}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 13 }}
                     >
                       <option value="None">None (Standard)</option>
