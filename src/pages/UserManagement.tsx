@@ -470,11 +470,9 @@ export default function UserManagement() {
     try {
       // Await the backend. Database is the source of truth — UI only updates
       // from the PERSISTED state returned by the API, never from local intent.
-      // NOTE: uses /api/admin/.../block with an explicit whitelisted status —
-      // the one route shape that exists on EVERY deployed backend generation
-      // (the dedicated /unblock alias is newer than current production).
-      // The backend persists, re-reads the row, and returns authoritative state.
-      const res = await apiFetch(`/api/admin/users/${targetId}/block`, {
+      // ponytail: /block only accepts BLOCKED; /unblock restores to VERIFIED.
+      const endpoint = isCurrentlyBlocked ? 'unblock' : 'block';
+      const res = await apiFetch(`/api/admin/users/${targetId}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus })
@@ -561,6 +559,8 @@ export default function UserManagement() {
 
       // ── Attempt 2: per-user fallback (works on every backend generation) ──
       const targetStatus = targetAction === 'block' ? 'BLOCKED' : 'VERIFIED';
+      // ponytail: use correct endpoint per action
+      const perUserEndpoint = targetAction === 'block' ? 'block' : 'unblock';
       const succeeded: string[] = [];
       const failed: string[] = [];
 
@@ -570,7 +570,7 @@ export default function UserManagement() {
         const batch = targetIds.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
           batch.map(async (id) => {
-            const res = await apiFetch(`/api/admin/users/${id}/block`, {
+            const res = await apiFetch(`/api/admin/users/${id}/${perUserEndpoint}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: targetStatus })

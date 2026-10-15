@@ -552,10 +552,9 @@ export default function UserManagementDetail() {
 
     setBlockMutating(true);
     try {
-      // Await the backend. UI updates ONLY from the persisted state returned.
-      // Uses /api/admin/.../block with explicit status — the route shape that
-      // exists on every deployed backend generation (see UserManagement).
-      const res = await apiFetch(`/api/admin/users/${user.dbId || user.id}/block`, {
+      // ponytail: /block only accepts BLOCKED; /unblock restores to VERIFIED.
+      const endpoint = isCurrentlyBlocked ? 'unblock' : 'block';
+      const res = await apiFetch(`/api/admin/users/${user.dbId || user.id}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus })

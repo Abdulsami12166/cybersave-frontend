@@ -96,23 +96,23 @@ export default function SupportTickets() {
           };
 
           setData((prev: any) => {
-            if (!prev || !Array.isArray(prev.tickets)) return prev;
-            const existingIdx = prev.tickets.findIndex((t: any) =>
+            const list = (prev && Array.isArray(prev.tickets)) ? prev.tickets : [];
+            const existingIdx = list.findIndex((t: any) =>
               (t.id && t.id === formattedTkt.id) ||
               (t.refNumber && t.refNumber === formattedTkt.refNumber) ||
               (t.rawId && t.rawId === formattedTkt.rawId)
             );
             let updatedList: any[];
             if (existingIdx >= 0) {
-              updatedList = [...prev.tickets];
+              updatedList = [...list];
               updatedList[existingIdx] = { ...updatedList[existingIdx], ...formattedTkt };
             } else {
-              updatedList = [formattedTkt, ...prev.tickets];
+              updatedList = [formattedTkt, ...list];
             }
             return {
-              ...prev,
+              ...(prev || {}),
               stats: {
-                ...prev.stats,
+                ...(prev?.stats || {}),
                 totalTickets: updatedList.length,
                 openTickets: updatedList.filter((t: any) => t.status === 'OPEN').length
               },
