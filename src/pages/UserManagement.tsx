@@ -547,6 +547,12 @@ export default function UserManagement() {
         const result = await res.json().catch(() => null);
         if (res.ok && result?.success) {
           nativeSucceeded = true;
+          const targetStatus = targetAction === 'block' ? 'BLOCKED' : 'VERIFIED';
+          const targetSet = new Set(targetIds);
+          setLiveUsers(prev => prev.map(u => {
+            const uId = u.dbId || u.id || u._id;
+            return targetSet.has(uId) ? { ...u, status: targetStatus } : u;
+          }));
           showToast(result.message || `Successfully ${doneLabel} ${result.count ?? totalCount} citizen(s)`);
           setSelectedCitizenIds([]);
           fetchUsersRest();
@@ -586,6 +592,14 @@ export default function UserManagement() {
           if (r.status === 'fulfilled') succeeded.push(batch[idx]);
           else failed.push(batch[idx]);
         });
+      }
+
+      if (succeeded.length > 0) {
+        const targetSet = new Set(succeeded);
+        setLiveUsers(prev => prev.map(u => {
+          const uId = u.dbId || u.id || u._id;
+          return targetSet.has(uId) ? { ...u, status: targetStatus } : u;
+        }));
       }
 
       if (succeeded.length > 0 && failed.length === 0) {

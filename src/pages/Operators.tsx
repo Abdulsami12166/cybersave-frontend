@@ -21,6 +21,7 @@ export default function Operators() {
   const [newOpEmail, setNewOpEmail] = useState('');
   const [newOpPass, setNewOpPass] = useState('');
   const [newOpFeats, setNewOpFeats] = useState<string[]>(['DASHBOARD']);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ponytail: Exact dashboard screen names matching sidebar nav items
   const ALL_FEATURES = [
@@ -69,7 +70,6 @@ export default function Operators() {
       });
       socket.on('operators_updated', () => {
         fetchOperatorsRest();
-        socket.emit('request_operators_data');
       });
       socket.on('update_operator_access_success', () => {
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Operator access updated successfully!' } }));
@@ -110,12 +110,14 @@ export default function Operators() {
   }, [socket, connected]);
 
   const handleAddOperatorSubmit = async () => {
+    if (isSubmitting) return;
     if (!newOpName.trim() || !newOpEmail.trim() || !newOpPass.trim()) {
       window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Name, email, and password are required!', type: 'error' } }));
       return;
     }
 
     const finalPermissions = Array.from(new Set(newOpFeats));
+    setIsSubmitting(true);
 
     try {
       const res = await apiFetch('/api/v1/operators', {
@@ -131,15 +133,33 @@ export default function Operators() {
       });
 
       if (res.ok) {
+        const json = await res.json().catch(() => null);
         window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: `Operator "${newOpName}" created successfully with selected features!` } }));
         setShowAddOpModal(false);
         setNewOpName('');
         setNewOpEmail('');
         setNewOpPass('');
         setNewOpFeats(['DASHBOARD']);
-        fetchOperatorsRest();
-        if (socket) {
-          socket.emit('request_operators_data');
+
+        // ponytail: instant optimistic update of operator list
+        if (json?.operator) {
+          setData((prev: any) => {
+            if (!prev) return prev;
+            const existing = prev.operators || [];
+            const exists = existing.some((o: any) => o.id === json.operator.id || o.email === json.operator.email);
+            const updatedList = exists
+              ? existing.map((o: any) => o.id === json.operator.id || o.email === json.operator.email ? { ...o, ...json.operator } : o)
+              : [json.operator, ...existing];
+            return {
+              ...prev,
+              stats: {
+                ...prev.stats,
+                totalOps: updatedList.length,
+                active: updatedList.filter((x: any) => x.status !== 'Suspended').length,
+              },
+              operators: updatedList,
+            };
+          });
         }
       } else {
         const errJson = await res.json().catch(() => ({}));
@@ -148,6 +168,8 @@ export default function Operators() {
     } catch (err) {
       console.warn('Create operator error:', err);
       window.dispatchEvent(new CustomEvent('cybersave_toast', { detail: { message: 'Network error creating operator', type: 'error' } }));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -634,8 +656,15 @@ export default function Operators() {
             </div>
 
             <div style={{display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 12, borderTop: '1px solid #f1f5f9'}}>
-              <button className="date-picker-btn" onClick={() => setShowAddOpModal(false)}>Cancel</button>
-              <button className="action-btn" onClick={handleAddOperatorSubmit} style={{padding: '8px 20px'}}>Create Operator</button>
+              <button className="date-picker-btn" onClick={() => setShowAddOpModal(false)} disabled={isSubmitting}>Cancel</button>
+              <button
+                className="action-btn"
+                onClick={handleAddOperatorSubmit}
+                disabled={isSubmitting}
+                style={{padding: '8px 20px', opacity: isSubmitting ? 0.7 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer'}}
+              >
+                {isSubmitting ? 'Creating Operator...' : 'Create Operator'}
+              </button>
             </div>
           </div>
         </div>

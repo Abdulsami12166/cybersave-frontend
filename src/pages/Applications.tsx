@@ -73,7 +73,12 @@ export default function Applications() {
   const [rejectionReasonText, setRejectionReasonText] = useState('Documents could not be verified by the administrative officer.');
 
   const [showBatchAssignModal, setShowBatchAssignModal] = useState(false);
-  const [batchTargetOfficer, setBatchTargetOfficer] = useState('Vikram Tiwari (VLE-0234)');
+  const [availableOperators, setAvailableOperators] = useState<Array<{ id: string; name: string; role: string; email: string }>>([]);
+  const [loadingOperators, setLoadingOperators] = useState(false);
+  const [operatorsError, setOperatorsError] = useState<string | null>(null);
+  const [selectedOperatorId, setSelectedOperatorId] = useState<string>('');
+  const [batchTargetOfficer, setBatchTargetOfficer] = useState<string>('');
+  const [isAssigning, setIsAssigning] = useState(false);
 
   const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
 
@@ -674,42 +679,87 @@ export default function Applications() {
     }
   };
 
-  // Handle Batch Actions: Batch Assign
-  const handleBatchAssign = async () => {
-    if (selectedAppIds.length === 0) return;
-    const count = selectedAppIds.length;
-    const officer = batchTargetOfficer;
-    setShowBatchAssignModal(false);
-
-    setData((prev: any) => {
-      if (!prev || !prev.applications) return prev;
-      const updated = prev.applications.map((a: any) => {
-        if (selectedAppIds.includes(a.rawId) || selectedAppIds.includes(a.id) || selectedAppIds.includes(a.refNumber)) {
-          return { ...a, assigned: officer };
+  // Fetch eligible operators dynamically and open batch assign modal
+  const openBatchAssignModal = async () => {
+    setShowBatchAssignModal(true);
+    setOperatorsError(null);
+    setLoadingOperators(true);
+    try {
+      const res = await apiFetch('/api/v1/operators');
+      const resData = await res.json().catch(() => null);
+      const ops = (resData?.operators || []).filter((o: any) => o.status !== 'Suspended');
+      setAvailableOperators(ops);
+      if (ops.length > 0) {
+        if (!selectedOperatorId || !ops.some((o: any) => o.id === selectedOperatorId)) {
+          setSelectedOperatorId(ops[0].id);
+          setBatchTargetOfficer(ops[0].name);
         }
-        return a;
-      });
-      return { ...prev, applications: updated };
-    });
+      } else {
+        setSelectedOperatorId('');
+        setBatchTargetOfficer('');
+      }
+    } catch (err: any) {
+      setOperatorsError('Failed to load eligible operators. Please check network and try again.');
+    } finally {
+      setLoadingOperators(false);
+    }
+  };
 
-    window.dispatchEvent(new CustomEvent('cybersave_toast', {
-      detail: { message: `Assigned ${count} application(s) to ${officer}! ✓` }
-    }));
-
-    if (socket) {
-      socket.emit('bulk_assign_applications', { applicationIds: selectedAppIds, operatorName: officer });
+  // Handle Batch Actions: Batch Assign with real operator
+  const handleBatchAssign = async () => {
+    if (selectedAppIds.length === 0 || isAssigning) return;
+    if (!selectedOperatorId) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: 'Please select an eligible operator to assign', type: 'error' }
+      }));
+      return;
     }
 
+    setIsAssigning(true);
+    const count = selectedAppIds.length;
+    const officer = batchTargetOfficer;
+    const opId = selectedOperatorId;
+
     try {
-      await apiFetch('/api/v1/applications/bulk-assign', {
+      const res = await apiFetch('/api/v1/applications/bulk-assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationIds: selectedAppIds, operatorName: officer })
+        body: JSON.stringify({ applicationIds: selectedAppIds, operatorName: officer, operatorId: opId })
       });
-    } catch (e) {
-      console.warn('Bulk assign error:', e);
-    } finally {
+      const resData = await res.json().catch(() => null);
+      if (!res.ok || resData?.error) {
+        throw new Error(resData?.error || 'Failed to assign applications');
+      }
+
+      const assignedOfficerName = resData?.operatorName || officer;
+
+      setData((prev: any) => {
+        if (!prev || !prev.applications) return prev;
+        const updated = prev.applications.map((a: any) => {
+          if (selectedAppIds.includes(a.rawId) || selectedAppIds.includes(a.id) || selectedAppIds.includes(a.refNumber)) {
+            return { ...a, assigned: assignedOfficerName };
+          }
+          return a;
+        });
+        return { ...prev, applications: updated };
+      });
+
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: `Assigned ${count} application(s) to ${assignedOfficerName}! ✓` }
+      }));
+
+      if (socket) {
+        socket.emit('bulk_assign_applications', { applicationIds: selectedAppIds, operatorName: assignedOfficerName, operatorId: opId });
+      }
+
+      setShowBatchAssignModal(false);
       setSelectedAppIds([]);
+    } catch (e: any) {
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: e?.message || 'Failed to assign applications', type: 'error' }
+      }));
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -1916,7 +1966,7 @@ export default function Applications() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button
-              onClick={() => setShowBatchAssignModal(true)}
+              onClick={openBatchAssignModal}
               style={{
                 background: 'rgba(255,255,255,0.1)',
                 color: '#FFFFFF',
@@ -2019,29 +2069,60 @@ export default function Applications() {
             <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
               Select Verification Officer
             </label>
-            <select
-              value={batchTargetOfficer}
-              onChange={(e) => setBatchTargetOfficer(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '13px',
-                outline: 'none',
-                marginBottom: '20px'
-              }}
-            >
-              <option value="Vikram Tiwari (VLE-0234)">Vikram Tiwari (VLE-0234)</option>
-              <option value="Sunita Mishra (SDM-Office)">Sunita Mishra (SDM-Office)</option>
-              <option value="Deepak Verma (CSC-1024)">Deepak Verma (CSC-1024)</option>
-              <option value="Rakesh Singh (Kendra-4892)">Rakesh Singh (Kendra-4892)</option>
-              <option value="Rajesh Kumar (Senior Field Officer)">Rajesh Kumar (Senior Field Officer)</option>
-            </select>
+            {loadingOperators ? (
+              <div style={{ padding: '16px', textAlign: 'center', color: '#64748B', fontSize: '13px', background: '#F8FAFC', borderRadius: '8px', marginBottom: '20px' }}>
+                Loading eligible operators from database...
+              </div>
+            ) : operatorsError ? (
+              <div style={{ padding: '12px 14px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', marginBottom: '20px' }}>
+                <p style={{ color: '#DC2626', fontSize: '12.5px', margin: '0 0 8px 0' }}>{operatorsError}</p>
+                <button
+                  type="button"
+                  onClick={openBatchAssignModal}
+                  style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Retry Loading Operators
+                </button>
+              </div>
+            ) : availableOperators.length === 0 ? (
+              <div style={{ padding: '14px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', color: '#B45309', fontSize: '13px', marginBottom: '20px' }}>
+                No active operators found in the system.
+              </div>
+            ) : (
+              <select
+                value={selectedOperatorId}
+                onChange={(e) => {
+                  const opId = e.target.value;
+                  setSelectedOperatorId(opId);
+                  const found = availableOperators.find(o => o.id === opId);
+                  if (found) setBatchTargetOfficer(found.name);
+                }}
+                disabled={isAssigning}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  outline: 'none',
+                  marginBottom: '20px',
+                  cursor: isAssigning ? 'not-allowed' : 'pointer',
+                  backgroundColor: '#FFFFFF',
+                  color: '#0F172A'
+                }}
+              >
+                {availableOperators.map((op) => (
+                  <option key={op.id} value={op.id}>
+                    {op.name} ({op.role || 'Operator'}{op.email ? ` • ${op.email}` : ''})
+                  </option>
+                ))}
+              </select>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 onClick={() => setShowBatchAssignModal(false)}
+                disabled={isAssigning}
                 style={{
                   background: '#F1F5F9',
                   border: 'none',
@@ -2050,25 +2131,26 @@ export default function Applications() {
                   fontSize: '12.5px',
                   fontWeight: 600,
                   color: '#475569',
-                  cursor: 'pointer'
+                  cursor: isAssigning ? 'not-allowed' : 'pointer'
                 }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleBatchAssign}
+                disabled={isAssigning || loadingOperators || availableOperators.length === 0}
                 style={{
-                  background: '#2563EB',
+                  background: isAssigning || loadingOperators || availableOperators.length === 0 ? '#94A3B8' : '#2563EB',
                   border: 'none',
                   borderRadius: '6px',
                   padding: '8px 18px',
                   fontSize: '12.5px',
                   fontWeight: 700,
                   color: '#FFFFFF',
-                  cursor: 'pointer'
+                  cursor: isAssigning || loadingOperators || availableOperators.length === 0 ? 'not-allowed' : 'pointer'
                 }}
               >
-                Confirm Assign
+                {isAssigning ? 'Assigning...' : 'Confirm Assign'}
               </button>
             </div>
           </div>
