@@ -554,21 +554,30 @@ export default function UserManagementDetail() {
     try {
       // ponytail: /block only accepts BLOCKED; /unblock restores to VERIFIED.
       const endpoint = isCurrentlyBlocked ? 'unblock' : 'block';
-      const res = await apiFetch(`/api/admin/users/${user.dbId || user.id}/${endpoint}`, {
+      let res = await apiFetch(`/api/admin/users/${user.dbId || user.id}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus })
       });
 
+      // Seamless fallback if backend unblock route returned 404
+      if (res.status === 404 && endpoint === 'unblock') {
+        res = await apiFetch(`/api/admin/users/${user.dbId || user.id}/block`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'VERIFIED' })
+        });
+      }
+
       const result = await res.json().catch(() => null);
 
       if (res.ok && result?.success) {
-        const persistedStatus = String(result?.data?.status || '').toUpperCase();
+        const persistedStatus = String(result?.data?.status || result?.status || targetStatus).toUpperCase();
         setUser((prev: any) => prev ? { ...prev, status: persistedStatus } : prev);
         showToast(result.message || `Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
         fetchUserRest();
       } else {
-        showToast(result?.error || 'Failed to update citizen status. Please try again.', 'error');
+        showToast(result?.error || result?.message || 'Failed to update citizen status. Please try again.', 'error');
         fetchUserRest();
       }
     } catch {

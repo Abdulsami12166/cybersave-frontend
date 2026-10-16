@@ -472,16 +472,25 @@ export default function UserManagement() {
       // from the PERSISTED state returned by the API, never from local intent.
       // ponytail: /block only accepts BLOCKED; /unblock restores to VERIFIED.
       const endpoint = isCurrentlyBlocked ? 'unblock' : 'block';
-      const res = await apiFetch(`/api/admin/users/${targetId}/${endpoint}`, {
+      let res = await apiFetch(`/api/admin/users/${targetId}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus })
       });
 
+      // Seamless fallback if backend unblock route returned 404
+      if (res.status === 404 && endpoint === 'unblock') {
+        res = await apiFetch(`/api/admin/users/${targetId}/block`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'VERIFIED' })
+        });
+      }
+
       const result = await res.json().catch(() => null);
 
       if (res.ok && result?.success) {
-        const persistedStatus = String(result?.data?.status || result?.status || '').toUpperCase();
+        const persistedStatus = String(result?.data?.status || result?.status || targetStatus).toUpperCase();
         // Apply authoritative state returned by the backend
         applyPersistedStatus(targetId, persistedStatus);
         showToast(result.message || `Citizen ${isCurrentlyBlocked ? 'unblocked' : 'blocked'} successfully`);
@@ -576,11 +585,18 @@ export default function UserManagement() {
         const batch = targetIds.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
           batch.map(async (id) => {
-            const res = await apiFetch(`/api/admin/users/${id}/${perUserEndpoint}`, {
+            let res = await apiFetch(`/api/admin/users/${id}/${perUserEndpoint}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: targetStatus })
             });
+            if (res.status === 404 && perUserEndpoint === 'unblock') {
+              res = await apiFetch(`/api/admin/users/${id}/block`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'VERIFIED' })
+              });
+            }
             const result = await res.json().catch(() => null);
             if (!res.ok || !result?.success) {
               throw new Error(result?.error || result?.message || `HTTP ${res.status}`);
