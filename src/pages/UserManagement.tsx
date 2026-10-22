@@ -33,12 +33,15 @@ import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
 
 const API_BASE_URL = getApiBaseUrl();
 
+let cachedUsersData: any = null;
+let cachedLiveUsers: any[] = [];
+
 export default function UserManagement() {
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
-  const [data, setData] = useState<any>(null);
-  const [liveUsers, setLiveUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(() => cachedUsersData);
+  const [liveUsers, setLiveUsers] = useState<any[]>(() => cachedLiveUsers);
+  const [loading, setLoading] = useState(() => cachedLiveUsers.length === 0);
 
   const [filterStatus, setFilterStatus] = useState<'All' | 'Verified' | 'Pending' | 'Blocked' | 'Unverified'>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -92,10 +95,15 @@ export default function UserManagement() {
       if (res && res.ok) {
         const raw = await res.json().catch(() => []);
         if (Array.isArray(raw)) {
+          cachedLiveUsers = raw;
           setLiveUsers(raw);
         } else if (raw && Array.isArray(raw.users)) {
+          cachedLiveUsers = raw.users;
           setLiveUsers(raw.users);
-          if (raw.stats) setData(raw);
+          if (raw.stats) {
+            cachedUsersData = raw;
+            setData(raw);
+          }
         }
       }
     } catch (err) {
@@ -111,10 +119,11 @@ export default function UserManagement() {
     // 1. Always invoke REST immediately for instant data paint
     fetchUsersRest();
 
-    // 2. Poll every 8 seconds to ensure fresh data within 10s
+    // 2. Poll every 25 seconds for fresh data on active tab
     const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchUsersRest();
-    }, 8000);
+    }, 25000);
 
     // 3. Safety timer to dismiss loading spinner
     const safetyTimer = setTimeout(() => {

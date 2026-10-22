@@ -5,11 +5,13 @@ import { Grid, CheckCircle, Clock, FileText, Users, ChevronDown, ChevronUp, Eye,
 import { StatCard } from '../components/Dashboard';
 import { apiFetch } from '../utils/apiConfig';
 
+let cachedServicesData: any = null;
+
 export default function Services() {
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(() => cachedServicesData);
+  const [loading, setLoading] = useState(() => !cachedServicesData);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCats, setExpandedCats] = useState<{ [key: string]: boolean }>({
     'Government': true,
@@ -93,11 +95,13 @@ export default function Services() {
               });
             }
           });
-          setData({
+          const fullData = {
             stats: { totalServices, active, offline: 0, drafts: 0 },
             services: Object.values(groups),
             rawServices: raw
-          });
+          };
+          cachedServicesData = fullData;
+          setData(fullData);
         }
       }
     } catch (e) {
@@ -114,9 +118,11 @@ export default function Services() {
     const handleServicesUpdated = () => { fetchServicesRest(); };
     window.addEventListener('cybersave_services_updated', handleServicesUpdated);
     if (socket && connected) {
-      socket.emit('request_services_data');
       socket.on('response_services_data', (resData) => {
-        setData(resData);
+        if (resData?.services && Array.isArray(resData.services) && resData.services.length > 0) {
+          cachedServicesData = resData;
+          setData(resData);
+        }
         setLoading(false);
       });
       socket.on('edit_service_success', () => {

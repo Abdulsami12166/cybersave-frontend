@@ -30,11 +30,13 @@ interface TabItem {
   highlight?: boolean;
 }
 
+let cachedRefundsData: any[] = [];
+
 export default function Refunds() {
   const { socket, connected } = useSocket();
   const { admin } = useAuth();
-  const [refunds, setRefunds] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [refunds, setRefunds] = useState<any[]>(() => cachedRefundsData);
+  const [loading, setLoading] = useState(() => cachedRefundsData.length === 0);
   const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [reasonFilter, setReasonFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'NEWEST' | 'AMOUNT_HIGH' | 'OLDEST'>('NEWEST');
@@ -161,9 +163,11 @@ export default function Refunds() {
     return getApiBaseUrl();
   };
 
-  const fetchRefunds = async () => {
+  const fetchRefunds = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground && refunds.length === 0) {
+        setLoading(true);
+      }
       const token = localStorage.getItem('adminToken');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -178,11 +182,14 @@ export default function Refunds() {
           ? raw.refunds
           : [];
 
+        cachedRefundsData = list;
         setRefunds(list);
       }
     } catch (err: any) {
       console.error('Error fetching refunds:', err);
-      showToast('Failed to load refund requests', 'error');
+      if (!isBackground) {
+        showToast('Failed to load refund requests', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -192,8 +199,9 @@ export default function Refunds() {
     fetchRefunds();
 
     const pollInterval = setInterval(() => {
-      fetchRefunds();
-    }, 8000);
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchRefunds(true);
+    }, 25000);
 
     const safetyTimer = setTimeout(() => {
       setLoading(false);

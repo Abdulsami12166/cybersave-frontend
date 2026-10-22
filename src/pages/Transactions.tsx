@@ -20,10 +20,12 @@ import { StatCard } from '../components/Dashboard';
 import { formatIndianDate, normalizeAppId } from '../utils/normalize';
 import { apiFetch } from '../utils/apiConfig';
 
+let cachedTransactionsData: any = null;
+
 export default function Transactions() {
   const { socket, connected } = useSocket();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(() => cachedTransactionsData);
+  const [loading, setLoading] = useState(() => !cachedTransactionsData);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMethod, setFilterMethod] = useState<'ALL' | 'RAZORPAY' | 'PORTAL' | 'REFUNDED'>('ALL');
   const [selectedDate, setSelectedDate] = useState<string>('ALL');
@@ -35,6 +37,7 @@ export default function Transactions() {
       if (txRes?.ok) {
         const rawData = await txRes.json().catch(() => null);
         if (rawData && Array.isArray(rawData.transactions)) {
+          cachedTransactionsData = rawData;
           setData(rawData);
           setLoading(false);
           return;
@@ -94,7 +97,7 @@ export default function Transactions() {
         const todayGross = todayTxns.reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
         const todayRefunds = todayTxns.filter((t: any) => t.status === 'REFUNDED').reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
 
-        setData({
+        const fullData = {
           transactions: txns,
           stats: {
             grossInflow,
@@ -105,7 +108,9 @@ export default function Transactions() {
             todayGross,
             todayRefunds,
           }
-        });
+        };
+        cachedTransactionsData = fullData;
+        setData(fullData);
       }
     } catch (e) {
       console.warn('[Transactions] REST fetch notice:', e);
@@ -120,10 +125,11 @@ export default function Transactions() {
     // 1. Always invoke REST fetch immediately for instant paint
     fetchTransactionsRest();
 
-    // 2. Poll every 8s to guarantee real-time data within 10s
+    // 2. Poll every 25s for active tab
     const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchTransactionsRest();
-    }, 8000);
+    }, 25000);
 
     // 3. Safety timer
     const safetyTimer = setTimeout(() => {

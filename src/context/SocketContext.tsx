@@ -60,7 +60,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!isMounted) return;
         setConnected(true);
         setSocket(newSocket);
-        setApiBaseUrl(targetUrl);
       });
 
       newSocket.on('disconnect', () => {

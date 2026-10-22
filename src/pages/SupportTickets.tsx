@@ -49,19 +49,46 @@ export default function SupportTickets() {
     // 1. Initial REST fetch
     fetchTicketsRest();
 
-    // 2. Guaranteed 8-second background polling interval for fresh submissions within 10s
+    // 2. Efficient background polling interval (25s, active tab only)
     const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchTicketsRest();
-    }, 8000);
+    }, 25000);
 
     // 3. Socket real-time events
     if (socket && connected) {
-      socket.emit('request_support_tickets');
       const handleResponse = (resData: any) => {
-        if (resData && resData.tickets) {
-          setData(resData);
-          cachedSupportData = resData;
-        }
+        if (!resData || !Array.isArray(resData.tickets)) return;
+        setData((prev: any) => {
+          if (!prev || !Array.isArray(prev.tickets) || prev.tickets.length === 0) {
+            cachedSupportData = resData;
+            return resData;
+          }
+          const existingMap = new Map<string, any>();
+          prev.tickets.forEach((t: any) => {
+            const key = t.rawId || t.id || t.refNumber;
+            if (key) existingMap.set(key, t);
+          });
+          resData.tickets.forEach((t: any) => {
+            const key = t.rawId || t.id || t.refNumber;
+            if (key) {
+              const prevItem = existingMap.get(key);
+              existingMap.set(key, prevItem ? { ...prevItem, ...t } : t);
+            }
+          });
+          const mergedTickets = Array.from(existingMap.values());
+          const mergedData = {
+            ...prev,
+            stats: {
+              ...prev.stats,
+              totalTickets: Math.max(prev.stats?.totalTickets || 0, mergedTickets.length),
+              openTickets: mergedTickets.filter((t: any) => t.status === 'OPEN').length
+            },
+            tickets: mergedTickets
+          };
+          cachedSupportData = mergedData;
+          return mergedData;
+        });
       };
       const handleNew = (newTkt?: any) => {
         if (newTkt && (newTkt.id || newTkt.refNumber || newTkt.title)) {
@@ -109,7 +136,7 @@ export default function SupportTickets() {
             } else {
               updatedList = [formattedTkt, ...list];
             }
-            return {
+            const nextState = {
               ...(prev || {}),
               stats: {
                 ...(prev?.stats || {}),
@@ -118,10 +145,10 @@ export default function SupportTickets() {
               },
               tickets: updatedList
             };
+            cachedSupportData = nextState;
+            return nextState;
           });
         }
-        fetchTicketsRest();
-        socket.emit('request_support_tickets');
       };
 
       socket.on('response_support_tickets', handleResponse);
@@ -137,7 +164,6 @@ export default function SupportTickets() {
         setNewTitle('');
         setNewDesc('');
         fetchTicketsRest();
-        socket.emit('request_support_tickets');
       });
     }
 

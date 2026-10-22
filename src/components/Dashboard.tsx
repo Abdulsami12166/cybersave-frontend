@@ -270,6 +270,11 @@ const DASHBOARD_I18N: Record<string, Record<string, string>> = {
   }
 };
 
+let cachedDashboardData: any = null;
+let cachedRawApps: any[] = [];
+let cachedRawTransactions: any[] = [];
+let cachedOperatorCount: number | null = null;
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
@@ -285,11 +290,11 @@ export default function Dashboard() {
     return () => window.removeEventListener('cybersave_lang_changed', handleLang);
   }, []);
 
-  const [data, setData] = useState<any>(null);
-  const [operatorCount, setOperatorCount] = useState<number | null>(null);
-  const [rawApps, setRawApps] = useState<any[]>([]);
-  const [rawTransactions, setRawTransactions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(() => cachedDashboardData);
+  const [operatorCount, setOperatorCount] = useState<number | null>(() => cachedOperatorCount);
+  const [rawApps, setRawApps] = useState<any[]>(() => cachedRawApps);
+  const [rawTransactions, setRawTransactions] = useState<any[]>(() => cachedRawTransactions);
+  const [loading, setLoading] = useState(() => !cachedDashboardData);
   const [refreshing, setRefreshing] = useState(false);
   const [tableFilter, setTableFilter] = useState<'All' | 'In Review' | 'Approved' | 'Rejected'>('All');
   const [tableSearch, setTableSearch] = useState('');
@@ -307,12 +312,15 @@ export default function Dashboard() {
       if (dashRes && dashRes.ok) {
         const dData = await dashRes.json().catch(() => null);
         if (dData) {
+          cachedDashboardData = dData;
           setData(dData);
           if (Array.isArray(dData.transactions) && dData.transactions.length > 0) {
+            cachedRawTransactions = dData.transactions;
             setRawTransactions(dData.transactions);
           }
           if (dData?.stats?.activeCentres !== undefined && dData?.stats?.activeCentres !== null) {
-            setOperatorCount(Number(dData.stats.activeCentres));
+            cachedOperatorCount = Number(dData.stats.activeCentres);
+            setOperatorCount(cachedOperatorCount);
           }
         }
       }
@@ -320,6 +328,7 @@ export default function Dashboard() {
       if (appsRes && appsRes.ok) {
         const apps = await appsRes.json().catch(() => []);
         if (Array.isArray(apps) && apps.length > 0) {
+          cachedRawApps = apps;
           setRawApps(apps);
         }
       }
@@ -330,6 +339,7 @@ export default function Dashboard() {
           if (res && res.ok) {
             const txData = await res.json().catch(() => null);
             if (txData?.transactions && Array.isArray(txData.transactions)) {
+              cachedRawTransactions = txData.transactions;
               setRawTransactions(txData.transactions);
             }
           }
@@ -338,9 +348,11 @@ export default function Dashboard() {
           if (res && res.ok) {
             const opsData = await res.json().catch(() => null);
             if (opsData?.stats?.active !== undefined) {
-              setOperatorCount(Number(opsData.stats.active));
+              cachedOperatorCount = Number(opsData.stats.active);
+              setOperatorCount(cachedOperatorCount);
             } else if (Array.isArray(opsData?.operators)) {
               const activeOps = opsData.operators.filter((o: any) => o.status !== 'Suspended').length;
+              cachedOperatorCount = activeOps;
               setOperatorCount(activeOps);
             }
           }
@@ -369,10 +381,11 @@ export default function Dashboard() {
 
     fetchLiveApplications();
 
-    // Guaranteed 8-second background polling interval for fresh submissions within 10s
+    // Efficient background polling interval (25s, active tab only)
     const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchLiveApplications();
-    }, 8000);
+    }, 25000);
 
     if (socket && connected) {
       socket.emit('request_dashboard_data');

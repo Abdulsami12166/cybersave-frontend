@@ -36,14 +36,14 @@ import {
 } from '../utils/normalize';
 import { apiFetch } from '../utils/apiConfig';
 
-// Clear stale sessionStorage cache on module load
-try { sessionStorage.removeItem('cybersave_apps_cache'); } catch (_) {}
+let cachedApplicationsData: any = null;
+let lastApplicationsFetchTime = 0;
 
 export default function Applications() {
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(() => cachedApplicationsData);
+  const [loading, setLoading] = useState(() => !cachedApplicationsData);
 
   // Filter States
   const [selectedCategory, setSelectedCategory] = useState<string>('All Applications');
@@ -96,9 +96,10 @@ export default function Applications() {
     const statusObj = normalizeStatus(raw.status || a.status);
     const dateObj = formatIndianDate(raw.submittedAt || a.submittedAt || raw.createdAt);
 
-    // Realistic Priority determination (High / Medium / Low)
+    // Deterministic Priority determination (High / Medium / Low) by Record ID
+    const idSeed = String(mongoId || refNumber || idx).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     const storedPriority = formData.priority || a.priority;
-    const priority = storedPriority || (idx % 3 === 0 ? 'High' : (idx % 3 === 1 ? 'Medium' : 'Low'));
+    const priority = storedPriority || (idSeed % 3 === 0 ? 'High' : (idSeed % 3 === 1 ? 'Medium' : 'Low'));
 
     // Assigned Officer determination: empty if unassigned / placeholder
     const storedOfficer = raw.officialOfficer || a.assigned || a.assignedOfficer || '';
@@ -124,7 +125,7 @@ export default function Applications() {
       slaType = 'orange';
     } else {
       const hrsLeft = Math.max(1, Math.round(24 - diffHours));
-      const minsLeft = (idx * 17) % 60;
+      const minsLeft = (idSeed * 17) % 60;
       sla = `${hrsLeft}h ${minsLeft}m`;
       slaType = 'green';
     }
@@ -247,7 +248,7 @@ export default function Applications() {
             return upd.toDateString() === new Date().toDateString();
           }).length;
 
-          setData({
+          const fullData = {
             stats: {
               totalApps,
               todayApps,
@@ -263,7 +264,10 @@ export default function Applications() {
               completed: completedTodayCount
             },
             applications: formatted,
-          });
+          };
+          cachedApplicationsData = fullData;
+          lastApplicationsFetchTime = Date.now();
+          setData(fullData);
           setLoading(false);
         }
       }
@@ -280,18 +284,18 @@ export default function Applications() {
     fetchApplicationsRest();
 
     const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchApplicationsRest();
-    }, 8000);
+    }, 25000);
 
     if (socket && connected) {
-      socket.emit('request_applications_data');
-
       const handleSocketData = (resData: any) => {
         if (!resData) {
           setLoading(false);
           return;
         }
         const rawList = Array.isArray(resData.applications) ? resData.applications : [];
+        if (rawList.length === 0) return;
         const rawFormatted = rawList.map((item: any, idx: number) => formatApplication(item, idx));
         const deduplicated = deduplicateApplicationList(rawFormatted);
         const formatted = sortApplicationsDesc(deduplicated);
@@ -356,17 +360,18 @@ export default function Applications() {
             approved: Math.max(Number(resData.pipeline?.approved ?? 0), finalApproved),
             completed: Math.max(Number(resData.stats?.completed ?? 0), completedTodayCount),
           };
-          return { stats, pipeline, applications: finalApps };
+          const nextState = { stats, pipeline, applications: finalApps };
+          cachedApplicationsData = nextState;
+          return nextState;
         });
         setLoading(false);
       };
 
-      const handleRefresh = () => {
+      const handleDebouncedRefresh = () => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-          socket.emit('request_applications_data');
           fetchApplicationsRest();
-        }, 200);
+        }, 600);
       };
 
       const handleNewApplicationSubmitted = (newApp: any) => {
@@ -416,7 +421,7 @@ export default function Applications() {
           const completedCount = sorted.filter((a: any) => String(a.rawStatus || '').toUpperCase() === 'COMPLETED' || a.status === 'Completed').length;
           const pendingReviewCount = submittedCount + underReviewCount;
 
-          return {
+          const nextState = {
             stats: {
               totalApps,
               todayApps,
@@ -433,9 +438,9 @@ export default function Applications() {
             },
             applications: sorted,
           };
+          cachedApplicationsData = nextState;
+          return nextState;
         });
-
-        handleRefresh();
       };
 
       const handleStatusChanged = (evtData: any) => {
@@ -470,7 +475,7 @@ export default function Applications() {
               return updDate ? new Date(updDate).toDateString() === new Date().toDateString() : false;
             }).length;
 
-            return {
+            const nextState = {
               ...prev,
               stats: {
                 ...prev.stats,
@@ -481,26 +486,27 @@ export default function Applications() {
               pipeline: { submitted: updated.length, underReview: pending, processing, approved, completed: completedToday },
               applications: updated,
             };
+            cachedApplicationsData = nextState;
+            return nextState;
           });
         }
-        handleRefresh();
       };
 
       socket.on('response_applications_data', handleSocketData);
-      socket.on('applications_updated', handleRefresh);
+      socket.on('applications_updated', handleDebouncedRefresh);
       socket.on('new_application_submitted', handleNewApplicationSubmitted);
       socket.on('application_submitted', handleNewApplicationSubmitted);
-      socket.on('dashboard_updated', handleRefresh);
+      socket.on('dashboard_updated', handleDebouncedRefresh);
       socket.on('application_status_changed', handleStatusChanged);
 
       return () => {
         clearInterval(pollInterval);
         if (debounceTimer) clearTimeout(debounceTimer);
         socket.off('response_applications_data', handleSocketData);
-        socket.off('applications_updated', handleRefresh);
+        socket.off('applications_updated', handleDebouncedRefresh);
         socket.off('new_application_submitted', handleNewApplicationSubmitted);
         socket.off('application_submitted', handleNewApplicationSubmitted);
-        socket.off('dashboard_updated', handleRefresh);
+        socket.off('dashboard_updated', handleDebouncedRefresh);
         socket.off('application_status_changed', handleStatusChanged);
       };
     } else {

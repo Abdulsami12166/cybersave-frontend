@@ -125,18 +125,19 @@ async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise
         continue;
       }
 
-      // 404 on a mutating endpoint: this backend generation predates the
-      // route. Remember the candidate and try the next backend instead of
-      // short-circuiting with an error the user sees as 'not found'.
-      if (res.status === 404 && options.method && options.method !== 'GET') {
+      // If backend candidate returns 404, this specific host does not have this route.
+      // Continue to next candidate so endpoints like /api/v1/support/tickets fail over to Vercel!
+      if (res.status === 404) {
         continue;
       }
 
-      // If response received (success or other 4xx client error with valid API format), server is alive
-      if (res.ok || res.status < 500) {
+      // If response received (success or other valid API response), return it
+      if (res.ok) {
         if (activeBaseUrl !== base) {
           setApiBaseUrl(base);
         }
+        return res;
+      } else if (res.status < 500) {
         return res;
       }
     } catch (err) {
