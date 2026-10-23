@@ -208,6 +208,20 @@ export default function UserManagement() {
         showToast('Citizen successfully registered in database');
         handleRefresh();
       });
+      socket.on('citizens_bulk_updated', (data: any) => {
+        if (data && Array.isArray(data.userIds)) {
+          const updatedStatus = String(data.status || 'VERIFIED').toUpperCase();
+          const idSet = new Set(data.userIds.map((id: any) => String(id).toLowerCase()));
+          setLiveUsers(prev => prev.map(u => {
+            const uDbId = String(u.dbId || u._id || '').toLowerCase();
+            const uId = String(u.id || '').toLowerCase();
+            if (idSet.has(uDbId) || idSet.has(uId)) {
+              return { ...u, status: updatedStatus };
+            }
+            return u;
+          }));
+        }
+      });
       socket.on('block_citizen_success', () => {
         // Optimistic update already applied — no delayed refresh needed
       });
@@ -566,13 +580,22 @@ export default function UserManagement() {
         if (res.ok && result?.success) {
           nativeSucceeded = true;
           const targetStatus = targetAction === 'block' ? 'BLOCKED' : 'VERIFIED';
-          const targetSet = new Set(targetIds);
+          const confirmedIds: string[] = Array.isArray(result.updatedIds) && result.updatedIds.length > 0
+            ? result.updatedIds
+            : targetIds;
+          const targetSet = new Set([
+            ...targetIds.map((id: any) => String(id).toLowerCase()),
+            ...confirmedIds.map((id: any) => String(id).toLowerCase()),
+          ]);
           setLiveUsers(prev => prev.map(u => {
-            const uId = u.dbId || u.id || u._id;
-            return targetSet.has(uId) ? { ...u, status: targetStatus } : u;
+            const uDbId = String(u.dbId || u._id || '').toLowerCase();
+            const uId = String(u.id || '').toLowerCase();
+            const isMatch = targetSet.has(uDbId) || targetSet.has(uId);
+            return isMatch ? { ...u, status: targetStatus } : u;
           }));
-          showToast(result.message || `Successfully ${doneLabel} ${result.count ?? totalCount} citizen(s)`);
+          showToast(result.message || `Successfully ${doneLabel} ${result.count ?? confirmedIds.length} citizen(s)`);
           setSelectedCitizenIds([]);
+          // Non-blocking sync with backend
           fetchUsersRest();
         }
       } catch {
@@ -589,7 +612,7 @@ export default function UserManagement() {
       const failed: string[] = [];
 
       // Bounded concurrency so large selections never hammer the backend.
-      const BATCH_SIZE = 5;
+      const BATCH_SIZE = 10;
       for (let i = 0; i < targetIds.length; i += BATCH_SIZE) {
         const batch = targetIds.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
@@ -620,10 +643,12 @@ export default function UserManagement() {
       }
 
       if (succeeded.length > 0) {
-        const targetSet = new Set(succeeded);
+        const targetSet = new Set(succeeded.map((id: any) => String(id).toLowerCase()));
         setLiveUsers(prev => prev.map(u => {
-          const uId = u.dbId || u.id || u._id;
-          return targetSet.has(uId) ? { ...u, status: targetStatus } : u;
+          const uDbId = String(u.dbId || u._id || '').toLowerCase();
+          const uId = String(u.id || '').toLowerCase();
+          const isMatch = targetSet.has(uDbId) || targetSet.has(uId);
+          return isMatch ? { ...u, status: targetStatus } : u;
         }));
       }
 
