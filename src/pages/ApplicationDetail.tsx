@@ -239,13 +239,17 @@ export default function ApplicationDetail() {
     setApp(cached);
     setLoading(!cached);
     setInternalNotes([]);
-    setChecklist([
-      { id: 'aadhaar-check', label: 'Identity verified against Aadhaar database', checked: true },
-      { id: 'address-check', label: 'Current address matches official records', checked: true },
-      { id: 'doc-validity', label: 'Address proof document is valid and recent (< 3 months)', checked: true },
-      { id: 'geo-verify', label: 'New address geo-verification completed', checked: false },
-      { id: 'operator-verify', label: 'Operator physical verification done', checked: false },
-    ]);
+    if (cached?.checklist && Array.isArray(cached.checklist) && cached.checklist.length > 0) {
+      setChecklist(cached.checklist);
+    } else {
+      setChecklist([
+        { id: 'aadhaar-check', label: 'Identity verified against Aadhaar database', checked: true },
+        { id: 'address-check', label: 'Current address matches official records', checked: true },
+        { id: 'doc-validity', label: 'Address proof document is valid and recent (< 3 months)', checked: true },
+        { id: 'geo-verify', label: 'New address geo-verification completed', checked: false },
+        { id: 'operator-verify', label: 'Operator physical verification done', checked: false },
+      ]);
+    }
 
     let debounceTimer: any = null;
 
@@ -280,8 +284,21 @@ export default function ApplicationDetail() {
       };
 
       const handleChecklistUpdate = (checklistData?: any) => {
+        if (!checklistData) return;
+        // Strictly match by application ID, refNumber, or MongoDB ID to prevent cross-application contamination
+        const curTarget = app?.rawId || app?.id || id;
+        const curRef = app?.refNumber || app?.id || id;
+        const isMatch =
+          (checklistData.id && (checklistData.id === curTarget || checklistData.id === curRef || checklistData.id === id)) ||
+          (checklistData.rawId && (checklistData.rawId === curTarget || checklistData.rawId === curRef || checklistData.rawId === id)) ||
+          (checklistData.refNumber && (checklistData.refNumber === curRef || checklistData.refNumber === curTarget || checklistData.refNumber === id)) ||
+          (checklistData.applicationId && (checklistData.applicationId === curTarget || checklistData.applicationId === curRef || checklistData.applicationId === id));
+
+        if (!isMatch) return;
+
         if (checklistData?.checklist && Array.isArray(checklistData.checklist)) {
           setChecklist(checklistData.checklist);
+          setApp((prev: any) => prev ? { ...prev, checklist: checklistData.checklist } : prev);
         } else {
           handleUpdate();
         }
@@ -428,9 +445,10 @@ export default function ApplicationDetail() {
     }
   };
 
-  const saveChecklistToServer = async (items: any[]) => {
+  const saveChecklistToServer = async (items: any[], previousItems?: any[]) => {
     if (!app) return;
     const targetId = app.rawId || app.id;
+    const rollbackState = previousItems || checklist;
     const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
     const adminName = currentAdminUser.name || (currentAdminUser.email ? currentAdminUser.email.split('@')[0] : 'Officer Sharma (SDM)');
     const adminEmail = currentAdminUser.email || '';
@@ -455,7 +473,7 @@ export default function ApplicationDetail() {
 
     // 2. REST Call for persistence
     try {
-      await apiFetch(`/api/v1/applications/${targetId}/checklist`, {
+      const res = await apiFetch(`/api/v1/applications/${targetId}/checklist`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -466,29 +484,73 @@ export default function ApplicationDetail() {
           adminRole,
         }),
       });
-      window.dispatchEvent(new CustomEvent('cybersave_toast', {
-        detail: { message: 'Verification checklist saved & synchronized to mobile app!', type: 'success' }
-      }));
+
+      if (res && res.ok) {
+        const confirmed = await res.json().catch(() => null);
+        const confirmedChecklist = confirmed?.checklist || confirmed?.application?.checklist || items;
+        setChecklist(confirmedChecklist);
+        setApp((prev: any) => prev ? { ...prev, checklist: confirmedChecklist } : prev);
+
+        // Update local session cache with confirmed items
+        if (id) {
+          const cached = detailCache.get(id);
+          if (cached) {
+            cached.checklist = confirmedChecklist;
+            detailCache.set(id, cached);
+          }
+        }
+
+        window.dispatchEvent(new CustomEvent('cybersave_toast', {
+          detail: { message: 'Verification checklist saved & synchronized to mobile app!', type: 'success' }
+        }));
+      } else {
+        throw new Error(`Server returned HTTP ${res?.status || 500}`);
+      }
     } catch (e) {
       console.warn('Checklist sync error:', e);
+      // Rollback to confirmed state
+      setChecklist(rollbackState);
+      window.dispatchEvent(new CustomEvent('cybersave_toast', {
+        detail: { message: 'Failed to save verification checklist. State restored.', type: 'error' }
+      }));
     } finally {
       setSavingChecklist(false);
     }
   };
 
   const toggleCheck = async (idx: number) => {
-    const updated = checklist.map((c, i) => i === idx ? { ...c, checked: !c.checked } : c);
+    const previous = checklist;
+    const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
+    const adminName = currentAdminUser.name || (currentAdminUser.email ? currentAdminUser.email.split('@')[0] : 'Officer Sharma (SDM)');
+    const updated = checklist.map((c, i) => {
+      if (i === idx) {
+        const nextChecked = !c.checked;
+        return {
+          ...c,
+          checked: nextChecked,
+          verifiedBy: nextChecked ? adminName : undefined,
+          verifiedAt: nextChecked ? new Date().toISOString() : undefined,
+        };
+      }
+      return c;
+    });
     setChecklist(updated);
-    await saveChecklistToServer(updated);
+    await saveChecklistToServer(updated, previous);
   };
 
   const handleVerifyAll = async () => {
-    const updated = checklist.map(c => ({ ...c, checked: true }));
-    setChecklist(updated);
-    await saveChecklistToServer(updated);
-    window.dispatchEvent(new CustomEvent('cybersave_toast', {
-      detail: { message: 'All checklist items verified & synced with mobile app!', type: 'success' }
+    const previous = checklist;
+    const currentAdminUser = admin || JSON.parse(localStorage.getItem('adminUser') || '{}');
+    const adminName = currentAdminUser.name || (currentAdminUser.email ? currentAdminUser.email.split('@')[0] : 'Officer Sharma (SDM)');
+    const now = new Date().toISOString();
+    const updated = checklist.map(c => ({
+      ...c,
+      checked: true,
+      verifiedBy: adminName,
+      verifiedAt: now,
     }));
+    setChecklist(updated);
+    await saveChecklistToServer(updated, previous);
   };
 
   const handleAddNote = async (e?: React.FormEvent) => {
