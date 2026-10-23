@@ -273,9 +273,10 @@ export default function Settings() {
           updateAdmin({ avatarUrl: uploadedUrl });
         }
         if (isSuperAdmin) {
-          await axios.put(`${BACKEND_BASE}/api/admin/profile`, { avatarUrl: uploadedUrl }).catch(() => null);
+          // ponytail: pass explicit id & email so backend targets only this admin record
+          await axios.put(`${BACKEND_BASE}/api/admin/profile`, { id: admin?.id, email: admin?.email, avatarUrl: uploadedUrl }).catch(() => null);
           if (socket && connected) {
-            socket.emit('update_admin_profile', { avatarUrl: uploadedUrl });
+            socket.emit('update_admin_profile', { id: admin?.id, email: admin?.email, avatarUrl: uploadedUrl });
           }
         } else if (admin?.id) {
           await axios.put(`${BACKEND_BASE}/api/v1/operators/${admin.id}`, { avatarUrl: uploadedUrl }).catch(() => null);
@@ -296,7 +297,9 @@ export default function Settings() {
     setSaving(true);
     const cleanPhone = phone.trim();
 
+    // ponytail: pass explicit id & email so backend targets only this admin record
     const profilePayload = {
+      id: admin?.id,
       name: name.trim(),
       email: email.trim(),
       phone: cleanPhone,
