@@ -107,6 +107,10 @@ async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const reqHeaders = new Headers(options.headers || {});
+      const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('adminToken') || localStorage.getItem('token')) : null;
+      if (token && !reqHeaders.has('Authorization')) {
+        reqHeaders.set('Authorization', `Bearer ${token}`);
+      }
       if (!reqHeaders.has('Cache-Control') && (!options.method || options.method === 'GET')) {
         reqHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
         reqHeaders.set('Pragma', 'no-cache');
