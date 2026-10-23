@@ -81,20 +81,65 @@ export function getSocketUrl(): string {
   return getApiBaseUrl();
 }
 
+// ponytail: track recently failed candidate hosts to skip them on subsequent requests for 30 seconds
+const failedCandidateCooldownMs = 30000;
+const failedCandidateHosts = new Map<string, number>();
+
+function isHostAvailable(host: string): boolean {
+  const failedAt = failedCandidateHosts.get(host);
+  if (!failedAt) return true;
+  if (Date.now() - failedAt > failedCandidateCooldownMs) {
+    failedCandidateHosts.delete(host);
+    return true;
+  }
+  return false;
+}
+
+function markHostFailed(host: string) {
+  failedCandidateHosts.set(host, Date.now());
+}
+
+function markHostSuccess(host: string) {
+  failedCandidateHosts.delete(host);
+}
+
+// ponytail: in-memory SWR cache for GET JSON responses (instant navigation & 0ms screen re-renders)
+interface CacheEntry<T = any> {
+  data: T;
+  time: number;
+}
+const apiJsonCache = new Map<string, CacheEntry>();
+
+export function invalidateApiCache(pattern?: string | RegExp) {
+  if (!pattern) {
+    apiJsonCache.clear();
+    return;
+  }
+  for (const key of apiJsonCache.keys()) {
+    if (typeof pattern === 'string' && key.includes(pattern)) {
+      apiJsonCache.delete(key);
+    } else if (pattern instanceof RegExp && pattern.test(key)) {
+      apiJsonCache.delete(key);
+    }
+  }
+}
+
 const inFlightGetRequests = new Map<string, Promise<Response>>();
 
 async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise<Response> {
   const candidates = getCandidateBackendUrls();
+  const method = (options.method || 'GET').toUpperCase();
   
-  // Try current activeBaseUrl first
+  // Try current activeBaseUrl first, followed by alive candidates
   const orderedCandidates = [
     activeBaseUrl,
     ...candidates.filter(c => c !== activeBaseUrl)
-  ];
+  ].filter(c => isHostAvailable(c) || c === activeBaseUrl);
 
   let lastError: any = null;
 
-  for (const base of orderedCandidates) {
+  for (let idx = 0; idx < orderedCandidates.length; idx++) {
+    const base = orderedCandidates[idx];
     // Safety check: Never try to call localhost if user is browsing the live Vercel site
     if (!isLocalhost && (base.includes('localhost') || base.includes('127.0.0.1'))) {
       continue;
@@ -103,7 +148,10 @@ async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise
     try {
       const url = `${base}${cleanPath}`;
       const controller = new AbortController();
-      const timeoutMs = options.method && options.method !== 'GET' ? 35000 : 8000;
+      // ponytail: use adaptive fast timeout for fallback candidate discovery (1500ms max for alternates)
+      const timeoutMs = options.method && options.method !== 'GET' 
+        ? 35000 
+        : (idx === 0 ? 6000 : 1500);
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const reqHeaders = new Headers(options.headers || {});
@@ -126,26 +174,29 @@ async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise
       const contentType = res.headers.get('content-type') || '';
       // CRITICAL: If server returned text/html for an API endpoint (e.g. <!doctype html> from an SPA rewrite fallback), it is NOT a valid API!
       if (contentType.includes('text/html')) {
+        markHostFailed(base);
         continue;
       }
 
       // If backend candidate returns 404, this specific host does not have this route.
-      // Continue to next candidate so endpoints like /api/v1/support/tickets fail over to Vercel!
       if (res.status === 404) {
         continue;
       }
 
-      // If response received (success or other valid API response), return it
+      // If response received (success or other valid API response), mark healthy and return
       if (res.ok) {
+        markHostSuccess(base);
         if (activeBaseUrl !== base) {
           setApiBaseUrl(base);
         }
         return res;
       } else if (res.status < 500) {
+        markHostSuccess(base);
         return res;
       }
     } catch (err) {
       lastError = err;
+      markHostFailed(base);
     }
   }
 
@@ -169,6 +220,12 @@ async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   const method = (options.method || 'GET').toUpperCase();
+
+  // ponytail: automatically bust related SWR cache on mutation requests (POST/PUT/PATCH/DELETE)
+  if (method !== 'GET') {
+    const resourcePrefix = cleanPath.split('?')[0].replace(/\/[0-9a-fA-F]{24}$/, '');
+    invalidateApiCache(resourcePrefix);
+  }
 
   // Deduplicate concurrent in-flight GET requests
   if (method === 'GET' && !options.signal) {
@@ -196,9 +253,31 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
 }
 
 /**
- * Robust JSON getter
+ * Robust JSON getter with SWR caching (Stale-While-Revalidate)
+ * Returns instantly cached data if fresh (< ttlMs), with background revalidation.
  */
-export async function apiGetJson<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiGetJson<T = any>(
+  path: string, 
+  options: RequestInit & { ttlMs?: number; bypassCache?: boolean } = {}
+): Promise<T> {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const ttlMs = options.ttlMs ?? 15000; // 15-second default TTL
+  const now = Date.now();
+
+  if (!options.bypassCache) {
+    const cached = apiJsonCache.get(cleanPath);
+    if (cached) {
+      const age = now - cached.time;
+      if (age < ttlMs) {
+        // Fresh hit: if halfway through TTL, refresh in background silently
+        if (age > ttlMs / 2) {
+          apiGetJson<T>(cleanPath, { ...options, bypassCache: true }).catch(() => {});
+        }
+        return cached.data as T;
+      }
+    }
+  }
+
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('adminToken') : null;
   const headers = {
     'Content-Type': 'application/json',
@@ -206,7 +285,7 @@ export async function apiGetJson<T = any>(path: string, options: RequestInit = {
     ...(options.headers || {})
   };
 
-  const res = await apiFetch(path, { ...options, headers });
+  const res = await apiFetch(cleanPath, { ...options, headers });
   const contentType = res.headers.get('content-type') || '';
   if (contentType.includes('text/html')) {
     throw new Error('Received HTML instead of JSON (SPA rewrite fallback)');
@@ -214,5 +293,7 @@ export async function apiGetJson<T = any>(path: string, options: RequestInit = {
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}: ${res.statusText}`);
   }
-  return res.json();
+  const data = await res.json();
+  apiJsonCache.set(cleanPath, { data, time: Date.now() });
+  return data as T;
 }

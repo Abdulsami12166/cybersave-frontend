@@ -17,39 +17,42 @@ import {
   PieChart, Pie, Cell 
 } from 'recharts';
 import { showToast } from '../components/Layout';
-import { apiFetch } from '../utils/apiConfig';
+import { apiFetch, apiGetJson } from '../utils/apiConfig';
+
+// ponytail: in-memory cache for instant 0ms analytics tab rendering
+let cachedAnalyticsData: any = null;
+let cachedRealApps: any[] = [];
+let cachedTxnData: any = null;
 
 export default function Analytics() {
   const { socket, connected } = useSocket();
   const navigate = useNavigate();
-  const [analyticsData, setAnalyticsData] = useState<any>(null);
-  const [realApps, setRealApps] = useState<any[]>([]);
-  const [txnData, setTxnData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [analyticsData, setAnalyticsData] = useState<any>(() => cachedAnalyticsData);
+  const [realApps, setRealApps] = useState<any[]>(() => cachedRealApps);
+  const [txnData, setTxnData] = useState<any>(() => cachedTxnData);
+  const [loading, setLoading] = useState(() => !cachedAnalyticsData);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchLiveAnalyticsRest = useCallback(async (showLoader = false) => {
-    if (showLoader) setRefreshing(true);
+    if (showLoader && !cachedAnalyticsData) setRefreshing(true);
     try {
-      const [appsRes, txnsRes, analyticsRes] = await Promise.all([
-        apiFetch('/api/v1/applications').catch(() => null),
-        apiFetch('/api/v1/transactions').catch(() => null),
-        apiFetch('/api/v1/analytics').catch(() => null),
+      const [apps, txns, analyticsJson] = await Promise.all([
+        apiGetJson<any[]>('/api/v1/applications', { ttlMs: 15000 }).catch(() => null),
+        apiGetJson<any>('/api/v1/transactions', { ttlMs: 15000 }).catch(() => null),
+        apiGetJson<any>('/api/v1/analytics', { ttlMs: 15000 }).catch(() => null),
       ]);
 
-      if (appsRes && appsRes.ok) {
-        const apps = await appsRes.json().catch(() => null);
-        if (Array.isArray(apps)) setRealApps(apps);
+      if (Array.isArray(apps)) {
+        cachedRealApps = apps;
+        setRealApps(apps);
       }
-
-      if (txnsRes && txnsRes.ok) {
-        const txns = await txnsRes.json().catch(() => null);
-        if (txns) setTxnData(txns);
+      if (txns) {
+        cachedTxnData = txns;
+        setTxnData(txns);
       }
-
-      if (analyticsRes && analyticsRes.ok) {
-        const analyticsJson = await analyticsRes.json().catch(() => null);
-        if (analyticsJson) setAnalyticsData(analyticsJson);
+      if (analyticsJson) {
+        cachedAnalyticsData = analyticsJson;
+        setAnalyticsData(analyticsJson);
       }
     } catch (e) {
       console.warn('[Analytics] REST fetch error:', e);
@@ -62,9 +65,11 @@ export default function Analytics() {
   useEffect(() => {
     fetchLiveAnalyticsRest();
 
+    // ponytail: gentle 30s background poll for active tab only
     const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchLiveAnalyticsRest();
-    }, 8000);
+    }, 30000);
 
     if (socket && connected) {
       socket.emit('request_analytics');

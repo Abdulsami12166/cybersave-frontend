@@ -29,7 +29,7 @@ import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from 'recharts';
 import { normalizeApplication, type NormalizedApplication, formatIndianDate, normalizeAppId } from '../utils/normalize';
-import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
+import { apiFetch, apiGetJson, getApiBaseUrl } from '../utils/apiConfig';
 
 const API_BASE_URL = getApiBaseUrl();
 
@@ -301,63 +301,31 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState<'APPLICATIONS' | 'TRANSACTIONS'>('APPLICATIONS');
   const [revenueRange, setRevenueRange] = useState<'7' | '30'>('7');
 
-  const fetchLiveApplications = useCallback(async () => {
+  const fetchLiveApplications = useCallback(async (bypass = false) => {
     try {
-      // 1. Fetch unified dashboard endpoint and full applications in parallel
-      const [dashRes, appsRes] = await Promise.all([
-        apiFetch('/api/admin/dashboard').catch(() => null),
-        apiFetch('/api/v1/applications?limit=100').catch(() => null),
+      // 1. Fetch unified dashboard endpoint and full applications in parallel with fast SWR
+      const [dData, apps] = await Promise.all([
+        apiGetJson<any>('/api/admin/dashboard', { ttlMs: 15000, bypassCache: bypass }).catch(() => null),
+        apiGetJson<any[]>('/api/v1/applications?limit=100', { ttlMs: 15000, bypassCache: bypass }).catch(() => null),
       ]);
 
-      if (dashRes && dashRes.ok) {
-        const dData = await dashRes.json().catch(() => null);
-        if (dData) {
-          cachedDashboardData = dData;
-          setData(dData);
-          if (Array.isArray(dData.transactions) && dData.transactions.length > 0) {
-            cachedRawTransactions = dData.transactions;
-            setRawTransactions(dData.transactions);
-          }
-          if (dData?.stats?.activeCentres !== undefined && dData?.stats?.activeCentres !== null) {
-            cachedOperatorCount = Number(dData.stats.activeCentres);
-            setOperatorCount(cachedOperatorCount);
-          }
+      if (dData) {
+        cachedDashboardData = dData;
+        setData(dData);
+        if (Array.isArray(dData.transactions) && dData.transactions.length > 0) {
+          cachedRawTransactions = dData.transactions;
+          setRawTransactions(dData.transactions);
+        }
+        if (dData?.stats?.activeCentres !== undefined && dData?.stats?.activeCentres !== null) {
+          cachedOperatorCount = Number(dData.stats.activeCentres);
+          setOperatorCount(cachedOperatorCount);
         }
       }
 
-      if (appsRes && appsRes.ok) {
-        const apps = await appsRes.json().catch(() => []);
-        if (Array.isArray(apps) && apps.length > 0) {
-          cachedRawApps = apps;
-          setRawApps(apps);
-        }
+      if (Array.isArray(apps) && apps.length > 0) {
+        cachedRawApps = apps;
+        setRawApps(apps);
       }
-
-      // 2. Secondary queries execute in background without blocking
-      Promise.all([
-        apiFetch('/api/admin/transactions').then(async (res) => {
-          if (res && res.ok) {
-            const txData = await res.json().catch(() => null);
-            if (txData?.transactions && Array.isArray(txData.transactions)) {
-              cachedRawTransactions = txData.transactions;
-              setRawTransactions(txData.transactions);
-            }
-          }
-        }).catch(() => null),
-        apiFetch('/api/v1/operators').then(async (res) => {
-          if (res && res.ok) {
-            const opsData = await res.json().catch(() => null);
-            if (opsData?.stats?.active !== undefined) {
-              cachedOperatorCount = Number(opsData.stats.active);
-              setOperatorCount(cachedOperatorCount);
-            } else if (Array.isArray(opsData?.operators)) {
-              const activeOps = opsData.operators.filter((o: any) => o.status !== 'Suspended').length;
-              cachedOperatorCount = activeOps;
-              setOperatorCount(activeOps);
-            }
-          }
-        }).catch(() => null),
-      ]);
     } catch (err) {
       console.warn('Live applications fetch notice:', err);
     } finally {
@@ -372,7 +340,7 @@ export default function Dashboard() {
       socket.emit('request_transactions_data');
       socket.emit('request_operators_data');
     }
-    await fetchLiveApplications();
+    await fetchLiveApplications(true);
     setTimeout(() => setRefreshing(false), 600);
   };
 

@@ -5,7 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../components/Layout';
 import { StatCard } from '../components/Dashboard';
-import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
+import { apiFetch, apiGetJson, getApiBaseUrl } from '../utils/apiConfig';
 import {
   RotateCcw,
   CheckCircle2,
@@ -168,12 +168,8 @@ export default function Refunds() {
       if (!isBackground && refunds.length === 0) {
         setLoading(true);
       }
-      const token = localStorage.getItem('adminToken');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-      const res = await apiFetch('/api/v1/refunds', { headers }).catch(() => null);
-      if (res && res.ok) {
-        const raw = await res.json().catch(() => []);
+      const raw = await apiGetJson<any>('/api/v1/refunds', { ttlMs: 15000 }).catch(() => null);
+      if (raw) {
         const list = Array.isArray(raw)
           ? raw
           : Array.isArray(raw?.data)

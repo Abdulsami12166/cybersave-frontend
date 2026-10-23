@@ -34,7 +34,7 @@ import {
   extractSupportingDocuments,
   isRealOfficer
 } from '../utils/normalize';
-import { apiFetch } from '../utils/apiConfig';
+import { apiFetch, apiGetJson, invalidateApiCache } from '../utils/apiConfig';
 
 let cachedApplicationsData: any = null;
 let lastApplicationsFetchTime = 0;
@@ -213,20 +213,13 @@ export default function Applications() {
     });
   };
 
-  const fetchApplicationsRest = async () => {
+  const fetchApplicationsRest = async (bypass = false) => {
     try {
-      const res = await apiFetch('/api/v1/applications', {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        }
-      }).catch(() => null);
-      if (res && res.ok) {
-        const list = await res.json().catch(() => []);
-        if (Array.isArray(list)) {
-          const rawFormatted = list.map((item, idx) => formatApplication(item, idx));
-          const deduplicated = deduplicateApplicationList(rawFormatted);
-          const formatted = sortApplicationsDesc(deduplicated);
+      const list = await apiGetJson<any[]>('/api/v1/applications', { ttlMs: 15000, bypassCache: bypass }).catch(() => null);
+      if (Array.isArray(list)) {
+        const rawFormatted = list.map((item, idx) => formatApplication(item, idx));
+        const deduplicated = deduplicateApplicationList(rawFormatted);
+        const formatted = sortApplicationsDesc(deduplicated);
           const totalApps = formatted.length;
           const todayApps = formatted.filter(a => {
             const sub = new Date(a.submittedAt || a.rawApp?.submittedAt || a.rawApp?.createdAt || Date.now());
@@ -270,14 +263,13 @@ export default function Applications() {
           setData(fullData);
           setLoading(false);
         }
+      } catch (e) {
+        console.warn('[Applications] REST fetch error:', e);
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      console.warn('[Applications] REST fetch error:', e);
-    } finally {
-      setLoading(false);
-    }
-    return null;
-  };
+      return null;
+    };
 
   useEffect(() => {
     let debounceTimer: any = null;

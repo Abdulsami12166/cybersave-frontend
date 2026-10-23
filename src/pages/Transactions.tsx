@@ -18,7 +18,7 @@ import {
 import { StatCard } from '../components/Dashboard';
 
 import { formatIndianDate, normalizeAppId } from '../utils/normalize';
-import { apiFetch } from '../utils/apiConfig';
+import { apiFetch, apiGetJson } from '../utils/apiConfig';
 
 let cachedTransactionsData: any = null;
 
@@ -31,17 +31,14 @@ export default function Transactions() {
   const [selectedDate, setSelectedDate] = useState<string>('ALL');
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchTransactionsRest = async () => {
+  const fetchTransactionsRest = async (bypass = false) => {
     try {
-      const txRes = await apiFetch('/api/admin/transactions').catch(() => null);
-      if (txRes?.ok) {
-        const rawData = await txRes.json().catch(() => null);
-        if (rawData && Array.isArray(rawData.transactions)) {
-          cachedTransactionsData = rawData;
-          setData(rawData);
-          setLoading(false);
-          return;
-        }
+      const rawData = await apiGetJson<any>('/api/admin/transactions', { ttlMs: 15000, bypassCache: bypass }).catch(() => null);
+      if (rawData && Array.isArray(rawData.transactions)) {
+        cachedTransactionsData = rawData;
+        setData(rawData);
+        setLoading(false);
+        return;
       }
 
       const [appsRes, refundsRes] = await Promise.all([

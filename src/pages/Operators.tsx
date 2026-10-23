@@ -3,13 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { UserCheck, ShieldCheck, Clock, UserX, Search, X, Download } from 'lucide-react';
 import { StatCard } from '../components/Dashboard';
-import { apiFetch } from '../utils/apiConfig';
+import { apiFetch, apiGetJson, invalidateApiCache } from '../utils/apiConfig';
+
+// ponytail: in-memory cache for instant 0ms tab navigation
+let cachedOperatorsData: any = null;
 
 export default function Operators() {
   const navigate = useNavigate();
   const { socket, connected } = useSocket();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(() => cachedOperatorsData);
+  const [loading, setLoading] = useState(() => !cachedOperatorsData);
   const [managingOp, setManagingOp] = useState<any>(null);
   const [opPermissions, setOpPermissions] = useState<string[]>([]);
   const [searchFilter, setSearchFilter] = useState('');
@@ -39,14 +42,13 @@ export default function Operators() {
     { id: 'SETTINGS', label: 'Settings', category: 'Audit & Support', desc: 'Portal configuration, contact details & maintenance settings' },
   ];
 
-  const fetchOperatorsRest = async () => {
+  const fetchOperatorsRest = async (showLoader = false) => {
+    if (showLoader && !cachedOperatorsData) setLoading(true);
     try {
-      const res = await apiFetch('/api/v1/operators').catch(() => null);
-      if (res && res.ok) {
-        const json = await res.json().catch(() => null);
-        if (json) {
-          setData(json);
-        }
+      const json = await apiGetJson('/api/v1/operators', { ttlMs: 15000 }).catch(() => null);
+      if (json) {
+        cachedOperatorsData = json;
+        setData(json);
       }
     } catch (e) {
       console.warn('[Operators] REST fetch note:', e);

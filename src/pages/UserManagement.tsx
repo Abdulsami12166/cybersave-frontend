@@ -29,7 +29,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { showToast } from '../components/Layout';
-import { apiFetch, getApiBaseUrl } from '../utils/apiConfig';
+import { apiFetch, apiGetJson, getApiBaseUrl } from '../utils/apiConfig';
 
 const API_BASE_URL = getApiBaseUrl();
 
@@ -91,13 +91,12 @@ export default function UserManagement() {
 
   const fetchUsersRest = async () => {
     try {
-      const res = await apiFetch('/api/v1/users?limit=50').catch(() => null);
-      if (res && res.ok) {
-        const raw = await res.json().catch(() => []);
+      const raw = await apiGetJson<any>('/api/v1/users?limit=50', { ttlMs: 15000 }).catch(() => null);
+      if (raw) {
         if (Array.isArray(raw)) {
           cachedLiveUsers = raw;
           setLiveUsers(raw);
-        } else if (raw && Array.isArray(raw.users)) {
+        } else if (Array.isArray(raw.users)) {
           cachedLiveUsers = raw.users;
           setLiveUsers(raw.users);
           if (raw.stats) {

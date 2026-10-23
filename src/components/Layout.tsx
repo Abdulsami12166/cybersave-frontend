@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { apiFetch } from '../utils/apiConfig';
+import { apiFetch, apiGetJson } from '../utils/apiConfig';
 import ErrorBoundary from './ErrorBoundary';
 import CyberSaveLogo, { BlueShieldLogo } from './CyberSaveLogo';
 
@@ -209,19 +209,10 @@ export default function Layout() {
     return `${diffDays}d ago`;
   };
 
+  // ponytail: Fast cached fetch of live inquiries/tickets using SWR cache (30s TTL)
   const fetchRealMessages = async () => {
     try {
-      const endpoints = ['/api/v1/support/tickets', '/api/support/tickets'];
-      let ticketsData: any = null;
-      for (const ep of endpoints) {
-        try {
-          const res = await apiFetch(ep).catch(() => null);
-          if (res && res.ok) {
-            ticketsData = await res.json().catch(() => null);
-            if (ticketsData?.tickets) break;
-          }
-        } catch (_) {}
-      }
+      const ticketsData = await apiGetJson<any>('/api/v1/support/tickets', { ttlMs: 30000 }).catch(() => null);
 
       if (ticketsData?.tickets && Array.isArray(ticketsData.tickets)) {
         const mapped = ticketsData.tickets.map((t: any) => {
@@ -259,19 +250,10 @@ export default function Layout() {
     }
   };
 
+  // ponytail: Fast cached fetch of notifications with SWR (30s TTL)
   const fetchRealNotifications = async () => {
     try {
-      const endpoints = ['/api/v1/notifications', '/api/notifications'];
-      let notifData: any = null;
-      for (const ep of endpoints) {
-        try {
-          const res = await apiFetch(ep).catch(() => null);
-          if (res && res.ok) {
-            notifData = await res.json().catch(() => null);
-            if (notifData && Array.isArray(notifData.notifications)) break;
-          }
-        } catch (_) {}
-      }
+      const notifData = await apiGetJson<any>('/api/v1/notifications', { ttlMs: 30000 }).catch(() => null);
 
       if (notifData && Array.isArray(notifData.notifications)) {
         const mapped = notifData.notifications.map((n: any) => {
@@ -650,11 +632,19 @@ export default function Layout() {
     }
   }, [socket, admin?.id, admin?.email, logout, navigate, updateAdmin]);
 
-  // Fetch real messages and notifications on mount and route changes
+  // ponytail: Fetch real messages and notifications on initial mount and via gentle 60s background interval (plus real-time socket events)
   useEffect(() => {
     fetchRealMessages();
     fetchRealNotifications();
-  }, [location.pathname]);
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchRealMessages();
+      fetchRealNotifications();
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Real-time Support Chat Citizen Message Notifications (Bell Icon & Header Message Icon)
   useEffect(() => {
