@@ -81,8 +81,8 @@ export function getSocketUrl(): string {
   return getApiBaseUrl();
 }
 
-// ponytail: track recently failed candidate hosts to skip them on subsequent requests for 30 seconds
-const failedCandidateCooldownMs = 30000;
+// ponytail: track recently failed candidate hosts to skip them on subsequent requests for 8 seconds
+const failedCandidateCooldownMs = 8000;
 const failedCandidateHosts = new Map<string, number>();
 
 function isHostAvailable(host: string): boolean {
@@ -130,11 +130,13 @@ async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise
   const candidates = getCandidateBackendUrls();
   const method = (options.method || 'GET').toUpperCase();
   
-  // Try current activeBaseUrl first, followed by alive candidates
+  // Try current activeBaseUrl first, followed by alive candidates (fallback to full pool if all are on cooldown)
+  const aliveCandidates = candidates.filter(c => isHostAvailable(c));
+  const candidatePool = aliveCandidates.length > 0 ? aliveCandidates : candidates;
   const orderedCandidates = [
     activeBaseUrl,
-    ...candidates.filter(c => c !== activeBaseUrl)
-  ].filter(c => isHostAvailable(c) || c === activeBaseUrl);
+    ...candidatePool.filter(c => c !== activeBaseUrl)
+  ];
 
   let lastError: any = null;
 
@@ -148,10 +150,10 @@ async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise
     try {
       const url = `${base}${cleanPath}`;
       const controller = new AbortController();
-      // ponytail: use adaptive fast timeout for fallback candidate discovery (1500ms max for alternates)
+      // ponytail: reliable timeout (10s primary, 7s fallback) prevents premature aborts on cold starts
       const timeoutMs = options.method && options.method !== 'GET' 
         ? 35000 
-        : (idx === 0 ? 6000 : 1500);
+        : (idx === 0 ? 10000 : 7000);
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const reqHeaders = new Headers(options.headers || {});
@@ -194,8 +196,11 @@ async function doApiFetch(cleanPath: string, options: RequestInit = {}): Promise
         markHostSuccess(base);
         return res;
       }
-    } catch (err) {
+    } catch (err: any) {
       lastError = err;
+      if (options.signal?.aborted) {
+        throw err;
+      }
       markHostFailed(base);
     }
   }
@@ -239,7 +244,16 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
       }
     }
 
-    const fetchPromise = doApiFetch(cleanPath, options);
+    const fetchPromise = (async () => {
+      try {
+        return await doApiFetch(cleanPath, options);
+      } catch (err) {
+        // ponytail: safe 1-retry with short backoff for idempotent GET queries
+        await new Promise(r => setTimeout(r, 300));
+        return await doApiFetch(cleanPath, options);
+      }
+    })();
+
     inFlightGetRequests.set(cleanPath, fetchPromise);
     try {
       const res = await fetchPromise;
@@ -249,7 +263,15 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     }
   }
 
-  return doApiFetch(cleanPath, options);
+  try {
+    return await doApiFetch(cleanPath, options);
+  } catch (err) {
+    if (method === 'GET' && !options.signal?.aborted) {
+      await new Promise(r => setTimeout(r, 300));
+      return await doApiFetch(cleanPath, options);
+    }
+    throw err;
+  }
 }
 
 /**

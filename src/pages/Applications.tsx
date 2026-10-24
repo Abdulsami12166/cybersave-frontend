@@ -215,7 +215,12 @@ export default function Applications() {
 
   const fetchApplicationsRest = async (bypass = false) => {
     try {
-      const list = await apiGetJson<any[]>('/api/v1/applications', { ttlMs: 15000, bypassCache: bypass }).catch(() => null);
+      let list = await apiGetJson<any[]>('/api/v1/applications', { ttlMs: 15000, bypassCache: bypass }).catch(() => null);
+      if (!list) {
+        // ponytail: safe retry on transient network hiccup
+        await new Promise(r => setTimeout(r, 400));
+        list = await apiGetJson<any[]>('/api/v1/applications', { ttlMs: 15000, bypassCache: true }).catch(() => null);
+      }
       if (Array.isArray(list)) {
         const rawFormatted = list.map((item, idx) => formatApplication(item, idx));
         const deduplicated = deduplicateApplicationList(rawFormatted);

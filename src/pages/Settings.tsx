@@ -64,7 +64,13 @@ export default function Settings() {
   const { socket, connected } = useSocket();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isSuperAdmin = admin?.email === 'admin@cybersave.com' || admin?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = 
+    admin?.email === 'admin@cybersave.com' || 
+    admin?.email === 'officer.admin@cybersave.gov.in' ||
+    admin?.role === 'SUPER_ADMIN' ||
+    admin?.role === 'Super Admin' ||
+    admin?.role === 'ADMIN' ||
+    (Array.isArray(admin?.permissions) && (admin.permissions.includes('ALL') || admin.permissions.includes('SUPER_ADMIN')));
   const initialCached = getCachedProfile(isSuperAdmin, admin);
 
   const [activeTab, setActiveTab] = useState<'profile' | 'sla' | 'settlement' | 'security'>('profile');
@@ -101,8 +107,10 @@ export default function Settings() {
   const [twoFactor, setTwoFactor] = useState(true);
   const [sessionTimeout, setSessionTimeout] = useState('30');
 
-  // Load permanent saved settings from DB on mount & listen to socket events
+  // Load permanent saved settings from DB on mount
   useEffect(() => {
+    let isCancelled = false;
+
     if (!isSuperAdmin) {
       // Sub-admin / Operator: strictly fetch their own operator profile from DB
       const fetchOperatorSelf = async () => {
@@ -113,7 +121,7 @@ export default function Settings() {
           if (!res?.data && BACKEND_BASE !== API_BASE_URL) {
             res = await axios.get(`${API_BASE_URL}/api/v1/operators/${opId}`).catch(() => null);
           }
-          if (res?.data) {
+          if (res?.data && !isCancelled) {
             const op = res.data;
             if (op.name) setName(op.name);
             if (op.email) setEmail(op.email);
@@ -128,12 +136,12 @@ export default function Settings() {
         }
       };
       fetchOperatorSelf();
-      return; // Do NOT fetch super admin profile or settings!
+      return () => { isCancelled = true; };
     }
 
     // Super Admin: Fetch Master Profile & Operational Settings
     const applyProfileData = (d: any) => {
-      if (!d) return;
+      if (!d || isCancelled) return;
       if (d.name) setName(d.name);
       if (d.email) setEmail(d.email);
       if (d.phone !== undefined && d.phone !== null && d.phone !== '') setPhone(d.phone);
@@ -141,15 +149,6 @@ export default function Settings() {
       if (d.kendraId) setKendraId(d.kendraId);
       if (d.designation) setDesignation(d.designation);
       if (d.district) setDistrict(d.district);
-
-      if (updateAdmin) {
-        updateAdmin({
-          name: d.name || name,
-          email: d.email || email,
-          phone: d.phone !== undefined ? d.phone : phone,
-          avatarUrl: d.avatarUrl || avatar,
-        });
-      }
 
       const existingSettings = JSON.parse(localStorage.getItem('adminSettings') || '{}');
       localStorage.setItem('adminSettings', JSON.stringify({ ...existingSettings, ...d }));
@@ -176,7 +175,7 @@ export default function Settings() {
         if (!res?.data && BACKEND_BASE !== API_BASE_URL) {
           res = await axios.get(`${API_BASE_URL}/api/admin/settings`).catch(() => null);
         }
-        if (res?.data?.settings) {
+        if (res?.data?.settings && !isCancelled) {
           const s = res.data.settings;
           if (s.slaHours) setSlaHours(s.slaHours);
           if (typeof s.autoAssign === 'boolean') setAutoAssign(s.autoAssign);
@@ -195,7 +194,7 @@ export default function Settings() {
         }
       } catch {
         const savedSettings = localStorage.getItem('adminSettings');
-        if (savedSettings) {
+        if (savedSettings && !isCancelled) {
           try {
             const parsed = JSON.parse(savedSettings);
             if (parsed.slaHours) setSlaHours(parsed.slaHours);
@@ -220,18 +219,33 @@ export default function Settings() {
     fetchProfile();
     fetchSettings();
 
-    // Socket real-time synchronization for Super Admin
-    if (socket && connected) {
-      socket.emit('request_admin_profile');
-      socket.on('response_admin_profile', applyProfileData);
-      socket.on('admin_profile_updated', applyProfileData);
+    return () => { isCancelled = true; };
+  }, [isSuperAdmin, admin?.id, admin?.email]);
 
-      return () => {
-        socket.off('response_admin_profile', applyProfileData);
-        socket.off('admin_profile_updated', applyProfileData);
-      };
-    }
-  }, [socket, connected, isSuperAdmin, admin?.id, admin?.email]);
+  // Socket real-time synchronization for Super Admin
+  useEffect(() => {
+    if (!socket || !connected || !isSuperAdmin) return;
+
+    const handleSocketProfile = (d: any) => {
+      if (!d) return;
+      if (d.name) setName(d.name);
+      if (d.email) setEmail(d.email);
+      if (d.phone !== undefined && d.phone !== null && d.phone !== '') setPhone(d.phone);
+      if (d.avatarUrl) setAvatar(d.avatarUrl);
+      if (d.kendraId) setKendraId(d.kendraId);
+      if (d.designation) setDesignation(d.designation);
+      if (d.district) setDistrict(d.district);
+    };
+
+    socket.emit('request_admin_profile');
+    socket.on('response_admin_profile', handleSocketProfile);
+    socket.on('admin_profile_updated', handleSocketProfile);
+
+    return () => {
+      socket.off('response_admin_profile', handleSocketProfile);
+      socket.off('admin_profile_updated', handleSocketProfile);
+    };
+  }, [socket, connected, isSuperAdmin]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

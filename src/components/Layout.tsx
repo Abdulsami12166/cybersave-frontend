@@ -737,12 +737,15 @@ export default function Layout() {
     admin?.email === 'admin@cybersave.com' || 
     admin?.email === 'officer.admin@cybersave.gov.in' ||
     admin?.role === 'SUPER_ADMIN' ||
+    admin?.role === 'Super Admin' ||
+    admin?.role === 'ADMIN' ||
     (Array.isArray(admin?.permissions) && (admin.permissions.includes('ALL') || admin.permissions.includes('SUPER_ADMIN')));
 
   const userPermissions = Array.isArray(admin?.permissions) ? admin.permissions : [];
 
   const hasAccess = (requiredPermission?: string) => {
     if (isSuperAdmin) return true;
+    if (requiredPermission === 'SETTINGS') return true;
     if (!requiredPermission) return false;
     return userPermissions.includes(requiredPermission);
   };
@@ -1681,10 +1684,32 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Page Content Viewport with Route-Aware ErrorBoundary Protection */}
+        {/* Page Content Viewport with Route-Aware ErrorBoundary Protection & Outlet-level Suspense */}
         <main style={{ padding: '24px 28px', flex: 1 }}>
           <ErrorBoundary key={location.pathname} fallbackTitle="CyberSave Admin Console Error">
-            <Outlet />
+            <React.Suspense fallback={
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '40vh',
+                gap: '14px',
+                color: '#64748b'
+              }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  border: '3px solid rgba(37, 99, 235, 0.2)',
+                  borderTopColor: '#2563EB',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite'
+                }} />
+                <span style={{ fontSize: '12.5px', fontWeight: 600 }}>Loading section...</span>
+              </div>
+            }>
+              <Outlet />
+            </React.Suspense>
           </ErrorBoundary>
         </main>
 
